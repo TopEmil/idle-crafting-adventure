@@ -873,32 +873,23 @@ export class ForgeScene {
     const shaftW = cellW * SHAFT_COLS + 18;
     const shaftH = cellH * (SHAFT_LOOKAHEAD + SHAFT_LOOKBEHIND + 1.4);
 
-    // Side rock + open tunnel void — reads against the timber-framed backdrop
-    const wallAlpha = 0.72 + this.stratumFlash * 0.12;
-    const wallPad = 26;
-    g.rect(cx - shaftW * 0.5 - wallPad, cy - shaftH * 0.55, wallPad, shaftH * 1.15);
-    g.fill({ color: stratum.wall, alpha: wallAlpha });
-    g.rect(cx + shaftW * 0.5, cy - shaftH * 0.55, wallPad, shaftH * 1.15);
-    g.fill({ color: stratum.wall, alpha: wallAlpha });
-    g.rect(cx - shaftW * 0.5, cy - shaftH * 0.55, shaftW, shaftH * 1.15);
-    g.fill({ color: COLORS.void, alpha: 0.58 + this.stratumFlash * 0.12 });
+    // Soft tunnel void so painted timber/ore stays visible around the dig tiles
+    g.rect(cx - shaftW * 0.5 - 8, cy - shaftH * 0.55, shaftW + 16, shaftH * 1.15);
+    g.fill({ color: COLORS.void, alpha: 0.42 + this.stratumFlash * 0.12 });
 
+    // Light shoring accents (painted backdrop already carries the main timber frame)
     this.drawShaftTimbers(g, cx, cy, shaftW, shaftH);
 
-    // Torch glow along timber posts (matches painted sconces)
-    for (let i = 0; i < SHAFT_LOOKBEHIND + 1; i++) {
-      const ty = cy - cellH * (i + 0.55);
-      const flicker = 0.28 + Math.sin(this.pulse * 5 + i) * 0.07;
-      const lx = cx - shaftW * 0.5 - 10;
-      const rx = cx + shaftW * 0.5 + 10;
-      g.circle(lx, ty, 11);
-      g.fill({ color: COLORS.amber, alpha: flicker * 0.5 });
-      g.circle(rx, ty, 11);
-      g.fill({ color: COLORS.ember, alpha: flicker * 0.38 });
-      g.circle(lx, ty - 6, 2.2);
-      g.fill({ color: COLORS.mist, alpha: flicker * 0.55 });
-      g.circle(rx, ty - 6, 2.2);
-      g.fill({ color: COLORS.mist, alpha: flicker * 0.45 });
+    // Torch bloom near painted sconces
+    for (let i = 0; i < 2; i++) {
+      const ty = cy - cellH * (i * 1.6 + 0.35);
+      const flicker = 0.3 + Math.sin(this.pulse * 5 + i) * 0.08;
+      const lx = cx - shaftW * 0.5 - 18;
+      const rx = cx + shaftW * 0.5 + 18;
+      g.circle(lx, ty, 14);
+      g.fill({ color: COLORS.amber, alpha: flicker * 0.35 });
+      g.circle(rx, ty, 14);
+      g.fill({ color: COLORS.ember, alpha: flicker * 0.28 });
     }
 
     const ordered = [...this.shaftCells].sort((a, b) => {
@@ -936,7 +927,7 @@ export class ForgeScene {
     }
   }
 
-  /** Timber props that echo the painted shaft frame around the dig tiles. */
+  /** Subtle shoring lines that lock dig tiles into the painted timber frame. */
   private drawShaftTimbers(
     g: Graphics,
     cx: number,
@@ -948,34 +939,15 @@ export class ForgeScene {
     const bot = top + shaftH * 1.15;
     const left = cx - shaftW * 0.5;
     const right = cx + shaftW * 0.5;
-    const postW = 10;
-    const beamH = 12;
 
-    // Vertical posts
-    g.rect(left - postW - 2, top - 4, postW, bot - top + 8);
-    g.fill({ color: COLORS.timber, alpha: 0.92 });
-    g.rect(left - postW, top, 3, bot - top);
-    g.fill({ color: COLORS.timberLight, alpha: 0.35 });
-    g.rect(right + 2, top - 4, postW, bot - top + 8);
-    g.fill({ color: COLORS.timber, alpha: 0.92 });
-    g.rect(right + postW - 1, top, 3, bot - top);
+    g.rect(left - 6, top - 2, 6, bot - top + 4);
     g.fill({ color: COLORS.timberDark, alpha: 0.55 });
-
-    // Header + footer beams
-    g.rect(left - postW - 4, top - beamH, shaftW + postW * 2 + 8, beamH);
-    g.fill({ color: COLORS.timberDark, alpha: 0.95 });
-    g.rect(left - postW - 4, top - 3, shaftW + postW * 2 + 8, 3);
-    g.fill({ color: COLORS.timberLight, alpha: 0.4 });
-    g.rect(left - postW - 4, bot, shaftW + postW * 2 + 8, beamH * 0.75);
-    g.fill({ color: COLORS.timberDark, alpha: 0.85 });
-
-    // Corner braces only — keep the dig face clear for tiles
-    g.moveTo(left - postW - 2, top + 8);
-    g.lineTo(left + 16, top + 34);
-    g.stroke({ width: 4, color: COLORS.timberDark, alpha: 0.7 });
-    g.moveTo(right + postW + 2, top + 8);
-    g.lineTo(right - 16, top + 34);
-    g.stroke({ width: 4, color: COLORS.timberDark, alpha: 0.7 });
+    g.rect(right, top - 2, 6, bot - top + 4);
+    g.fill({ color: COLORS.timberDark, alpha: 0.55 });
+    g.rect(left - 8, top - 8, shaftW + 16, 7);
+    g.fill({ color: COLORS.timber, alpha: 0.5 });
+    g.rect(left - 8, bot + 1, shaftW + 16, 5);
+    g.fill({ color: COLORS.timberDark, alpha: 0.45 });
   }
 
   private drawBlockTile(
