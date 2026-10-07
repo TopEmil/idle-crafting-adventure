@@ -6,6 +6,7 @@ import {
   claimExpedition,
   clickVein,
   craftRecipe,
+  getAutoMineRate,
   getClickPower,
   prestige,
   simulateSeconds,
@@ -61,6 +62,22 @@ describe('click & craft', () => {
   it('rejects craft without resources', () => {
     const result = craftRecipe(createInitialState(), 'copper_pick');
     expect(result.ok).toBe(false);
+  });
+
+  it('starts dwarf auto-mine after copper pick', () => {
+    let state = createInitialState();
+    expect(getAutoMineRate(state)).toBe(0);
+    state.resources.ore = 20;
+    const crafted = craftRecipe(state, 'copper_pick');
+    expect(crafted.ok).toBe(true);
+    if (!crafted.ok) return;
+    state = crafted.state;
+    const rate = getAutoMineRate(state);
+    expect(rate).toBeCloseTo(getClickPower(state) * 0.25);
+    const before = state.resources.ore;
+    state = tickProduction(state, 2);
+    expect(state.resources.ore).toBeGreaterThan(before);
+    expect(state.totalOreProduced).toBeGreaterThan(0);
   });
 });
 

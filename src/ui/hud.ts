@@ -77,7 +77,7 @@ export class Hud {
           <button class="view-btn" data-view="forge" type="button" role="tab" aria-selected="false">Forge</button>
         </div>
         <div class="cta-row">
-          <button class="btn btn-primary" id="btn-vein" type="button">Tap Vein</button>
+          <button class="btn btn-primary" id="btn-vein" type="button">Mine</button>
           <div class="craft-cta">
             <button class="btn btn-secondary" id="btn-craft" type="button">Craft</button>
             <div class="craft-need" id="craft-need" hidden>
@@ -147,10 +147,7 @@ export class Hud {
     this.setView(this.view);
     const veinBtn = this.root.querySelector('#btn-vein') as HTMLButtonElement | null;
     if (veinBtn) {
-      veinBtn.textContent =
-        this.view === 'mine'
-          ? `Tap Vein (+${formatNumber(getClickPower(state))})`
-          : `Mine Vein (+${formatNumber(getClickPower(state))})`;
+      veinBtn.textContent = `Mine (+${formatNumber(getClickPower(state))})`;
       veinBtn.classList.toggle('btn-primary', this.view === 'mine');
       veinBtn.classList.toggle('btn-secondary', this.view === 'forge');
     }
@@ -206,12 +203,12 @@ export class Hud {
   showOnboarding(step: number) {
     const copy = [
       {
-        title: 'The vein answers',
-        body: 'Tap the glowing ore vein to gather Vein Ore. Your forge wakes with every strike.',
+        title: 'Crack the ore',
+        body: 'Tap the stone cluster to chip rocks and pull Vein Ore. Each strike cracks the face.',
       },
       {
         title: 'Craft your first tool',
-        body: 'Spend ore on a Copper Pick. Better tools mean richer taps.',
+        body: 'Spend ore on a Copper Pick. A forge dwarf joins in and keeps mining while you craft.',
       },
       {
         title: 'Light the stations',
