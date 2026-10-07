@@ -345,7 +345,7 @@ export class ForgeScene {
 
   private dwarfPoint() {
     const { x, y } = this.veinPoint();
-    return { x: x - 58, y: y + 28 };
+    return { x: x - 72, y: y + 36 };
   }
 
   private stationLayout(): { id: StationId; x: number; y: number }[] {
@@ -548,9 +548,11 @@ export class ForgeScene {
     g.clear();
     const { x: cx, y: cy } = this.veinPoint();
 
-    // Soft cyan seam behind the rocks
-    const shimmer = 0.06 + Math.sin(this.pulse * 2.8) * 0.03 + this.hitFlash * 0.35;
-    g.circle(cx, cy, 52 + this.hitFlash * 18);
+    // Dark mound + cyan seam so the pile reads as a dig site
+    g.ellipse(cx, cy + 18, 78, 36);
+    g.fill({ color: COLORS.void, alpha: 0.42 });
+    const shimmer = 0.1 + Math.sin(this.pulse * 2.8) * 0.04 + this.hitFlash * 0.4;
+    g.circle(cx, cy, 58 + this.hitFlash * 18);
     g.fill({ color: COLORS.cyan, alpha: shimmer });
 
     for (const rock of this.rocks) {
@@ -581,30 +583,40 @@ export class ForgeScene {
     const dmg = 1 - rock.hp / rock.maxHp;
     const wobble = this.hitFlash > 0 && dmg > 0 ? Math.sin(this.pulse * 40) * 1.2 : 0;
 
-    // Irregular stone blob (ellipse cluster)
-    g.ellipse(x + wobble, y, rock.w * 0.55, rock.h * 0.5);
-    g.fill({ color: rock.tint, alpha: 0.95 });
-    g.ellipse(x - rock.w * 0.15 + wobble, y - rock.h * 0.12, rock.w * 0.32, rock.h * 0.28);
-    g.fill({ color: COLORS.stone, alpha: 0.55 });
+    // Soft contact shadow so rocks lift off the painted backdrop
+    g.ellipse(x + wobble, y + rock.h * 0.28, rock.w * 0.5, rock.h * 0.18);
+    g.fill({ color: COLORS.void, alpha: 0.45 });
+
+    // Chunkier stone body
+    g.ellipse(x + wobble, y, rock.w * 0.55, rock.h * 0.48);
+    g.fill({ color: rock.tint, alpha: 1 });
+    g.ellipse(x - rock.w * 0.12 + wobble, y - rock.h * 0.14, rock.w * 0.34, rock.h * 0.3);
+    g.fill({ color: 0x5a6b74, alpha: 0.85 });
+    g.ellipse(x + rock.w * 0.18 + wobble, y + rock.h * 0.1, rock.w * 0.22, rock.h * 0.2);
+    g.fill({ color: COLORS.stone, alpha: 0.7 });
+
+    // Outline for readability
+    g.ellipse(x + wobble, y, rock.w * 0.55, rock.h * 0.48);
+    g.stroke({ width: 2, color: COLORS.void, alpha: 0.55 });
 
     // Cyan ore flecks — fewer as rock cracks
-    const flecks = Math.max(1, 3 - Math.floor(dmg * 3));
+    const flecks = Math.max(1, 4 - Math.floor(dmg * 3));
     for (let i = 0; i < flecks; i++) {
-      const fx = x + Math.cos(rock.seed + i * 2.1) * rock.w * 0.22;
-      const fy = y + Math.sin(rock.seed * 1.3 + i) * rock.h * 0.18;
-      g.circle(fx + wobble, fy, 2.2 - dmg);
-      g.fill({ color: COLORS.cyan, alpha: 0.55 + this.hitFlash * 0.3 });
+      const fx = x + Math.cos(rock.seed + i * 2.1) * rock.w * 0.24;
+      const fy = y + Math.sin(rock.seed * 1.3 + i) * rock.h * 0.2;
+      g.circle(fx + wobble, fy, 3.2 - dmg);
+      g.fill({ color: COLORS.cyan, alpha: 0.75 + this.hitFlash * 0.25 });
     }
 
     // Crack lines when damaged
     if (dmg > 0.05) {
-      g.moveTo(x - rock.w * 0.25, y - rock.h * 0.1);
-      g.lineTo(x + rock.w * 0.1 * dmg, y + rock.h * 0.2 * dmg);
+      g.moveTo(x - rock.w * 0.28, y - rock.h * 0.12);
+      g.lineTo(x + rock.w * 0.12 * dmg, y + rock.h * 0.22 * dmg);
       if (dmg > 0.4) {
-        g.moveTo(x + rock.w * 0.15, y - rock.h * 0.2);
-        g.lineTo(x - rock.w * 0.05, y + rock.h * 0.25);
+        g.moveTo(x + rock.w * 0.18, y - rock.h * 0.22);
+        g.lineTo(x - rock.w * 0.06, y + rock.h * 0.28);
       }
-      g.stroke({ width: 1.5, color: COLORS.void, alpha: 0.45 + dmg * 0.4 });
+      g.stroke({ width: 2, color: COLORS.void, alpha: 0.7 + dmg * 0.25 });
     }
   }
 
@@ -619,60 +631,60 @@ export class ForgeScene {
     const { x, y } = this.dwarfPoint();
     const swing = Math.sin(this.dwarfSwingT * Math.PI * 2);
     // Wind-up then strike: pick arm angle
-    const pickAng = -0.9 + swing * 1.1;
-    const bob = Math.abs(swing) * 2;
+    const pickAng = -0.95 + swing * 1.25;
+    const bob = Math.abs(swing) * 3;
+    const s = 1.35;
 
     // Shadow
-    g.ellipse(x, y + 18, 14, 5);
-    g.fill({ color: COLORS.void, alpha: 0.35 });
+    g.ellipse(x, y + 22 * s, 18 * s, 6 * s);
+    g.fill({ color: COLORS.void, alpha: 0.4 });
 
     // Legs
-    g.roundRect(x - 8, y + 4 - bob, 6, 12, 2);
+    g.roundRect(x - 10 * s, y + 5 * s - bob, 7 * s, 14 * s, 2);
     g.fill(COLORS.dwarfCoat);
-    g.roundRect(x + 2, y + 4 - bob, 6, 12, 2);
+    g.roundRect(x + 3 * s, y + 5 * s - bob, 7 * s, 14 * s, 2);
     g.fill(COLORS.dwarfCoat);
 
     // Body
-    g.roundRect(x - 11, y - 14 - bob, 22, 20, 5);
+    g.roundRect(x - 14 * s, y - 16 * s - bob, 28 * s, 24 * s, 6);
     g.fill(COLORS.dwarfCoat);
 
     // Head
-    g.circle(x, y - 22 - bob, 8);
+    g.circle(x, y - 26 * s - bob, 10 * s);
     g.fill(COLORS.dwarfSkin);
 
     // Helm
-    g.roundRect(x - 9, y - 30 - bob, 18, 8, 3);
+    g.roundRect(x - 11 * s, y - 36 * s - bob, 22 * s, 10 * s, 3);
     g.fill(COLORS.dwarfHelm);
-    g.moveTo(x, y - 34 - bob);
-    g.lineTo(x + 5, y - 28 - bob);
-    g.lineTo(x - 5, y - 28 - bob);
+    g.moveTo(x, y - 42 * s - bob);
+    g.lineTo(x + 7 * s, y - 34 * s - bob);
+    g.lineTo(x - 7 * s, y - 34 * s - bob);
     g.closePath();
     g.fill(COLORS.amber);
 
     // Beard
-    g.moveTo(x - 6, y - 18 - bob);
-    g.lineTo(x, y - 8 - bob);
-    g.lineTo(x + 6, y - 18 - bob);
+    g.moveTo(x - 8 * s, y - 22 * s - bob);
+    g.lineTo(x, y - 8 * s - bob);
+    g.lineTo(x + 8 * s, y - 22 * s - bob);
     g.closePath();
     g.fill({ color: COLORS.slate, alpha: 0.95 });
 
-    // Pickaxe arm + head
-    const ax = x + 10;
-    const ay = y - 10 - bob;
-    const px = ax + Math.cos(pickAng) * 26;
-    const py = ay + Math.sin(pickAng) * 26;
+    // Pickaxe arm + head — swings toward the ore pile
+    const ax = x + 12 * s;
+    const ay = y - 12 * s - bob;
+    const px = ax + Math.cos(pickAng) * 32 * s;
+    const py = ay + Math.sin(pickAng) * 32 * s;
     g.moveTo(ax, ay);
     g.lineTo(px, py);
-    g.stroke({ width: 3, color: COLORS.slate, alpha: 0.95 });
-    // Pick head
-    g.moveTo(px + Math.cos(pickAng - 1.2) * 10, py + Math.sin(pickAng - 1.2) * 10);
-    g.lineTo(px + Math.cos(pickAng + 1.2) * 10, py + Math.sin(pickAng + 1.2) * 10);
-    g.stroke({ width: 4, color: COLORS.amber, alpha: 0.95 });
+    g.stroke({ width: 4, color: COLORS.slate, alpha: 0.95 });
+    g.moveTo(px + Math.cos(pickAng - 1.2) * 12 * s, py + Math.sin(pickAng - 1.2) * 12 * s);
+    g.lineTo(px + Math.cos(pickAng + 1.2) * 12 * s, py + Math.sin(pickAng + 1.2) * 12 * s);
+    g.stroke({ width: 5, color: COLORS.amber, alpha: 0.95 });
 
     this.dwarfLabel.visible = true;
     this.dwarfLabel.text = 'Mining…';
     this.dwarfLabel.x = x;
-    this.dwarfLabel.y = y + 22;
+    this.dwarfLabel.y = y + 28 * s;
   }
 
   private isStationRunning(id: StationId): boolean {

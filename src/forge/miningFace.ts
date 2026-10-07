@@ -16,24 +16,25 @@ export interface OreRock {
   tint: number;
 }
 
-export function createOreRocks(count = 11): OreRock[] {
+export function createOreRocks(count = 10): OreRock[] {
   const rocks: OreRock[] = [];
   for (let i = 0; i < count; i++) {
     const ang = (i / count) * Math.PI * 2 + (i % 3) * 0.17;
-    const dist = 18 + (i % 5) * 11 + (i % 2) * 6;
+    const dist = 28 + (i % 5) * 14 + (i % 2) * 8;
     const maxHp = 2 + (i % 3);
     rocks.push({
       id: i,
-      ox: Math.cos(ang) * dist * 0.85,
-      oy: Math.sin(ang) * dist * 0.55 - 8,
-      w: 16 + (i % 4) * 5,
-      h: 12 + (i % 3) * 4,
+      ox: Math.cos(ang) * dist * 0.95,
+      oy: Math.sin(ang) * dist * 0.62 - 4,
+      w: 28 + (i % 4) * 8,
+      h: 22 + (i % 3) * 6,
       rot: (i * 0.7) % 1.2 - 0.6,
       hp: maxHp,
       maxHp,
       respawn: 0,
       seed: 1.1 + i * 0.37,
-      tint: i % 3 === 0 ? 0x1a4550 : i % 3 === 1 ? 0x143840 : 0x1f525c,
+      // Warm stone tones so they read against the cyan cavern painting
+      tint: i % 3 === 0 ? 0x3a4a52 : i % 3 === 1 ? 0x2c383f : 0x46565e,
     });
   }
   return rocks;
