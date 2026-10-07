@@ -23,6 +23,12 @@ export interface GameState {
   pendingLoot: Partial<Record<ResourceId, number>> | null;
   totalOreProduced: number;
   lifetimeOre: number;
+  /** Fully cleared mine-shaft rows this run (resets on Reforge). */
+  mineDepth: number;
+  /** Hits applied to the current dig face (left-to-right). */
+  mineFaceHits: number;
+  /** Fractional auto-mine dig accumulator (hits/sec). */
+  mineDigAcc: number;
   playTimeSec: number;
   prestigeCount: number;
   totalRelicsEarned: number;

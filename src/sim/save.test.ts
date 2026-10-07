@@ -18,19 +18,28 @@ describe('save migration', () => {
     expect(migrated.stations.enchanter.enabled).toBe(true);
   });
 
-  it('defaults missing talents and lastPrestigeAt', () => {
+  it('defaults missing talents, lastPrestigeAt, and mine shaft fields', () => {
     const state = createInitialState();
     const legacy = structuredClone(state) as unknown as {
       talents?: typeof state.talents;
       lastPrestigeAt?: number;
+      mineDepth?: number;
+      mineFaceHits?: number;
+      mineDigAcc?: number;
     };
     delete legacy.talents;
     delete legacy.lastPrestigeAt;
+    delete legacy.mineDepth;
+    delete legacy.mineFaceHits;
+    delete legacy.mineDigAcc;
 
     const migrated = migrateState(legacy as typeof state);
     expect(migrated.talents.vein_attunement).toBe(0);
     expect(migrated.talents.hearth_kindling).toBe(0);
     expect(migrated.lastPrestigeAt).toBe(0);
+    expect(migrated.mineDepth).toBe(0);
+    expect(migrated.mineFaceHits).toBe(0);
+    expect(migrated.mineDigAcc).toBe(0);
   });
 
   it('round-trips enabled through serialize/deserialize', () => {

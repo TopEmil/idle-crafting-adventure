@@ -52,8 +52,20 @@ describe('click & craft', () => {
     const state = createInitialState();
     const { state: next, event } = clickVein(state);
     expect(event.type).toBe('click_vein');
-    expect(next.resources.ore).toBe(getClickPower(state));
+    expect(event.type === 'click_vein' && event.amount).toBe(getClickPower(next));
+    expect(next.resources.ore).toBe(getClickPower(next));
     expect(next.totalOreProduced).toBe(next.resources.ore);
+    expect(next.mineFaceHits).toBe(1);
+  });
+
+  it('advances mine depth when the dig face is cleared', () => {
+    let state = createInitialState();
+    // Enough taps to clear several rows of the shaft face
+    for (let i = 0; i < 80; i++) {
+      state = clickVein(state).state;
+    }
+    expect(state.mineDepth).toBeGreaterThan(0);
+    expect(getClickPower(state)).toBeGreaterThan(BALANCE.baseClickOre);
   });
 
   it('crafts copper pick within early ore budget', () => {

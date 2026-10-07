@@ -29,6 +29,19 @@ export function migrateState(state: GameState): GameState {
   if (typeof next.lastPrestigeAt !== 'number') {
     next.lastPrestigeAt = 0;
   }
+  if (typeof next.mineDepth !== 'number' || next.mineDepth < 0) {
+    next.mineDepth = 0;
+  } else {
+    next.mineDepth = Math.floor(next.mineDepth);
+  }
+  if (typeof next.mineFaceHits !== 'number' || next.mineFaceHits < 0) {
+    next.mineFaceHits = 0;
+  } else {
+    next.mineFaceHits = Math.floor(next.mineFaceHits);
+  }
+  if (typeof next.mineDigAcc !== 'number' || next.mineDigAcc < 0) {
+    next.mineDigAcc = 0;
+  }
   return next;
 }
 

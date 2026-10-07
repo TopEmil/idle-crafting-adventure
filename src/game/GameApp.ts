@@ -250,6 +250,7 @@ export class GameApp {
     }
     const { state, event } = clickVein(this.state);
     this.state = state;
+    this.scene.sync(this.state);
     const amount = event.type === 'click_vein' ? event.amount : 1;
     this.scene.triggerVeinHit(amount);
     this.hud.pulseVeinButton();
