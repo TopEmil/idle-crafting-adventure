@@ -153,9 +153,14 @@ export class GameApp {
       void this.persist();
     }
 
-    // Refresh expedition progress UI periodically when panel open
-    if (this.panel === 'expeditions' && this.overlayMode === 'none') {
-      this.refreshHud();
+    // Keep chrome live while a sheet is open, but never rebuild the Expeditions
+    // sheet every frame — full innerHTML replaces steal click/tap events (Send
+    // felt broken). Progress bars patch in place instead.
+    if (this.overlayMode === 'none' && this.panel) {
+      this.refreshHudChrome();
+      if (this.panel === 'expeditions') {
+        this.hud.syncExpeditionProgress(this.state);
+      }
     } else if (this.overlayMode === 'none' && !this.panel) {
       this.refreshHudLight();
     }
@@ -167,6 +172,13 @@ export class GameApp {
     this.hud.setPanel(this.panel);
     this.hud.setView(this.scene.getView());
     this.hud.render(this.state, { notice: this.notice });
+  }
+
+  /** Resources / goals / CTAs only — does not rebuild open sheets. */
+  private refreshHudChrome() {
+    this.hud.setPanel(this.panel);
+    this.hud.setView(this.scene.getView());
+    this.hud.renderChrome(this.state);
   }
 
   private refreshHudLight() {
@@ -413,7 +425,12 @@ export class GameApp {
     }
 
     const result = claimExpedition(this.state, doubled);
-    if (!result.ok) return;
+    if (!result.ok) {
+      this.notice = result.reason;
+      this.closeOverlay();
+      this.refreshHudLight();
+      return;
+    }
     this.state = result.state;
     this.audio.claim();
     this.platform.happytime();

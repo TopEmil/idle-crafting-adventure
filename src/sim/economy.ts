@@ -224,6 +224,7 @@ export function completeExpeditionIfReady(
   }
   const next = structuredClone(state);
   next.pendingLoot = rollExpeditionLoot(next, active.id, rng);
+  next.activeExpedition = { ...active, claimed: true };
   return {
     state: next,
     event: { type: 'expedition_ready', expeditionId: active.id },
@@ -234,7 +235,9 @@ export function claimExpedition(
   state: GameState,
   doubled: boolean,
 ): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
-  if (!state.pendingLoot || !state.activeExpedition) {
+  // Only pendingLoot is required — older saves / edge paths can drop activeExpedition
+  // while loot is still waiting, and that must not soft-lock the player.
+  if (!state.pendingLoot) {
     return { ok: false, reason: 'Nothing to claim' };
   }
   const loot = state.pendingLoot;

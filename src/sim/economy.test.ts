@@ -148,13 +148,28 @@ describe('expeditions', () => {
 
     const { state: after } = simulateSeconds(state, 50, now + 50_000, () => 0.99);
     expect(after.pendingLoot).not.toBeNull();
+    expect(after.activeExpedition?.claimed).toBe(true);
 
     const claimed = claimExpedition(after, false);
     expect(claimed.ok).toBe(true);
     if (claimed.ok) {
       expect(claimed.state.pendingLoot).toBeNull();
+      expect(claimed.state.activeExpedition).toBeNull();
       expect(claimed.state.milestones.firstExpeditionClaimed).toBe(true);
       expect(claimed.state.resources.glowdust).toBeGreaterThan(0);
+    }
+  });
+
+  it('claims pending loot even if activeExpedition was lost', () => {
+    const state = createInitialState();
+    state.pendingLoot = { glowdust: 18, ore: 12 };
+    state.activeExpedition = null;
+    const claimed = claimExpedition(state, false);
+    expect(claimed.ok).toBe(true);
+    if (claimed.ok) {
+      expect(claimed.state.pendingLoot).toBeNull();
+      expect(claimed.state.resources.glowdust).toBe(18);
+      expect(claimed.state.milestones.firstExpeditionClaimed).toBe(true);
     }
   });
 
@@ -165,7 +180,7 @@ describe('expeditions', () => {
       id: 'glow_shalllows',
       startedAt: 0,
       endsAt: 0,
-      claimed: false,
+      claimed: true,
       doublePending: true,
     };
     const single = claimExpedition(structuredClone(state), false);
