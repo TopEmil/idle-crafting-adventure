@@ -377,9 +377,16 @@ body {
 }
 
 .btn:disabled {
-  opacity: 0.42;
+  opacity: 0.38;
   cursor: not-allowed;
-  filter: grayscale(0.2);
+  filter: grayscale(0.35) saturate(0.7);
+  box-shadow: none;
+  transform: none;
+}
+
+#btn-craft:disabled {
+  border-color: color-mix(in srgb, var(--slate) 35%, transparent);
+  color: color-mix(in srgb, var(--mist) 55%, var(--slate));
 }
 
 .btn-primary {

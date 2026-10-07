@@ -538,19 +538,20 @@ export class ForgeScene {
           sprite.visible = true;
           sprite.x = slot.x;
           sprite.y = slot.y + 8;
-          sprite.scale.set(baseScale * 0.92);
-          sprite.alpha = 0.22;
-          sprite.tint = 0x8fa8b0;
+          sprite.scale.set(baseScale * 0.9);
+          // Readable silhouette against the busy cavern painting
+          sprite.alpha = 0.48;
+          sprite.tint = 0x9eb8c0;
         } else {
-          this.drawStationBody(g, slot.id, slot.x, slot.y, 0.22, false, 1);
+          this.drawStationBody(g, slot.id, slot.x, slot.y, 0.35, false, 1);
         }
         // Soft ground shadow so the cutout sits in the cavern
         g.ellipse(slot.x, slot.y + 10, 34 * baseScale * 2.2, 10 * baseScale * 2);
-        g.fill({ color: COLORS.void, alpha: 0.28 });
+        g.fill({ color: COLORS.void, alpha: 0.32 });
         if (label) {
           label.visible = true;
           label.text = `${getStation(slot.id).name}?`;
-          label.alpha = 0.35;
+          label.alpha = 0.55;
           label.x = slot.x;
           label.y = slot.y + (hasArt ? 22 : 28);
         }
