@@ -21,7 +21,8 @@ Built for CrazyGames HTML5 — instant play, mobile-friendly controls, optional 
 - **Tap / Click** the vein or Tap Vein button to gather ore
 - **Craft** recipes from the bottom Craft CTA or Recipes sheet
 - **Expeditions** — send scouts, wait, claim loot
-- **Forge** — unlock/upgrade stations and Reforge
+- **Forge** — unlock/upgrade stations
+- **Reforge** — prestige for Relics (shown before you confirm)
 - **Ledger** — stats and collection
 
 Keyboard: gameplay blocks Space/Arrows from scrolling the page. Mouse/touch primary.

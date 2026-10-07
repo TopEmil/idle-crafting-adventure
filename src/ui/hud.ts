@@ -36,7 +36,7 @@ import {
 import type { SceneView } from '../forge/sceneView';
 import { leaderboardScore, msUntilSeasonEnd } from '../sim/oreScore';
 
-export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'talents' | 'ledger' | null;
+export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'talents' | 'reforge' | 'ledger' | null;
 
 export interface HudActions {
   onClickVein: () => void;
@@ -118,6 +118,7 @@ export class Hud {
           <button class="nav-btn" data-panel="expeditions" type="button">Expeditions</button>
           <button class="nav-btn" data-panel="forge" type="button">Stations</button>
           <button class="nav-btn" data-panel="talents" type="button">Talents</button>
+          <button class="nav-btn" data-panel="reforge" type="button">Reforge</button>
           <button class="nav-btn" data-panel="ledger" type="button">Ledger</button>
         </div>
       </div>
@@ -373,9 +374,9 @@ export class Hud {
     this.overlay.innerHTML = `
       <div class="modal">
         <h2>Reforge the Forge</h2>
-        <p>Reset production for <strong>${relicsPreview} Relics</strong>. Spend them on permanent Talents — then wait ${BALANCE.prestigeCooldownSec / 60} min before the next Reforge.</p>
+        <p>Reset production for <strong>${formatNumber(relicsPreview)} Relics</strong> (reforge points). Spend them on permanent Talents — then wait ${BALANCE.prestigeCooldownSec / 60} min before the next Reforge.</p>
         <div class="modal-actions">
-          <button class="btn btn-primary" id="prestige-yes" type="button">Reforge</button>
+          <button class="btn btn-primary" id="prestige-yes" type="button">Reforge · +${formatNumber(relicsPreview)} Relics</button>
           <button class="btn btn-ghost" id="prestige-no" type="button">Not yet</button>
         </div>
       </div>
@@ -467,6 +468,9 @@ export class Hud {
         return;
       case 'talents':
         this.renderTalents(state, notice);
+        return;
+      case 'reforge':
+        this.renderReforge(state, notice);
         return;
       case 'ledger':
         this.renderLedger(state, notice);
@@ -787,37 +791,14 @@ export class Hud {
       `;
     }).join('');
 
-    const relicsPreview = relicsFromReforge(state.lifetimeOre, state.prestigeCount);
-    const coolLeft = prestigeCooldownRemaining(state);
-    const prestigeReady = canPrestige(state);
-    let prestigeLabel = 'Reforge';
-    let prestigeHint = 'Reset production for Relics — spend them on the Talents page.';
-    let prestigeCost = `Gain ~${relicsPreview} Relics`;
-    if (!prestigeReady && coolLeft > 0) {
-      prestigeLabel = formatDuration(coolLeft);
-      prestigeHint = `Reforge cools ${BALANCE.prestigeCooldownSec / 60} min between runs.`;
-      prestigeCost = `Ready in ${formatDuration(coolLeft)}`;
-    } else if (!prestigeReady) {
-      prestigeLabel = 'Locked';
-      prestigeHint = `Need ${BALANCE.prestigeMinLifetimeOre} lifetime ore, or unlock the Smelter.`;
-    }
-
     this.overlay.innerHTML = `
       <div class="sheet">
         <div class="sheet-header">
           <h2>Stations</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Machines sit on the Forge hall pedestals · Use −/+ Speed to run slower than owned level · Relics ${formatNumber(state.resources.relics)} · Cosmetic: ${state.activeCosmetic}</p>
+        <p class="muted">Machines sit on the Forge hall pedestals · Use −/+ Speed to run slower than owned level · Cosmetic: ${state.activeCosmetic}</p>
         <div class="list">${stationRows}</div>
-        <div class="row-item">
-          <div>
-            <h3>Reforge</h3>
-            <div class="cost">${prestigeCost}</div>
-          </div>
-          <button class="btn btn-primary" id="btn-prestige" type="button" ${prestigeReady ? '' : 'disabled'}>${prestigeLabel}</button>
-          <p>${prestigeHint}</p>
-        </div>
         <div class="row-item">
           <div>
             <h3>Time Warp</h3>
@@ -848,12 +829,71 @@ export class Hud {
     this.overlay.querySelectorAll('[data-upgrade]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUpgradeStation((btn as HTMLElement).dataset.upgrade as StationId));
     });
+    this.overlay.querySelector('#btn-warp-ad')?.addEventListener('click', () => this.actions.onTimeWarp(true));
+    this.overlay.querySelector('#btn-warp-coin')?.addEventListener('click', () => this.actions.onTimeWarp(false));
+  }
+
+  private renderReforge(state: GameState, notice?: string) {
+    const relicsPreview = relicsFromReforge(state.lifetimeOre, state.prestigeCount);
+    const coolLeft = prestigeCooldownRemaining(state);
+    const prestigeReady = canPrestige(state);
+    let prestigeLabel = 'Reforge';
+    let prestigeHint = 'Reset this run\'s production. Talents, Relics, and cosmetics stay.';
+    let statusLine = 'Ready to Reforge';
+    if (!prestigeReady && coolLeft > 0) {
+      prestigeLabel = formatDuration(coolLeft);
+      prestigeHint = `Reforge cools ${BALANCE.prestigeCooldownSec / 60} min between runs.`;
+      statusLine = `Ready in ${formatDuration(coolLeft)}`;
+    } else if (!prestigeReady) {
+      prestigeLabel = 'Locked';
+      prestigeHint = `Need ${formatNumber(BALANCE.prestigeMinLifetimeOre)} lifetime ore, or unlock the Smelter.`;
+      statusLine = 'Not unlocked yet';
+    }
+
+    this.overlay.innerHTML = `
+      <div class="sheet">
+        <div class="sheet-header">
+          <h2>Reforge</h2>
+          <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <p class="sheet-intro">Reset the forge for Relics, then spend them on the Talents tab for permanent power.</p>
+        <div class="reforge-reward" aria-live="polite">
+          <div class="reforge-reward-label">Reforge points this run</div>
+          <div class="reforge-reward-value">${formatNumber(relicsPreview)}</div>
+          <div class="reforge-reward-unit">Relics on Reforge</div>
+        </div>
+        <div class="list">
+          <div class="row-item">
+            <div>
+              <h3>This Reforge</h3>
+              <div class="cost">${statusLine}</div>
+              <div class="effect-line">Gain ${formatNumber(relicsPreview)} Relics</div>
+              <div class="effect-line muted">Run ore ${formatNumber(state.lifetimeOre)} · Past Reforges ${state.prestigeCount}</div>
+            </div>
+            <button class="btn btn-primary" id="btn-prestige" type="button" ${prestigeReady ? '' : 'disabled'}>${prestigeLabel}</button>
+            <p>${prestigeHint}</p>
+          </div>
+          <div class="row-item">
+            <div>
+              <h3>Relics owned</h3>
+              <div class="cost">${formatNumber(state.resources.relics)} available</div>
+              <div class="effect-line muted">Lifetime earned ${formatNumber(state.totalRelicsEarned)}</div>
+            </div>
+            <button class="btn btn-secondary" id="btn-reforge-talents" type="button">Talents</button>
+            <p>Spend Relics on permanent bonuses that survive every Reforge.</p>
+          </div>
+        </div>
+        ${notice ? `<p class="notice">${notice}</p>` : ''}
+      </div>
+    `;
+    this.bindSheet();
     this.overlay.querySelector('#btn-prestige')?.addEventListener('click', () => {
       this.actions.onOpenPanel(null);
       this.showPrestigeConfirm(relicsPreview);
     });
-    this.overlay.querySelector('#btn-warp-ad')?.addEventListener('click', () => this.actions.onTimeWarp(true));
-    this.overlay.querySelector('#btn-warp-coin')?.addEventListener('click', () => this.actions.onTimeWarp(false));
+    this.overlay.querySelector('#btn-reforge-talents')?.addEventListener('click', () => {
+      this.actions.onOpenPanel('talents');
+    });
   }
 
   private renderTalents(state: GameState, notice?: string) {
@@ -891,7 +931,7 @@ export class Hud {
         <p class="muted">Permanent bonuses that survive Reforge · Relics ${formatNumber(state.resources.relics)} · Levels ${talentLevels}</p>
         <div class="list">${talentRows}</div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
-        <p class="muted" style="margin-top:12px">Earn Relics by Reforging from the Stations sheet.</p>
+        <p class="muted" style="margin-top:12px">Earn Relics from the Reforge tab.</p>
       </div>
     `;
     this.bindSheet();

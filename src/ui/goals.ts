@@ -132,7 +132,7 @@ export function nextGoal(state: GameState): GoalInfo {
     return {
       id: 'prestige',
       title: 'Reforge the forge',
-      detail: 'Earn Relics for permanent Talents',
+      detail: 'Open the Reforge tab for Relics',
       progress: 1,
       ready: true,
     };
