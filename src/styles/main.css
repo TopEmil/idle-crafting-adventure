@@ -540,7 +540,7 @@ body {
 
 .nav-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   padding: 8px;
   border-radius: 18px;
@@ -917,14 +917,14 @@ body {
   }
 
   .nav-row {
-    gap: 4px;
+    gap: 3px;
     padding: 6px;
     border-radius: 14px;
   }
 
   .nav-btn {
-    font-size: 11px;
-    padding: 10px 2px;
+    font-size: 10px;
+    padding: 10px 1px;
   }
 
   .goal-strip {

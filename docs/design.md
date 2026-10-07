@@ -72,11 +72,11 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 │         [ full-bleed Pixi forge ]        │
 │                                          │
 │  [ Tap Vein ]              [ Craft ▸ ]   │
-│  Recipes | Expeditions | Forge | Ledger  │
+│  Recipes | Expeditions | Stations | Talents | Ledger  │
 └──────────────────────────────────────────┘
 ```
 
-Sheets slide up for Recipes / Expeditions / Forge / Ledger — not floating cards.
+Sheets slide up for Recipes / Expeditions / Stations / Talents / Ledger — not floating cards.
 
 ### Expedition return
 
@@ -101,7 +101,7 @@ Equal-weight “No thanks”; coin alternative when available; no reward on `adE
 └────────────────────────────┘
 ```
 
-Talents (Stations sheet): Vein Attunement, Hearth Kindling, Scout Instinct, Deep Slumber — spend Relics; levels persist across Reforge.
+Talents (own sheet): Vein Attunement, Hearth Kindling, Scout Instinct, Deep Slumber — spend Relics; levels persist across Reforge.
 
 Midgame ad may fire **after** confirm modal closes — never mid-animation freeze without SDK callbacks.
 

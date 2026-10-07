@@ -455,7 +455,7 @@ export class GameApp {
     this.overlayMode = 'prestige';
     this.hud.showMilestone(
       'Forge Reforged',
-      `You gained ${result.relics} Relics. Spend them on Talents in Stations — next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
+      `You gained ${result.relics} Relics. Spend them on the Talents page — next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
     );
     void this.persist();
   }
