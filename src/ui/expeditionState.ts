@@ -13,13 +13,24 @@ export type ExpeditionRowKind =
   | 'active'
   | 'returning';
 
+/** Stable action slot mode used to avoid rebuilding buttons every frame. */
+export type ExpeditionActionMode =
+  | 'locked'
+  | 'busy'
+  | 'claim_first'
+  | 'need_cost'
+  | 'send'
+  | 'progress'
+  | 'claim';
+
 export interface ExpeditionRowState {
   kind: ExpeditionRowKind;
+  mode: ExpeditionActionMode;
   /** Primary cost / unlock / timer line */
   status: string;
   /** Explicit requirements the player must meet */
   requirements: string;
-  /** Send / Locked / Need more / Scout busy button label */
+  /** Send / Locked / Need more / Scout busy / Claim button label */
   actionLabel: string;
   canSend: boolean;
   blocked: boolean;
@@ -35,17 +46,18 @@ export function getExpeditionRowState(
   now = Date.now(),
 ): ExpeditionRowState {
   const active = state.activeExpedition;
-  const isThisActive = active?.id === expedition.id && !active.claimed;
+  const pending = state.pendingLoot;
 
-  if (isThisActive && active) {
+  if (active?.id === expedition.id) {
     const left = Math.max(0, (active.endsAt - now) / 1000);
     const pct = Math.min(100, ((expedition.durationSec - left) / expedition.durationSec) * 100);
-    if (left <= 0 || state.pendingLoot) {
+    if (pending || left <= 0 || active.claimed) {
       return {
         kind: 'returning',
-        status: 'Ready to claim',
-        requirements: 'Open the return modal to collect loot',
-        actionLabel: 'Returning',
+        mode: 'claim',
+        status: 'Loot ready — claim it',
+        requirements: 'Tap Claim to collect loot',
+        actionLabel: 'Claim',
         canSend: false,
         blocked: false,
         progress: 1,
@@ -54,6 +66,7 @@ export function getExpeditionRowState(
     }
     return {
       kind: 'active',
+      mode: 'progress',
       status: `Returning in ${formatDuration(left)}`,
       requirements: `Cost paid · ${formatDuration(expedition.durationSec)} run`,
       actionLabel: 'En route',
@@ -71,6 +84,7 @@ export function getExpeditionRowState(
     const progress = need > 0 ? Math.min(1, have / need) : 1;
     return {
       kind: 'locked',
+      mode: 'locked',
       status: `${formatNumber(have)} / ${formatNumber(need)} lifetime ore`,
       requirements: `Unlock at ${formatNumber(need)} lifetime ore produced`,
       actionLabel: 'Locked',
@@ -81,9 +95,10 @@ export function getExpeditionRowState(
     };
   }
 
-  if (state.pendingLoot) {
+  if (pending) {
     return {
       kind: 'claim_first',
+      mode: 'claim_first',
       status: `${formatCost(expedition.cost)} · ${formatDuration(expedition.durationSec)}`,
       requirements: 'Claim pending loot before sending again',
       actionLabel: 'Claim first',
@@ -97,6 +112,7 @@ export function getExpeditionRowState(
   if (active && !active.claimed) {
     return {
       kind: 'busy',
+      mode: 'busy',
       status: `${formatCost(expedition.cost)} · ${formatDuration(expedition.durationSec)}`,
       requirements: 'Only one scout party at a time',
       actionLabel: 'Scout busy',
@@ -112,6 +128,7 @@ export function getExpeditionRowState(
   if (!affordable) {
     return {
       kind: 'need_cost',
+      mode: 'need_cost',
       status: costProgress.detail,
       requirements: `Needs ${formatCost(expedition.cost)} to send · ${formatDuration(expedition.durationSec)}`,
       actionLabel: 'Need more',
@@ -124,6 +141,7 @@ export function getExpeditionRowState(
 
   return {
     kind: 'ready',
+    mode: 'send',
     status: `Ready · ${costProgress.detail} · ${formatDuration(expedition.durationSec)}`,
     requirements: `Spend ${formatCost(expedition.cost)} · returns in ${formatDuration(expedition.durationSec)}`,
     actionLabel: 'Send',
@@ -132,4 +150,23 @@ export function getExpeditionRowState(
     progress: 1,
     activePct: null,
   };
+}
+
+export function expeditionActionHtml(row: ExpeditionRowState, expeditionId: string): string {
+  switch (row.mode) {
+    case 'claim':
+      return `<button class="btn btn-primary" id="exp-claim" type="button">${row.actionLabel}</button>`;
+    case 'progress':
+      return `<div class="progress-bar" style="width:88px" title="${row.status}"><span data-exp-bar style="width:${row.activePct ?? 0}%"></span></div>`;
+    case 'locked':
+    case 'busy':
+    case 'claim_first':
+    case 'need_cost':
+    case 'send':
+      return `<button class="btn btn-secondary" data-exp="${expeditionId}" type="button" ${row.canSend ? '' : 'disabled'} title="${row.requirements}">${row.actionLabel}</button>`;
+    default: {
+      const _exhaustive: never = row.mode;
+      return _exhaustive;
+    }
+  }
 }

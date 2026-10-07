@@ -75,9 +75,28 @@ describe('getExpeditionRowState', () => {
     };
     const row = getExpeditionRowState(state, glow, 10_000);
     expect(row.kind).toBe('active');
+    expect(row.mode).toBe('progress');
     expect(row.status).toMatch(/Returning in/);
     expect(row.activePct).not.toBeNull();
     expect(row.canSend).toBe(false);
+  });
+
+  it('offers Claim when the active expedition is ready', () => {
+    const state = createInitialState();
+    state.totalOreProduced = 50;
+    state.pendingLoot = { glowdust: 10 };
+    state.activeExpedition = {
+      id: 'glow_shalllows',
+      startedAt: 1,
+      endsAt: 2,
+      claimed: false,
+      doublePending: false,
+    };
+    const row = getExpeditionRowState(state, glow, 10_000);
+    expect(row.kind).toBe('returning');
+    expect(row.mode).toBe('claim');
+    expect(row.actionLabel).toBe('Claim');
+    expect(row.status).toMatch(/Loot ready/i);
   });
 
   it('requires claiming pending loot before another send', () => {
@@ -96,6 +115,7 @@ describe('getExpeditionRowState', () => {
     state.totalOreProduced = 200;
     const row = getExpeditionRowState(state, crystal);
     expect(row.kind).toBe('claim_first');
+    expect(row.mode).toBe('claim_first');
     expect(row.actionLabel).toBe('Claim first');
     expect(row.requirements).toMatch(/Claim pending loot/i);
   });

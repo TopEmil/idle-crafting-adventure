@@ -12,6 +12,7 @@ import {
   simulateSeconds,
   startExpedition,
   tickProduction,
+  toggleStation,
   unlockStation,
   upgradeStation,
 } from './economy';
@@ -97,11 +98,40 @@ describe('stations', () => {
 
   it('upgrades increase level', () => {
     const state = createInitialState();
-    state.stations.smelter = { unlocked: true, level: 1 };
+    state.stations.smelter = { unlocked: true, level: 1, enabled: true };
     state.resources.ore = 10_000;
     const up = upgradeStation(state, 'smelter');
     expect(up.ok).toBe(true);
     if (up.ok) expect(up.state.stations.smelter.level).toBe(2);
+  });
+
+  it('can turn stations off and on', () => {
+    let state = createInitialState();
+    state.resources.ore = 100;
+    const unlocked = unlockStation(state, 'smelter');
+    expect(unlocked.ok).toBe(true);
+    if (!unlocked.ok) return;
+    state = unlocked.state;
+    expect(state.stations.smelter.enabled).toBe(true);
+
+    const off = toggleStation(state, 'smelter');
+    expect(off.ok).toBe(true);
+    if (!off.ok) return;
+    state = off.state;
+    expect(state.stations.smelter.enabled).toBe(false);
+
+    state.resources.ore = 50;
+    const paused = tickProduction(state, 2);
+    expect(paused.resources.emberglass).toBe(0);
+    expect(paused.resources.ore).toBe(50);
+
+    const on = toggleStation(state, 'smelter');
+    expect(on.ok).toBe(true);
+    if (!on.ok) return;
+    state = on.state;
+    state.resources.ore = 50;
+    state = tickProduction(state, 2);
+    expect(state.resources.emberglass).toBeGreaterThan(0);
   });
 });
 
@@ -118,13 +148,28 @@ describe('expeditions', () => {
 
     const { state: after } = simulateSeconds(state, 50, now + 50_000, () => 0.99);
     expect(after.pendingLoot).not.toBeNull();
+    expect(after.activeExpedition?.claimed).toBe(true);
 
     const claimed = claimExpedition(after, false);
     expect(claimed.ok).toBe(true);
     if (claimed.ok) {
       expect(claimed.state.pendingLoot).toBeNull();
+      expect(claimed.state.activeExpedition).toBeNull();
       expect(claimed.state.milestones.firstExpeditionClaimed).toBe(true);
       expect(claimed.state.resources.glowdust).toBeGreaterThan(0);
+    }
+  });
+
+  it('claims pending loot even if activeExpedition was lost', () => {
+    const state = createInitialState();
+    state.pendingLoot = { glowdust: 18, ore: 12 };
+    state.activeExpedition = null;
+    const claimed = claimExpedition(state, false);
+    expect(claimed.ok).toBe(true);
+    if (claimed.ok) {
+      expect(claimed.state.pendingLoot).toBeNull();
+      expect(claimed.state.resources.glowdust).toBe(18);
+      expect(claimed.state.milestones.firstExpeditionClaimed).toBe(true);
     }
   });
 
@@ -135,7 +180,7 @@ describe('expeditions', () => {
       id: 'glow_shalllows',
       startedAt: 0,
       endsAt: 0,
-      claimed: false,
+      claimed: true,
       doublePending: true,
     };
     const single = claimExpedition(structuredClone(state), false);
@@ -150,7 +195,7 @@ describe('expeditions', () => {
 describe('offline & prestige', () => {
   it('caps offline progress', () => {
     const state = createInitialState(0);
-    state.stations.smelter = { unlocked: true, level: 3 };
+    state.stations.smelter = { unlocked: true, level: 3, enabled: true };
     state.resources.ore = 10_000;
     state.lastTickAt = 0;
     const farFuture = BALANCE.offlineCapSeconds * 1000 * 3;
@@ -165,7 +210,7 @@ describe('offline & prestige', () => {
     let state = createInitialState();
     state.lifetimeOre = 2000;
     state.resources.ore = 500;
-    state.stations.smelter = { unlocked: true, level: 4 };
+    state.stations.smelter = { unlocked: true, level: 4, enabled: true };
     const result = prestige(state);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -180,7 +225,7 @@ describe('offline & prestige', () => {
 describe('fixed timestep independence', () => {
   it('produces similar totals across step sizes for equal duration', () => {
     const base = createInitialState();
-    base.stations.smelter = { unlocked: true, level: 2 };
+    base.stations.smelter = { unlocked: true, level: 2, enabled: true };
     base.resources.ore = 1_000;
 
     const a = simulateSeconds(structuredClone(base), 10, 10_000).state;

@@ -12,7 +12,7 @@ import {
 import { prestigeMult } from '../data/balance';
 import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
-import { getExpeditionRowState } from './expeditionState';
+import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
 import { formatCost, formatDuration, formatMissingCost, formatNumber } from './format';
 import { nextGoal } from './goals';
 import {
@@ -33,7 +33,9 @@ export interface HudActions {
   onCraftRecipe: (id: string) => void;
   onUnlockStation: (id: StationId) => void;
   onUpgradeStation: (id: StationId) => void;
+  onToggleStation: (id: StationId) => void;
   onStartExpedition: (id: string) => void;
+  onRevealExpeditionLoot: () => void;
   onClaimExpedition: (mode: 'normal' | 'ad' | 'coin') => void;
   onPrestige: () => void;
   onTimeWarp: (viaAd: boolean) => void;
@@ -140,7 +142,8 @@ export class Hud {
     });
   }
 
-  render(state: GameState, opts?: { notice?: string }) {
+  /** Top-bar / dock chrome only — safe to call every frame with a sheet open. */
+  renderChrome(state: GameState) {
     this.renderResources(state);
     this.renderGoal(state);
     this.renderCraftQuick(state);
@@ -156,12 +159,29 @@ export class Hud {
       craftBtn.classList.toggle('btn-primary', this.view === 'forge');
       craftBtn.classList.toggle('btn-secondary', this.view === 'mine');
     }
+  }
+
+  render(state: GameState, opts?: { notice?: string }) {
+    this.renderChrome(state);
 
     if (this.panel) {
       this.renderPanel(state, opts?.notice);
     } else if (!this.overlay.querySelector('.modal') && !this.overlay.querySelector('.onboarding')) {
       // keep overlay empty unless modal/onboarding managed elsewhere
     }
+  }
+
+  /**
+   * Update expedition timers / claim affordances without replacing the sheet DOM.
+   * Full rebuilds every frame made Send/Claim taps miss their targets.
+   */
+  syncExpeditionProgress(state: GameState) {
+    if (this.panel !== 'expeditions') return;
+    if (!this.overlay.querySelector('[data-expedition-sheet]')) {
+      this.renderExpeditions(state);
+      return;
+    }
+    this.patchExpeditionRows(state);
   }
 
   /** Short HUD toast — e.g. craft / unlock feedback */
@@ -441,54 +461,150 @@ export class Hud {
 
   private renderExpeditions(state: GameState, notice?: string) {
     const now = Date.now();
+    const pending = state.pendingLoot;
+    const orphanClaim = Boolean(pending) && !state.activeExpedition;
 
     const rows = EXPEDITIONS.map((e) => {
       const row = getExpeditionRowState(state, e, now);
-      let action: string;
-      if (row.activePct != null) {
-        action = `<div class="progress-bar" style="width:88px" title="${row.status}"><span style="width:${row.activePct}%"></span></div>`;
-      } else {
-        action = `<button class="btn btn-secondary" data-exp="${e.id}" type="button" ${row.canSend ? '' : 'disabled'} title="${row.requirements}">${row.actionLabel}</button>`;
-      }
       const lootHint = Object.entries(e.baseLoot)
         .map(([k, v]) => `+${v} ${k}`)
         .join(' · ');
-      const unlockMeter =
-        row.kind === 'locked' || row.kind === 'need_cost'
-          ? `<div class="req-meter" aria-hidden="true"><span style="width:${Math.round(row.progress * 100)}%"></span></div>`
-          : '';
+      const showMeter = row.kind === 'locked' || row.kind === 'need_cost';
+      const meter = showMeter
+        ? `<div class="req-meter" data-exp-meter aria-hidden="true"><span style="width:${Math.round(row.progress * 100)}%"></span></div>`
+        : `<div class="req-meter" data-exp-meter hidden aria-hidden="true"><span style="width:0%"></span></div>`;
       return `
-        <div class="row-item${row.blocked ? ' row-item-blocked' : ''}">
+        <div class="row-item${row.blocked ? ' row-item-blocked' : ''}" data-exp-row="${e.id}">
           <div>
             <h3>${e.name}</h3>
-            <div class="cost">${row.status}</div>
-            ${unlockMeter}
-            <div class="req-line">${row.requirements}</div>
+            <div class="cost" data-exp-status>${row.status}</div>
+            ${meter}
+            <div class="req-line" data-exp-req>${row.requirements}</div>
             <div class="effect-line">Loot: ${lootHint}</div>
           </div>
-          ${action}
+          <div data-exp-action data-exp-mode="${row.mode}">${expeditionActionHtml(row, e.id)}</div>
           <p>${e.description}</p>
         </div>
       `;
     }).join('');
 
+    const orphan = orphanClaim
+      ? `<div class="row-item" data-exp-orphan-claim>
+          <div>
+            <h3>Loot waiting</h3>
+            <div class="cost">Scouts already returned — claim your haul.</div>
+          </div>
+          <div data-exp-action data-exp-mode="claim">
+            <button class="btn btn-primary" id="exp-claim" type="button">Claim</button>
+          </div>
+        </div>`
+      : '';
+
     this.overlay.innerHTML = `
-      <div class="sheet">
+      <div class="sheet" data-expedition-sheet>
         <div class="sheet-header">
           <h2>Expeditions</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
         <p class="sheet-intro">Unlock destinations with lifetime ore, spend the listed cost, then wait for scouts to return. Only one party at a time.</p>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
-        <div class="list">${rows}</div>
+        <div class="list">${orphan}${rows}</div>
       </div>
     `;
     this.bindSheet();
+    this.bindExpeditionActions();
+  }
+
+  private patchExpeditionRows(state: GameState) {
+    const now = Date.now();
+    const pending = state.pendingLoot;
+    const orphanClaim = Boolean(pending) && !state.activeExpedition;
+
+    const list = this.overlay.querySelector('[data-expedition-sheet] .list');
+    if (list) {
+      let orphan = list.querySelector('[data-exp-orphan-claim]');
+      if (orphanClaim && !orphan) {
+        orphan = document.createElement('div');
+        orphan.className = 'row-item';
+        orphan.setAttribute('data-exp-orphan-claim', '');
+        orphan.innerHTML = `
+          <div>
+            <h3>Loot waiting</h3>
+            <div class="cost">Scouts already returned — claim your haul.</div>
+          </div>
+          <div data-exp-action data-exp-mode="claim">
+            <button class="btn btn-primary" id="exp-claim" type="button">Claim</button>
+          </div>
+        `;
+        list.prepend(orphan);
+        this.bindExpeditionActions();
+      } else if (!orphanClaim && orphan) {
+        orphan.remove();
+      }
+    }
+
+    for (const e of EXPEDITIONS) {
+      const rowEl = this.overlay.querySelector(`[data-exp-row="${e.id}"]`);
+      if (!rowEl) continue;
+      const statusEl = rowEl.querySelector('[data-exp-status]');
+      const reqEl = rowEl.querySelector('[data-exp-req]');
+      const meterEl = rowEl.querySelector('[data-exp-meter]') as HTMLElement | null;
+      const actionEl = rowEl.querySelector('[data-exp-action]') as HTMLElement | null;
+      if (!statusEl || !actionEl) continue;
+
+      const row = getExpeditionRowState(state, e, now);
+      statusEl.textContent = row.status;
+      if (reqEl) reqEl.textContent = row.requirements;
+      rowEl.classList.toggle('row-item-blocked', row.blocked);
+      if (meterEl) {
+        const showMeter = row.kind === 'locked' || row.kind === 'need_cost';
+        meterEl.hidden = !showMeter;
+        const fill = meterEl.querySelector('span') as HTMLElement | null;
+        if (fill) fill.style.width = `${Math.round(row.progress * 100)}%`;
+      }
+
+      const prevMode = actionEl.dataset.expMode;
+      if (prevMode !== row.mode) {
+        actionEl.dataset.expMode = row.mode;
+        actionEl.innerHTML = expeditionActionHtml(row, e.id);
+        this.bindExpeditionActions();
+      } else if (row.mode === 'progress') {
+        const bar = actionEl.querySelector('[data-exp-bar]') as HTMLElement | null;
+        if (bar) bar.style.width = `${row.activePct ?? 0}%`;
+        statusEl.textContent = row.status;
+      } else if (
+        row.mode === 'send' ||
+        row.mode === 'need_cost' ||
+        row.mode === 'busy' ||
+        row.mode === 'claim_first' ||
+        row.mode === 'locked'
+      ) {
+        const btn = actionEl.querySelector('[data-exp]') as HTMLButtonElement | null;
+        if (btn) {
+          btn.disabled = !row.canSend;
+          btn.textContent = row.actionLabel;
+          btn.title = row.requirements;
+        }
+      }
+    }
+  }
+
+  private bindExpeditionActions() {
     this.overlay.querySelectorAll('[data-exp]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        this.actions.onStartExpedition((btn as HTMLElement).dataset.exp!);
+      const el = btn as HTMLElement;
+      if (el.dataset.bound === '1') return;
+      el.dataset.bound = '1';
+      el.addEventListener('click', () => {
+        this.actions.onStartExpedition(el.dataset.exp!);
       });
     });
+    const claim = this.overlay.querySelector('#exp-claim') as HTMLElement | null;
+    if (claim && claim.dataset.bound !== '1') {
+      claim.dataset.bound = '1';
+      claim.addEventListener('click', () => {
+        this.actions.onRevealExpeditionLoot();
+      });
+    }
   }
 
   private renderForge(state: GameState, notice?: string) {
@@ -530,16 +646,24 @@ export class Hud {
       const costHint = !atCap && !affordable
         ? formatMissingCost(cost, state.resources)
         : `Upgrade ${formatCost(cost)}`;
+      const powerLabel = st.enabled ? 'On' : 'Off';
+      const powerClass = st.enabled ? 'btn-power is-on' : 'btn-power is-off';
+      const statusHint = st.enabled
+        ? 'Running when inputs are available'
+        : 'Paused — turn On to resume';
       return `
-        <div class="row-item${!atCap && !affordable ? ' row-item-blocked' : ''}">
+        <div class="row-item${!atCap && !affordable ? ' row-item-blocked' : ''}${!st.enabled ? ' row-item-paused' : ''}">
           <div>
-            <h3>${s.name} · Lv ${st.level}</h3>
+            <h3>${s.name} · Lv ${st.level}${st.enabled ? '' : ' · Off'}</h3>
             <div class="cost">${costHint}</div>
             <div class="effect-line">${formatStationIO(s, st.level)}</div>
             <div class="effect-line muted">${formatStationUpgradeHint(st.level)}</div>
           </div>
-          <button class="btn btn-secondary" data-upgrade="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
-          <p>${s.description} <span class="muted">(runs automatically when inputs are available)</span></p>
+          <div class="row-actions">
+            <button class="btn ${powerClass}" data-toggle="${s.id}" type="button" aria-pressed="${st.enabled ? 'true' : 'false'}">${powerLabel}</button>
+            <button class="btn btn-secondary" data-upgrade="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
+          </div>
+          <p>${s.description} <span class="muted">(${statusHint})</span></p>
         </div>
       `;
     }).join('');
@@ -578,6 +702,9 @@ export class Hud {
     this.bindSheet();
     this.overlay.querySelectorAll('[data-unlock]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUnlockStation((btn as HTMLElement).dataset.unlock as StationId));
+    });
+    this.overlay.querySelectorAll('[data-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => this.actions.onToggleStation((btn as HTMLElement).dataset.toggle as StationId));
     });
     this.overlay.querySelectorAll('[data-upgrade]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUpgradeStation((btn as HTMLElement).dataset.upgrade as StationId));

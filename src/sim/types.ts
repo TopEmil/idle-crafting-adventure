@@ -14,7 +14,7 @@ export interface ActiveExpedition {
 export interface GameState {
   version: 1;
   resources: Record<ResourceId, number>;
-  stations: Record<StationId, { unlocked: boolean; level: number }>;
+  stations: Record<StationId, { unlocked: boolean; level: number; enabled: boolean }>;
   ownedRecipes: RecipeId[];
   activeExpedition: ActiveExpedition | null;
   pendingLoot: Partial<Record<ResourceId, number>> | null;

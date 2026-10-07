@@ -19,6 +19,7 @@ import {
   prestige,
   startExpedition,
   tickProduction,
+  toggleStation,
   unlockStation,
   upgradeStation,
 } from '../sim/economy';
@@ -61,7 +62,9 @@ export class GameApp {
       onCraftRecipe: (id) => this.handleCraft(id as RecipeId),
       onUnlockStation: (id) => this.handleUnlock(id),
       onUpgradeStation: (id) => this.handleUpgrade(id),
+      onToggleStation: (id) => this.handleToggleStation(id),
       onStartExpedition: (id) => this.handleStartExpedition(id as ExpeditionId),
+      onRevealExpeditionLoot: () => this.revealExpeditionLoot(),
       onClaimExpedition: (mode) => void this.handleClaim(mode),
       onPrestige: () => void this.handlePrestige(),
       onTimeWarp: (viaAd) => void this.handleTimeWarp(viaAd),
@@ -135,6 +138,11 @@ export class GameApp {
         }
         this.accum -= SIM_DT;
       }
+      // Offline / reload can leave pendingLoot without firing expedition_ready.
+      // Always surface the claim modal once the player is free to interact.
+      if (this.state.pendingLoot && this.overlayMode === 'none') {
+        this.showLootModal();
+      }
       this.scene.setAutoMineRate(getAutoMineRate(this.state));
       this.scene.sync(this.state);
     }
@@ -145,9 +153,14 @@ export class GameApp {
       void this.persist();
     }
 
-    // Refresh expedition progress UI periodically when panel open
-    if (this.panel === 'expeditions' && this.overlayMode === 'none') {
-      this.refreshHud();
+    // Keep chrome live while a sheet is open, but never rebuild the Expeditions
+    // sheet every frame — full innerHTML replaces steal click/tap events (Send
+    // felt broken). Progress bars patch in place instead.
+    if (this.overlayMode === 'none' && this.panel) {
+      this.refreshHudChrome();
+      if (this.panel === 'expeditions') {
+        this.hud.syncExpeditionProgress(this.state);
+      }
     } else if (this.overlayMode === 'none' && !this.panel) {
       this.refreshHudLight();
     }
@@ -159,6 +172,13 @@ export class GameApp {
     this.hud.setPanel(this.panel);
     this.hud.setView(this.scene.getView());
     this.hud.render(this.state, { notice: this.notice });
+  }
+
+  /** Resources / goals / CTAs only — does not rebuild open sheets. */
+  private refreshHudChrome() {
+    this.hud.setPanel(this.panel);
+    this.hud.setView(this.scene.getView());
+    this.hud.renderChrome(this.state);
   }
 
   private refreshHudLight() {
@@ -315,6 +335,23 @@ export class GameApp {
     this.refreshHud();
   }
 
+  private handleToggleStation(id: StationId) {
+    const result = toggleStation(this.state, id);
+    if (!result.ok) {
+      this.notice = result.reason;
+      this.refreshHud();
+      return;
+    }
+    this.state = result.state;
+    this.audio.click();
+    this.scene.sync(this.state);
+    const on = this.state.stations[id].enabled;
+    const pretty = id.charAt(0).toUpperCase() + id.slice(1);
+    this.hud.toast(on ? `${pretty} On` : `${pretty} Off`, on ? 'gain' : 'info');
+    this.refreshHud();
+    void this.persist();
+  }
+
   private handleStartExpedition(id: ExpeditionId) {
     const result = startExpedition(this.state, id);
     if (!result.ok) {
@@ -327,6 +364,17 @@ export class GameApp {
     this.hud.toast('Scouts dispatched', 'info');
     this.refreshHud();
     void this.persist();
+  }
+
+  /** Ensure pending loot is rolled, then open the claim modal. */
+  private revealExpeditionLoot() {
+    const ready = completeExpeditionIfReady(this.state);
+    this.state = ready.state;
+    if (ready.event) {
+      this.scene.triggerExpeditionReturn();
+      this.audio.claim();
+    }
+    this.showLootModal();
   }
 
   private showLootModal() {
@@ -377,7 +425,12 @@ export class GameApp {
     }
 
     const result = claimExpedition(this.state, doubled);
-    if (!result.ok) return;
+    if (!result.ok) {
+      this.notice = result.reason;
+      this.closeOverlay();
+      this.refreshHudLight();
+      return;
+    }
     this.state = result.state;
     this.audio.claim();
     this.platform.happytime();

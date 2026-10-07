@@ -484,6 +484,44 @@ body {
   box-shadow: 0 8px 20px color-mix(in srgb, var(--void) 35%, transparent);
 }
 
+.row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  min-width: 5.5rem;
+}
+
+.row-actions .btn {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+
+.btn-power {
+  background: color-mix(in srgb, var(--teal) 55%, transparent);
+  color: var(--mist);
+  border: 1px solid color-mix(in srgb, var(--cyan) 45%, transparent);
+  font-weight: 700;
+}
+
+.btn-power.is-on {
+  background: color-mix(in srgb, var(--cyan) 28%, var(--teal));
+  border-color: color-mix(in srgb, var(--cyan) 65%, transparent);
+  color: var(--mist);
+}
+
+.btn-power.is-off {
+  background: color-mix(in srgb, var(--void) 45%, var(--slate));
+  border-color: color-mix(in srgb, var(--slate) 40%, transparent);
+  color: color-mix(in srgb, var(--mist) 70%, var(--slate));
+}
+
+.row-item-paused h3 {
+  color: color-mix(in srgb, var(--mist) 72%, var(--slate));
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--slate);
