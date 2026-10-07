@@ -20,12 +20,14 @@ import {
   formatStationIO,
   formatStationUpgradeHint,
 } from './effectsText';
+import type { SceneView } from '../forge/sceneView';
 
 export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'ledger' | null;
 
 export interface HudActions {
   onClickVein: () => void;
   onCraftQuick: () => void;
+  onSetView: (view: SceneView) => void;
   onOpenPanel: (panel: PanelId) => void;
   onCloseOverlay: () => void;
   onCraftRecipe: (id: string) => void;
@@ -44,6 +46,7 @@ export class Hud {
   private root: HTMLElement;
   private overlay: HTMLElement;
   private panel: PanelId = null;
+  private view: SceneView = 'mine';
   private actions: HudActions;
   private lastResources: Partial<Record<ResourceId, number>> = {};
   private floatRoot: HTMLElement | null = null;
@@ -69,6 +72,10 @@ export class Hud {
         <div class="float-layer" id="float-layer" aria-hidden="true"></div>
       </div>
       <div class="bottom-dock">
+        <div class="view-row" role="tablist" aria-label="Scene">
+          <button class="view-btn active" data-view="mine" type="button" role="tab" aria-selected="true">Mine</button>
+          <button class="view-btn" data-view="forge" type="button" role="tab" aria-selected="false">Forge</button>
+        </div>
         <div class="cta-row">
           <button class="btn btn-primary" id="btn-vein" type="button">Tap Vein</button>
           <div class="craft-cta">
@@ -82,7 +89,7 @@ export class Hud {
         <div class="nav-row">
           <button class="nav-btn" data-panel="recipes" type="button">Recipes</button>
           <button class="nav-btn" data-panel="expeditions" type="button">Expeditions</button>
-          <button class="nav-btn" data-panel="forge" type="button">Forge</button>
+          <button class="nav-btn" data-panel="forge" type="button">Stations</button>
           <button class="nav-btn" data-panel="ledger" type="button">Ledger</button>
         </div>
       </div>
@@ -93,6 +100,12 @@ export class Hud {
     this.root.querySelector('#btn-craft')?.addEventListener('click', () => this.actions.onCraftQuick());
     this.root.querySelector('#btn-mute')?.addEventListener('click', () => {
       this.actions.onToggleMute();
+    });
+    this.root.querySelectorAll('.view-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const view = (btn as HTMLElement).dataset.view as SceneView;
+        this.actions.onSetView(view);
+      });
     });
     this.root.querySelectorAll('.nav-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -107,6 +120,18 @@ export class Hud {
     if (btn) btn.textContent = muted ? '🔇' : '♪';
   }
 
+  setView(view: SceneView) {
+    this.view = view;
+    this.root.querySelectorAll('.view-btn').forEach((btn) => {
+      const id = (btn as HTMLElement).dataset.view;
+      const active = id === view;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    this.root.classList.toggle('view-mine', view === 'mine');
+    this.root.classList.toggle('view-forge', view === 'forge');
+  }
+
   setPanel(panel: PanelId) {
     this.panel = panel;
     this.root.querySelectorAll('.nav-btn').forEach((btn) => {
@@ -119,9 +144,20 @@ export class Hud {
     this.renderResources(state);
     this.renderGoal(state);
     this.renderCraftQuick(state);
+    this.setView(this.view);
     const veinBtn = this.root.querySelector('#btn-vein') as HTMLButtonElement | null;
     if (veinBtn) {
-      veinBtn.textContent = `Tap Vein (+${formatNumber(getClickPower(state))})`;
+      veinBtn.textContent =
+        this.view === 'mine'
+          ? `Tap Vein (+${formatNumber(getClickPower(state))})`
+          : `Mine Vein (+${formatNumber(getClickPower(state))})`;
+      veinBtn.classList.toggle('btn-primary', this.view === 'mine');
+      veinBtn.classList.toggle('btn-secondary', this.view === 'forge');
+    }
+    const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
+    if (craftBtn) {
+      craftBtn.classList.toggle('btn-primary', this.view === 'forge');
+      craftBtn.classList.toggle('btn-secondary', this.view === 'mine');
     }
 
     if (this.panel) {
@@ -179,7 +215,7 @@ export class Hud {
       },
       {
         title: 'Light the stations',
-        body: 'Unlock the Smelter when you can — auto production keeps the cavern alive.',
+        body: 'Switch to the Forge view and unlock the Smelter — machines sit on the hall pedestals and keep producing.',
       },
     ];
     const item = copy[Math.min(step, copy.length - 1)];
@@ -517,10 +553,10 @@ export class Hud {
     this.overlay.innerHTML = `
       <div class="sheet">
         <div class="sheet-header">
-          <h2>Forge</h2>
+          <h2>Stations</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Prestige mult ×${prestigeMult(state.totalRelicsEarned).toFixed(2)} · Cosmetic: ${state.activeCosmetic}</p>
+        <p class="muted">Machines sit on the Forge hall pedestals · Prestige ×${prestigeMult(state.totalRelicsEarned).toFixed(2)} · Cosmetic: ${state.activeCosmetic}</p>
         <div class="list">${stationRows}</div>
         <div class="row-item">
           <div>

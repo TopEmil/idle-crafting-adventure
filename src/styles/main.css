@@ -295,6 +295,50 @@ body {
   gap: 10px;
 }
 
+.view-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--void) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cyan) 22%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.view-btn {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 12px;
+  padding: 9px 12px;
+  cursor: pointer;
+  color: var(--slate);
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.view-btn.active {
+  color: var(--mist);
+  background: color-mix(in srgb, var(--teal-light) 75%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 35%, transparent);
+}
+
+.hud.view-forge .view-btn[data-view='forge'].active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--amber) 40%, transparent),
+    0 0 16px color-mix(in srgb, var(--ember) 22%, transparent);
+}
+
+.hud.view-mine .view-btn[data-view='mine'].active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent),
+    0 0 16px color-mix(in srgb, var(--cyan) 18%, transparent);
+}
+
 .cta-row {
   display: flex;
   gap: 10px;
@@ -307,6 +351,18 @@ body {
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+}
+
+.hud.view-forge .craft-cta {
+  flex: 1.25;
+}
+
+.hud.view-mine #btn-vein {
+  flex: 1.25;
+}
+
+.hud.view-forge #btn-vein {
+  flex: 1;
 }
 
 .craft-cta .btn {

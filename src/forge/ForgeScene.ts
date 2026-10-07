@@ -2,9 +2,11 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 
 import type { GameState } from '../sim/types';
 import { getStation, STATIONS, type StationId } from '../data/stations';
 import type { ResourceId } from '../data/resources';
+import { FORGE_STATION_SLOTS, type SceneView } from './sceneView';
 
-/** Served from `public/art/` — painted cavern backdrop + station props */
-const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-bg.jpg`;
+/** Mine cavern + forge workshop hall */
+const MINE_BG_URL = `${import.meta.env.BASE_URL}art/forge-bg.jpg`;
+const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-hall-bg.jpg`;
 const STATION_ART: Record<StationId, string> = {
   smelter: `${import.meta.env.BASE_URL}art/stations/smelter.png`,
   anvil: `${import.meta.env.BASE_URL}art/stations/anvil.png`,
@@ -44,7 +46,10 @@ interface Floater {
 export class ForgeScene {
   readonly app: Application;
   private root = new Container();
-  private bgSprite: Sprite | null = null;
+  private mineLayer = new Container();
+  private forgeLayer = new Container();
+  private mineBg: Sprite | null = null;
+  private forgeBg: Sprite | null = null;
   private vignette = new Graphics();
   private hearth = new Graphics();
   private vein = new Graphics();
@@ -75,6 +80,8 @@ export class ForgeScene {
   private state: GameState | null = null;
   private onVeinTap: (() => void) | null = null;
   private productionPulse = 0;
+  private view: SceneView = 'mine';
+  private viewFade = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.app = new Application();
@@ -93,27 +100,34 @@ export class ForgeScene {
   async ready() {
     await this.initPromise;
 
-    let texture: Texture | null = null;
-    try {
-      texture = await Assets.load(FORGE_BG_URL);
-    } catch {
-      texture = null;
-    }
+    const [mineTex, forgeTex] = await Promise.all([
+      this.loadTexture(MINE_BG_URL),
+      this.loadTexture(FORGE_BG_URL),
+    ]);
 
     this.app.stage.addChild(this.root);
 
-    if (texture) {
-      this.bgSprite = new Sprite(texture);
-      this.bgSprite.alpha = 0.95;
-      this.root.addChild(this.bgSprite);
+    if (mineTex) {
+      this.mineBg = new Sprite(mineTex);
+      this.mineBg.alpha = 0.95;
+      this.mineLayer.addChild(this.mineBg);
+    }
+    if (forgeTex) {
+      this.forgeBg = new Sprite(forgeTex);
+      this.forgeBg.alpha = 0.95;
+      this.forgeLayer.addChild(this.forgeBg);
     }
 
+    this.mineLayer.addChild(this.hearth);
+    this.mineLayer.addChild(this.vein);
+
+    this.forgeLayer.addChild(this.stationsGfx);
+    this.forgeLayer.addChild(this.stationSpritesRoot);
+    this.forgeLayer.addChild(this.stationLabels);
+
+    this.root.addChild(this.mineLayer);
+    this.root.addChild(this.forgeLayer);
     this.root.addChild(this.vignette);
-    this.root.addChild(this.stationsGfx);
-    this.root.addChild(this.stationSpritesRoot);
-    this.root.addChild(this.stationLabels);
-    this.root.addChild(this.hearth);
-    this.root.addChild(this.vein);
     this.root.addChild(this.scout);
     this.root.addChild(this.particles);
     this.root.addChild(this.fx);
@@ -175,11 +189,24 @@ export class ForgeScene {
     this.app.stage.on('pointerdown', (e) => this.handlePointer(e.global.x, e.global.y));
 
     this.app.ticker.add((ticker) => this.update(ticker.deltaMS / 1000));
+    this.applyViewVisibility();
     this.resize();
   }
 
   setVeinTapHandler(handler: () => void) {
     this.onVeinTap = handler;
+  }
+
+  getView(): SceneView {
+    return this.view;
+  }
+
+  setView(view: SceneView) {
+    if (this.view === view) return;
+    this.view = view;
+    this.viewFade = 0;
+    this.applyViewVisibility();
+    this.redrawStations();
   }
 
   resize() {
@@ -191,7 +218,8 @@ export class ForgeScene {
     this.brand.x = 22;
     this.brand.y = 16;
     this.brand.style.fontSize = this.width < 520 ? 26 : 40;
-    this.layoutBackground();
+    this.layoutBackground(this.mineBg);
+    this.layoutBackground(this.forgeBg);
     this.drawVignette();
     this.redrawStations();
   }
@@ -203,6 +231,7 @@ export class ForgeScene {
 
   /** Call on successful vein tap — sparks, shockwave, floating +ore */
   triggerVeinHit(amount: number) {
+    if (this.view !== 'mine') this.setView('mine');
     const { x, y } = this.veinPoint();
     this.hitFlash = 0.28;
     this.shakeT = 0.12;
@@ -244,7 +273,10 @@ export class ForgeScene {
 
   triggerCraftBurst() {
     this.craftBurstT = 0.55;
-    const { x, y } = { x: this.width * 0.5, y: this.height * 0.58 };
+    const { x, y } =
+      this.view === 'forge'
+        ? { x: this.width * 0.5, y: this.height * 0.48 }
+        : { x: this.width * 0.5, y: this.height * 0.58 };
     for (let i = 0; i < 22; i++) {
       const ang = (i / 22) * Math.PI * 2;
       this.bursts.push({
@@ -265,6 +297,7 @@ export class ForgeScene {
   }
 
   triggerStationPuff(stationId: StationId) {
+    if (this.view !== 'forge') return;
     const layout = this.stationLayout();
     const slot = layout.find((s) => s.id === stationId);
     if (!slot) return;
@@ -284,6 +317,7 @@ export class ForgeScene {
 
   /** Pop-in animation when a station is purchased */
   triggerStationUnlock(stationId: StationId) {
+    this.setView('forge');
     this.spawnAnim[stationId] = 0.7;
     const slot = this.stationLayout().find((s) => s.id === stationId);
     if (!slot) return;
@@ -326,21 +360,38 @@ export class ForgeScene {
     this.app.destroy(true);
   }
 
+  private async loadTexture(url: string): Promise<Texture | null> {
+    try {
+      return await Assets.load(url);
+    } catch {
+      return null;
+    }
+  }
+
+  private applyViewVisibility() {
+    const forge = this.view === 'forge';
+    this.forgeLayer.visible = true;
+    this.mineLayer.visible = true;
+    this.forgeLayer.alpha = forge ? 1 : 0;
+    this.mineLayer.alpha = forge ? 0 : 1;
+    this.forgeLayer.eventMode = forge ? 'passive' : 'none';
+    this.mineLayer.eventMode = forge ? 'none' : 'passive';
+  }
+
   private veinPoint() {
     return { x: this.width * 0.28, y: this.height * 0.55 };
   }
 
   private stationLayout(): { id: StationId; x: number; y: number }[] {
-    // Sit on the cavern shelves / floor planes of the painted backdrop.
-    return [
-      { id: 'smelter', x: this.width * 0.72, y: this.height * 0.5 },
-      { id: 'anvil', x: this.width * 0.84, y: this.height * 0.58 },
-      { id: 'enchanter', x: this.width * 0.58, y: this.height * 0.4 },
-    ];
+    return (Object.keys(FORGE_STATION_SLOTS) as StationId[]).map((id) => ({
+      id,
+      x: this.width * FORGE_STATION_SLOTS[id].x,
+      y: this.height * FORGE_STATION_SLOTS[id].y,
+    }));
   }
 
   private handlePointer(px: number, py: number) {
-    if (!this.onVeinTap) return;
+    if (this.view !== 'mine' || !this.onVeinTap) return;
     const { x, y } = this.veinPoint();
     const dx = px - x;
     const dy = py - y;
@@ -349,13 +400,13 @@ export class ForgeScene {
     }
   }
 
-  private layoutBackground() {
-    if (!this.bgSprite) return;
-    const tex = this.bgSprite.texture;
+  private layoutBackground(sprite: Sprite | null) {
+    if (!sprite) return;
+    const tex = sprite.texture;
     const scale = Math.max(this.width / tex.width, this.height / tex.height);
-    this.bgSprite.scale.set(scale);
-    this.bgSprite.x = (this.width - tex.width * scale) / 2;
-    this.bgSprite.y = (this.height - tex.height * scale) / 2;
+    sprite.scale.set(scale);
+    sprite.x = (this.width - tex.width * scale) / 2;
+    sprite.y = (this.height - tex.height * scale) / 2;
   }
 
   private drawVignette() {
@@ -372,6 +423,18 @@ export class ForgeScene {
     this.sparkTimer += dt;
     this.productionPulse += dt;
 
+    if (this.viewFade < 1) {
+      this.viewFade = Math.min(1, this.viewFade + dt * 4.5);
+      const t = this.viewFade;
+      if (this.view === 'forge') {
+        this.forgeLayer.alpha = t;
+        this.mineLayer.alpha = 1 - t;
+      } else {
+        this.mineLayer.alpha = t;
+        this.forgeLayer.alpha = 1 - t;
+      }
+    }
+
     if (this.comboTimer > 0) {
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) this.combo = 0;
@@ -380,7 +443,6 @@ export class ForgeScene {
     if (this.shakeT > 0) this.shakeT = Math.max(0, this.shakeT - dt);
     if (this.craftBurstT > 0) this.craftBurstT = Math.max(0, this.craftBurstT - dt);
 
-    // Camera shake
     if (this.shakeT > 0) {
       const mag = 3 * (this.shakeT / 0.12);
       this.root.x = (Math.random() - 0.5) * mag;
@@ -390,7 +452,6 @@ export class ForgeScene {
       this.root.y = 0;
     }
 
-    // Burst physics
     for (const p of this.bursts) {
       p.life -= dt;
       p.x += p.vx * dt;
@@ -416,8 +477,7 @@ export class ForgeScene {
       if ((this.spawnAnim[id] ?? 0) <= 0) delete this.spawnAnim[id];
     }
 
-    // Ambient station puffs when producing
-    if (this.state && this.productionPulse > 0.9) {
+    if (this.view === 'forge' && this.state && this.productionPulse > 0.9) {
       this.productionPulse = 0;
       for (const slot of this.stationLayout()) {
         if (this.isStationRunning(slot.id)) {
@@ -426,8 +486,13 @@ export class ForgeScene {
       }
     }
 
-    this.redrawHearth();
-    this.redrawVeinHighlight();
+    if (this.view === 'mine') {
+      this.redrawHearth();
+      this.redrawVeinHighlight();
+    } else {
+      this.hearth.clear();
+      this.vein.clear();
+    }
     this.redrawStations();
     this.redrawParticles();
     this.redrawFx();
@@ -472,7 +537,6 @@ export class ForgeScene {
     g.circle(x, y, r * 0.45);
     g.fill({ color: COLORS.mist, alpha: 0.08 + this.hitFlash * 0.25 });
 
-    // Hint ring when idle (invite tap)
     if (this.combo === 0) {
       const ring = 48 + (this.pulse % 1.6) * 18;
       const a = 0.22 * (1 - (this.pulse % 1.6) / 1.6);
@@ -498,9 +562,8 @@ export class ForgeScene {
       try {
         const texture = await Assets.load(STATION_ART[def.id]);
         const sprite = new Sprite(texture);
-        sprite.anchor.set(0.5, 0.92);
+        sprite.anchor.set(0.5, 0.94);
         sprite.visible = false;
-        // Soft multiply-ish blend into the cavern painting
         sprite.tint = 0xe8f1f2;
         this.spriteByStation.set(def.id, sprite);
         this.stationSpritesRoot.addChild(sprite);
@@ -511,14 +574,14 @@ export class ForgeScene {
   }
 
   private stationDisplayScale(): number {
-    // Keep machines readable but subordinate to the painted hearth.
-    return Math.min(0.52, Math.max(0.28, this.width / 1400));
+    // Machines are the forge-view focus — larger, still below brand/HUD.
+    return Math.min(0.72, Math.max(0.42, this.width / 1100));
   }
 
   private redrawStations() {
     const g = this.stationsGfx;
     g.clear();
-    if (!this.state) {
+    if (!this.state || this.view !== 'forge') {
       for (const label of this.labelByStation.values()) label.visible = false;
       for (const sprite of this.spriteByStation.values()) sprite.visible = false;
       return;
@@ -532,28 +595,27 @@ export class ForgeScene {
       const sprite = this.spriteByStation.get(slot.id);
       const hasArt = Boolean(sprite);
 
+      // Pedestal top already in the painting — reinforce with a soft contact oval.
+      g.ellipse(slot.x, slot.y + 6, 52 * baseScale, 14 * baseScale);
+      g.fill({ color: COLORS.void, alpha: st.unlocked ? 0.38 : 0.22 });
+
       if (!st.unlocked) {
-        // Ghost silhouette — painted prop or procedural placeholder
         if (sprite) {
           sprite.visible = true;
           sprite.x = slot.x;
-          sprite.y = slot.y + 8;
-          sprite.scale.set(baseScale * 0.9);
-          // Readable silhouette against the busy cavern painting
-          sprite.alpha = 0.48;
+          sprite.y = slot.y;
+          sprite.scale.set(baseScale * 0.88);
+          sprite.alpha = 0.4;
           sprite.tint = 0x9eb8c0;
         } else {
           this.drawStationBody(g, slot.id, slot.x, slot.y, 0.35, false, 1);
         }
-        // Soft ground shadow so the cutout sits in the cavern
-        g.ellipse(slot.x, slot.y + 10, 34 * baseScale * 2.2, 10 * baseScale * 2);
-        g.fill({ color: COLORS.void, alpha: 0.32 });
         if (label) {
           label.visible = true;
           label.text = `${getStation(slot.id).name}?`;
-          label.alpha = 0.55;
+          label.alpha = 0.6;
           label.x = slot.x;
-          label.y = slot.y + (hasArt ? 22 : 28);
+          label.y = slot.y + (hasArt ? 18 : 26);
         }
         continue;
       }
@@ -561,42 +623,39 @@ export class ForgeScene {
       const spawn = this.spawnAnim[slot.id];
       const spawnScale = spawn != null ? 0.6 + (1 - spawn / 0.7) * 0.55 : 1;
       const running = this.isStationRunning(slot.id);
-      const workPulse = running ? 1 + Math.sin(this.pulse * 5 + st.level) * 0.045 : 1;
+      const workPulse = running ? 1 + Math.sin(this.pulse * 5 + st.level) * 0.04 : 1;
       const scale = baseScale * spawnScale * workPulse;
 
-      // Contact shadow under the machine
-      g.ellipse(slot.x, slot.y + 12, 38 * scale * 1.8, 11 * scale * 1.6);
-      g.fill({ color: COLORS.void, alpha: running ? 0.45 : 0.34 });
-
-      // Warm/cyan pool so the sprite reads as lit by the cavern
       const poolColor = slot.id === 'enchanter' ? COLORS.cyan : COLORS.ember;
-      g.circle(slot.x, slot.y - 8, 28 * scale * 1.4);
-      g.fill({ color: poolColor, alpha: running ? 0.16 : 0.07 });
+      g.circle(slot.x, slot.y - 10, 26 * scale);
+      g.fill({ color: poolColor, alpha: running ? 0.14 : 0.06 });
 
       if (sprite) {
         sprite.visible = true;
         sprite.x = slot.x;
-        sprite.y = slot.y + 10;
+        sprite.y = slot.y;
         sprite.scale.set(scale);
-        sprite.alpha = running ? 1 : 0.88;
-        sprite.tint = running ? 0xffffff : 0xd5e4e8;
+        sprite.alpha = running ? 1 : 0.92;
+        sprite.tint = running ? 0xffffff : 0xdfeaf0;
       } else {
         this.drawStationBody(g, slot.id, slot.x, slot.y, 1, running, spawnScale * workPulse);
       }
 
       if (label) {
         label.visible = true;
-        label.text = running ? `${getStation(slot.id).name} · Lv${st.level}` : `${getStation(slot.id).name} (idle)`;
+        label.text = running
+          ? `${getStation(slot.id).name} · Lv${st.level}`
+          : `${getStation(slot.id).name} (idle)`;
         label.alpha = 0.95;
         label.x = slot.x;
-        label.y = slot.y + (hasArt ? 24 : 30);
+        label.y = slot.y + (hasArt ? 16 : 28);
       }
 
       if (running) {
         for (let i = 0; i < 3; i++) {
           const t = this.sparkTimer * 0.9 + i * 0.4 + st.level;
-          const px = slot.x + Math.sin(t * 2) * 12;
-          const py = slot.y - 28 * scale - ((t * 28 + i * 10) % 40);
+          const px = slot.x + Math.sin(t * 2) * 14;
+          const py = slot.y - 36 * scale - ((t * 28 + i * 10) % 42);
           g.circle(px, py, 2);
           g.fill({
             color: slot.id === 'enchanter' ? COLORS.cyan : COLORS.amber,
@@ -616,43 +675,41 @@ export class ForgeScene {
     running: boolean,
     scale: number,
   ) {
-    const s = 18 * scale;
+    const s = 22 * scale;
     const accent = id === 'enchanter' ? COLORS.cyan : id === 'anvil' ? COLORS.amber : COLORS.ember;
 
-    // Base plinth
-    g.roundRect(x - s * 1.1, y + s * 0.35, s * 2.2, s * 0.55, 6);
+    g.roundRect(x - s * 1.1, y + s * 0.2, s * 2.2, s * 0.45, 6);
     g.fill({ color: COLORS.stone, alpha: 0.85 * alpha });
 
     if (id === 'smelter') {
-      g.roundRect(x - s * 0.85, y - s * 0.9, s * 1.7, s * 1.4, 8);
+      g.roundRect(x - s * 0.85, y - s * 1.05, s * 1.7, s * 1.4, 8);
       g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
-      g.roundRect(x - s * 0.45, y - s * 0.55, s * 0.9, s * 0.7, 5);
+      g.roundRect(x - s * 0.45, y - s * 0.7, s * 0.9, s * 0.7, 5);
       g.fill({ color: running ? COLORS.ember : COLORS.void, alpha: (running ? 0.95 : 0.5) * alpha });
       if (running) {
-        g.circle(x, y - s * 0.2, s * 0.28);
+        g.circle(x, y - s * 0.35, s * 0.28);
         g.fill({ color: COLORS.amber, alpha: 0.85 * alpha });
       }
     } else if (id === 'anvil') {
-      g.roundRect(x - s * 0.9, y - s * 0.15, s * 1.8, s * 0.55, 4);
+      g.roundRect(x - s * 0.9, y - s * 0.25, s * 1.8, s * 0.55, 4);
       g.fill({ color: COLORS.slate, alpha: 0.95 * alpha });
-      g.roundRect(x - s * 0.35, y + s * 0.2, s * 0.7, s * 0.45, 3);
+      g.roundRect(x - s * 0.35, y + s * 0.1, s * 0.7, s * 0.45, 3);
       g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
       if (running) {
-        g.circle(x + s * 0.55, y - s * 0.35, 3 + Math.sin(this.pulse * 8) * 1.5);
+        g.circle(x + s * 0.55, y - s * 0.45, 3 + Math.sin(this.pulse * 8) * 1.5);
         g.fill({ color: COLORS.amber, alpha: 0.9 * alpha });
       }
     } else {
-      // enchanter — crystal pedestal
-      g.moveTo(x, y - s);
-      g.lineTo(x + s * 0.7, y + s * 0.2);
-      g.lineTo(x - s * 0.7, y + s * 0.2);
+      g.moveTo(x, y - s * 1.1);
+      g.lineTo(x + s * 0.7, y + s * 0.15);
+      g.lineTo(x - s * 0.7, y + s * 0.15);
       g.closePath();
       g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
-      g.circle(x, y - s * 0.35, s * 0.28);
+      g.circle(x, y - s * 0.45, s * 0.28);
       g.fill({ color: running ? COLORS.cyan : COLORS.slate, alpha: (running ? 0.95 : 0.45) * alpha });
     }
 
-    g.circle(x, y - s * 1.15, running ? 4 : 2.5);
+    g.circle(x, y - s * 1.25, running ? 4 : 2.5);
     g.fill({ color: accent, alpha: (running ? 0.95 : 0.4) * alpha });
   }
 
@@ -660,7 +717,7 @@ export class ForgeScene {
     const g = this.particles;
     g.clear();
     const cx = this.width * 0.5;
-    const cy = this.height * 0.58;
+    const cy = this.view === 'forge' ? this.height * 0.42 : this.height * 0.58;
 
     for (let i = 0; i < 14; i++) {
       const t = this.sparkTimer * 0.75 + i * 0.35;
@@ -690,14 +747,14 @@ export class ForgeScene {
       g.fill({ color: p.color, alpha: a });
     }
 
-    if (this.hitFlash > 0) {
+    if (this.view === 'mine' && this.hitFlash > 0) {
       const { x, y } = this.veinPoint();
       const p = 1 - this.hitFlash / 0.28;
       g.circle(x, y, 20 + p * 55);
       g.stroke({ width: 3, color: COLORS.mist, alpha: 0.55 * (1 - p) });
     }
 
-    if (this.combo >= 3) {
+    if (this.view === 'mine' && this.combo >= 3) {
       const { x, y } = this.veinPoint();
       this.comboLabel.visible = true;
       this.comboLabel.text = `×${this.combo}`;

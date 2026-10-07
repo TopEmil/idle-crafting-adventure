@@ -26,6 +26,7 @@ import type { GameState } from '../sim/types';
 import { Hud, type PanelId } from '../ui/hud';
 import { formatRecipeEffects } from '../ui/effectsText';
 import { getRecipe } from '../data/recipes';
+import type { SceneView } from '../forge/sceneView';
 
 export class GameApp {
   private state: GameState;
@@ -53,6 +54,7 @@ export class GameApp {
     this.hud = new Hud(hudRoot, overlayRoot, {
       onClickVein: () => this.handleClickVein(),
       onCraftQuick: () => this.handleCraftQuick(),
+      onSetView: (view) => this.setSceneView(view),
       onOpenPanel: (p) => this.openPanel(p),
       onCloseOverlay: () => this.closeOverlay(),
       onCraftRecipe: (id) => this.handleCraft(id as RecipeId),
@@ -152,11 +154,19 @@ export class GameApp {
 
   private refreshHud() {
     this.hud.setPanel(this.panel);
+    this.hud.setView(this.scene.getView());
     this.hud.render(this.state, { notice: this.notice });
   }
 
   private refreshHudLight() {
+    this.hud.setView(this.scene.getView());
     this.hud.render(this.state);
+  }
+
+  private setSceneView(view: SceneView) {
+    this.scene.setView(view);
+    this.hud.setView(view);
+    this.refreshHudLight();
   }
 
   private async persist() {
@@ -175,6 +185,9 @@ export class GameApp {
       this.hud.setPanel(null);
       this.platform.gameplayStart();
       return;
+    }
+    if (panel === 'forge') {
+      this.setSceneView('forge');
     }
     this.panel = panel;
     this.notice = '';
@@ -205,6 +218,9 @@ export class GameApp {
       // allow click during first step
     } else if (this.overlayMode !== 'none' && this.overlayMode !== 'onboarding') {
       return;
+    }
+    if (this.scene.getView() !== 'mine') {
+      this.setSceneView('mine');
     }
     const { state, event } = clickVein(this.state);
     this.state = state;
@@ -244,6 +260,7 @@ export class GameApp {
     if (!this.state.onboardingDone && this.state.onboardingStep <= 1) {
       this.state.onboardingStep = 2;
       this.overlayMode = 'onboarding';
+      this.setSceneView('forge');
       this.hud.showOnboarding(2);
     }
     this.refreshHud();
@@ -437,6 +454,9 @@ export class GameApp {
       return;
     }
     this.state.onboardingStep += 1;
+    if (this.state.onboardingStep >= 2) {
+      this.setSceneView('forge');
+    }
     this.hud.showOnboarding(this.state.onboardingStep);
   }
 
