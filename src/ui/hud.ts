@@ -4,7 +4,6 @@ import { RECIPES } from '../data/recipes';
 import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import {
-  availableExpeditions,
   canAfford,
   canPrestige,
   getClickPower,
@@ -13,6 +12,7 @@ import {
 import { prestigeMult } from '../data/balance';
 import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
+import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
 import { formatCost, formatDuration, formatMissingCost, formatNumber } from './format';
 import { nextGoal } from './goals';
 import {
@@ -404,7 +404,7 @@ export class Hud {
 
   private renderPanel(state: GameState, notice?: string) {
     if (this.panel === 'recipes') this.renderRecipes(state);
-    else if (this.panel === 'expeditions') this.renderExpeditions(state);
+    else if (this.panel === 'expeditions') this.renderExpeditions(state, notice);
     else if (this.panel === 'forge') this.renderForge(state, notice);
     else if (this.panel === 'ledger') this.renderLedger(state, notice);
   }
@@ -459,27 +459,30 @@ export class Hud {
     });
   }
 
-  private renderExpeditions(state: GameState) {
-    const unlocked = new Set(availableExpeditions(state).map((e) => e.id));
-    const active = state.activeExpedition;
-    const pending = state.pendingLoot;
+  private renderExpeditions(state: GameState, notice?: string) {
     const now = Date.now();
-    const busy = Boolean(active) || Boolean(pending);
-    const orphanClaim = Boolean(pending) && !active;
+    const pending = state.pendingLoot;
+    const orphanClaim = Boolean(pending) && !state.activeExpedition;
 
     const rows = EXPEDITIONS.map((e) => {
-      const view = this.expeditionRowView(e.id, state, unlocked, active, pending, now, busy);
+      const row = getExpeditionRowState(state, e, now);
       const lootHint = Object.entries(e.baseLoot)
         .map(([k, v]) => `+${v} ${k}`)
         .join(' · ');
+      const showMeter = row.kind === 'locked' || row.kind === 'need_cost';
+      const meter = showMeter
+        ? `<div class="req-meter" data-exp-meter aria-hidden="true"><span style="width:${Math.round(row.progress * 100)}%"></span></div>`
+        : `<div class="req-meter" data-exp-meter hidden aria-hidden="true"><span style="width:0%"></span></div>`;
       return `
-        <div class="row-item" data-exp-row="${e.id}">
+        <div class="row-item${row.blocked ? ' row-item-blocked' : ''}" data-exp-row="${e.id}">
           <div>
             <h3>${e.name}</h3>
-            <div class="cost" data-exp-status>${view.status}</div>
+            <div class="cost" data-exp-status>${row.status}</div>
+            ${meter}
+            <div class="req-line" data-exp-req>${row.requirements}</div>
             <div class="effect-line">Loot: ${lootHint}</div>
           </div>
-          <div data-exp-action data-exp-mode="${view.mode}">${view.actionHtml}</div>
+          <div data-exp-action data-exp-mode="${row.mode}">${expeditionActionHtml(row, e.id)}</div>
           <p>${e.description}</p>
         </div>
       `;
@@ -503,6 +506,8 @@ export class Hud {
           <h2>Expeditions</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
+        <p class="sheet-intro">Unlock destinations with lifetime ore, spend the listed cost, then wait for scouts to return. Only one party at a time.</p>
+        ${notice ? `<p class="notice">${notice}</p>` : ''}
         <div class="list">${orphan}${rows}</div>
       </div>
     `;
@@ -510,55 +515,10 @@ export class Hud {
     this.bindExpeditionActions();
   }
 
-  private expeditionRowView(
-    id: string,
-    state: GameState,
-    unlocked: Set<string>,
-    active: GameState['activeExpedition'],
-    pending: GameState['pendingLoot'],
-    now: number,
-    busy: boolean,
-  ): { status: string; actionHtml: string; mode: 'locked' | 'send' | 'progress' | 'claim' } {
-    const def = EXPEDITIONS.find((e) => e.id === id)!;
-    const isUnlocked = unlocked.has(id);
-    if (!isUnlocked) {
-      return {
-        status: `Unlock at ${formatNumber(def.unlockAtOreProduced)} lifetime ore`,
-        actionHtml: `<button class="btn btn-secondary" type="button" disabled>Locked</button>`,
-        mode: 'locked',
-      };
-    }
-    if (active?.id === id) {
-      const left = Math.max(0, (active.endsAt - now) / 1000);
-      const pct = Math.min(100, ((def.durationSec - left) / def.durationSec) * 100);
-      if (pending || left <= 0 || active.claimed) {
-        return {
-          status: 'Loot ready — claim it',
-          actionHtml: `<button class="btn btn-primary" id="exp-claim" type="button">Claim</button>`,
-          mode: 'claim',
-        };
-      }
-      return {
-        status: `Returning in ${formatDuration(left)}`,
-        actionHtml: `<div class="progress-bar" style="width:88px"><span data-exp-bar style="width:${pct}%"></span></div>`,
-        mode: 'progress',
-      };
-    }
-    const canSend = !busy && canAfford(state.resources, def.cost);
-    return {
-      status: formatCost(def.cost) + ` · ${formatDuration(def.durationSec)}`,
-      actionHtml: `<button class="btn btn-secondary" data-exp="${id}" type="button" ${canSend ? '' : 'disabled'}>Send</button>`,
-      mode: 'send',
-    };
-  }
-
   private patchExpeditionRows(state: GameState) {
-    const unlocked = new Set(availableExpeditions(state).map((e) => e.id));
-    const active = state.activeExpedition;
-    const pending = state.pendingLoot;
     const now = Date.now();
-    const busy = Boolean(active) || Boolean(pending);
-    const orphanClaim = Boolean(pending) && !active;
+    const pending = state.pendingLoot;
+    const orphanClaim = Boolean(pending) && !state.activeExpedition;
 
     const list = this.overlay.querySelector('[data-expedition-sheet] .list');
     if (list) {
@@ -584,27 +544,47 @@ export class Hud {
     }
 
     for (const e of EXPEDITIONS) {
-      const row = this.overlay.querySelector(`[data-exp-row="${e.id}"]`);
-      if (!row) continue;
-      const statusEl = row.querySelector('[data-exp-status]');
-      const actionEl = row.querySelector('[data-exp-action]') as HTMLElement | null;
+      const rowEl = this.overlay.querySelector(`[data-exp-row="${e.id}"]`);
+      if (!rowEl) continue;
+      const statusEl = rowEl.querySelector('[data-exp-status]');
+      const reqEl = rowEl.querySelector('[data-exp-req]');
+      const meterEl = rowEl.querySelector('[data-exp-meter]') as HTMLElement | null;
+      const actionEl = rowEl.querySelector('[data-exp-action]') as HTMLElement | null;
       if (!statusEl || !actionEl) continue;
 
-      const view = this.expeditionRowView(e.id, state, unlocked, active, pending, now, busy);
-      statusEl.textContent = view.status;
+      const row = getExpeditionRowState(state, e, now);
+      statusEl.textContent = row.status;
+      if (reqEl) reqEl.textContent = row.requirements;
+      rowEl.classList.toggle('row-item-blocked', row.blocked);
+      if (meterEl) {
+        const showMeter = row.kind === 'locked' || row.kind === 'need_cost';
+        meterEl.hidden = !showMeter;
+        const fill = meterEl.querySelector('span') as HTMLElement | null;
+        if (fill) fill.style.width = `${Math.round(row.progress * 100)}%`;
+      }
+
       const prevMode = actionEl.dataset.expMode;
-      if (prevMode !== view.mode) {
-        actionEl.dataset.expMode = view.mode;
-        actionEl.innerHTML = view.actionHtml;
+      if (prevMode !== row.mode) {
+        actionEl.dataset.expMode = row.mode;
+        actionEl.innerHTML = expeditionActionHtml(row, e.id);
         this.bindExpeditionActions();
-      } else if (view.mode === 'progress') {
-        const left = Math.max(0, ((active?.endsAt ?? now) - now) / 1000);
-        const pct = Math.min(100, ((e.durationSec - left) / e.durationSec) * 100);
+      } else if (row.mode === 'progress') {
         const bar = actionEl.querySelector('[data-exp-bar]') as HTMLElement | null;
-        if (bar) bar.style.width = `${pct}%`;
-      } else if (view.mode === 'send') {
+        if (bar) bar.style.width = `${row.activePct ?? 0}%`;
+        statusEl.textContent = row.status;
+      } else if (
+        row.mode === 'send' ||
+        row.mode === 'need_cost' ||
+        row.mode === 'busy' ||
+        row.mode === 'claim_first' ||
+        row.mode === 'locked'
+      ) {
         const btn = actionEl.querySelector('[data-exp]') as HTMLButtonElement | null;
-        if (btn) btn.disabled = !canAfford(state.resources, e.cost) || busy;
+        if (btn) {
+          btn.disabled = !row.canSend;
+          btn.textContent = row.actionLabel;
+          btn.title = row.requirements;
+        }
       }
     }
   }
