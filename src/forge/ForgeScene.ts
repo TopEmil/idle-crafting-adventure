@@ -32,8 +32,14 @@ const STATION_ART: Record<StationId, string> = {
   anvil: `${import.meta.env.BASE_URL}art/stations/anvil.png`,
   enchanter: `${import.meta.env.BASE_URL}art/stations/enchanter.png`,
 };
+/** 5-frame dwarf mining loop (pick wind-up → strike → recover). */
+const DWARF_MINE_FRAMES = [1, 2, 3, 4, 5].map(
+  (n) => `${import.meta.env.BASE_URL}art/dwarf/mine-0${n}.png`,
+);
+/** Legacy single-frame fallback if the 5-frame sheet fails to load. */
 const DWARF_ART = `${import.meta.env.BASE_URL}art/mine/dwarf.png`;
 const ORE_ROCK_ART = `${import.meta.env.BASE_URL}art/mine/ore-rock.png`;
+const DWARF_FRAME_COUNT = 5;
 
 const COLORS = {
   void: 0x0b1c22,
@@ -80,6 +86,7 @@ export class ForgeScene {
   private vein = new Graphics();
   private dwarfGfx = new Graphics();
   private dwarfSprite: Sprite | null = null;
+  private dwarfFrames: Texture[] = [];
   private oreSpritesRoot = new Container();
   private rockSprites: Sprite[] = [];
   private rockTexture: Texture | null = null;
@@ -824,20 +831,27 @@ export class ForgeScene {
 
     const { x, y } = this.dwarfPoint();
     const swing = Math.sin(this.dwarfSwingT * Math.PI * 2);
-    const bob = Math.abs(swing) * 3;
+    const bob = Math.abs(swing) * 2;
+    const frame = Math.min(
+      DWARF_FRAME_COUNT - 1,
+      Math.floor(this.dwarfSwingT * DWARF_FRAME_COUNT),
+    );
     const short = Math.min(this.width, this.height);
-    const scale = Math.min(0.42, Math.max(0.22, short / 1600));
+    const scale = Math.min(0.55, Math.max(0.28, short / 1200));
 
     // Contact shadow (shared by sprite + procedural)
     g.ellipse(x, y + 10, 22 * (scale / 0.3), 7 * (scale / 0.3));
     g.fill({ color: COLORS.void, alpha: 0.4 });
 
     if (this.dwarfSprite) {
+      if (this.dwarfFrames.length === DWARF_FRAME_COUNT) {
+        this.dwarfSprite.texture = this.dwarfFrames[frame]!;
+      }
       this.dwarfSprite.visible = true;
       this.dwarfSprite.x = x;
       this.dwarfSprite.y = y - bob;
       this.dwarfSprite.scale.set(scale);
-      this.dwarfSprite.rotation = swing * 0.08;
+      this.dwarfSprite.rotation = 0;
       this.dwarfSprite.alpha = 1;
     } else {
       this.drawDwarfProcedural(g, x, y, swing, bob);
@@ -920,14 +934,27 @@ export class ForgeScene {
 
   private async loadMineArt() {
     try {
-      const dwarfTex = await Assets.load(DWARF_ART);
-      const sprite = new Sprite(dwarfTex);
-      sprite.anchor.set(0.5, 0.98);
+      const frames: Texture[] = [];
+      for (const url of DWARF_MINE_FRAMES) {
+        frames.push((await Assets.load(url)) as Texture);
+      }
+      this.dwarfFrames = frames;
+      const sprite = new Sprite(frames[0]);
+      sprite.anchor.set(0.5, 0.92);
       sprite.visible = false;
       this.dwarfSprite = sprite;
       this.mineLayer.addChild(sprite);
     } catch {
-      // Procedural redrawDwarf fallback.
+      try {
+        const dwarfTex = await Assets.load(DWARF_ART);
+        const sprite = new Sprite(dwarfTex);
+        sprite.anchor.set(0.5, 0.98);
+        sprite.visible = false;
+        this.dwarfSprite = sprite;
+        this.mineLayer.addChild(sprite);
+      } catch {
+        // Procedural redrawDwarf fallback.
+      }
     }
 
     try {
