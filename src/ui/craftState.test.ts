@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { RECIPES } from '../data/recipes';
+import { emptyWallet } from '../data/resources';
 import { createInitialState } from '../sim/createState';
 import { formatCostProgress, getCraftQuickState } from './craftState';
 
@@ -25,22 +27,7 @@ describe('getCraftQuickState', () => {
 
   it('reports crafted out when every recipe is owned', () => {
     const state = createInitialState();
-    state.ownedRecipes = [
-      'copper_pick',
-      'ember_tongs',
-      'vein_lantern',
-      'glow_chisel',
-      'alloy_hammer',
-      'scout_kit',
-      'hearth_bellows',
-      'cyan_lens',
-      'deep_gauntlets',
-      'resonance_core',
-      'forge_crown',
-      'mythic_crucible',
-      'nightiron_pick',
-      'starshard_lens',
-    ];
+    state.ownedRecipes = RECIPES.map((r) => r.id);
     const craft = getCraftQuickState(state);
     expect(craft.recipe).toBeNull();
     expect(craft.affordable).toBe(false);
@@ -51,18 +38,10 @@ describe('getCraftQuickState', () => {
 
 describe('formatCostProgress', () => {
   it('tracks the scarcest resource across multi-costs', () => {
-    const result = formatCostProgress(
-      { ore: 40, emberglass: 10 },
-      {
-        ore: 40,
-        emberglass: 5,
-        glowdust: 0,
-        alloy: 0,
-        nightiron: 0,
-        starshard: 0,
-        relics: 0,
-      },
-    );
+    const wallet = emptyWallet();
+    wallet.ore = 40;
+    wallet.emberglass = 5;
+    const result = formatCostProgress({ ore: 40, emberglass: 10 }, wallet);
     expect(result.affordable).toBe(false);
     expect(result.progress).toBeCloseTo(0.5);
     expect(result.detail).toContain('5/10');

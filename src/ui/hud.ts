@@ -253,7 +253,7 @@ export class Hud {
     if (detail) {
       detail.textContent = nextStratum
         ? `Depth ${depth} · ${toNext} to ${nextStratum.name}`
-        : `Depth ${depth} · Deep Dark`;
+        : `Depth ${depth} · ${stratum.name}`;
     }
     if (meter) meter.style.width = `${Math.round(faceProgress * 100)}%`;
   }
@@ -724,20 +724,29 @@ export class Hud {
       const st = state.stations[s.id as StationId];
       if (!st.unlocked) {
         const prereqOk = !s.unlockRequires || state.stations[s.unlockRequires].unlocked;
+        const depthOk = s.unlockAtDepth == null || (state.mineDepth ?? 0) >= s.unlockAtDepth;
         const affordable = canAfford(state.resources, s.unlockCost);
-        const gate = s.unlockRequires
-          ? `Requires ${STATIONS.find((x) => x.id === s.unlockRequires)?.name ?? s.unlockRequires} first`
-          : 'Appears in the forge when unlocked';
-        const disabled = !prereqOk || !affordable;
+        const gates: string[] = [];
+        if (s.unlockRequires) {
+          gates.push(
+            `Requires ${STATIONS.find((x) => x.id === s.unlockRequires)?.name ?? s.unlockRequires} first`,
+          );
+        }
+        if (s.unlockAtDepth != null) {
+          gates.push(`Depth ${s.unlockAtDepth}+`);
+        }
+        if (!gates.length) gates.push('Appears in the forge when unlocked');
+        const gate = gates.join(' · ');
+        const disabled = !prereqOk || !depthOk || !affordable;
         let actionLabel = 'Unlock';
-        if (!prereqOk) actionLabel = 'Locked';
+        if (!prereqOk || !depthOk) actionLabel = 'Locked';
         else if (!affordable) actionLabel = 'Need more';
         const costHint =
-          prereqOk && !affordable
+          prereqOk && depthOk && !affordable
             ? formatMissingCost(s.unlockCost, state.resources)
             : formatCost(s.unlockCost);
         return `
-          <div class="row-item${!prereqOk || !affordable ? ' row-item-blocked' : ''}">
+          <div class="row-item${!prereqOk || !depthOk || !affordable ? ' row-item-blocked' : ''}">
             <div>
               <h3>${s.name}</h3>
               <div class="cost">${costHint}</div>

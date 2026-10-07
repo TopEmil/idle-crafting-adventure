@@ -4,7 +4,12 @@ import {
   stationUpgradeCost,
   SIM_DT,
 } from '../data/balance';
-import { EXPEDITIONS, getExpedition, type ExpeditionId } from '../data/expeditions';
+import {
+  EXPEDITIONS,
+  expeditionUnlocked,
+  getExpedition,
+  type ExpeditionId,
+} from '../data/expeditions';
 import { getRecipe, RECIPES, type RecipeId } from '../data/recipes';
 import type { ResourceId } from '../data/resources';
 import { getStation, STATIONS, type StationId } from '../data/stations';
@@ -13,7 +18,7 @@ import {
   talentUpgradeCost,
   type TalentId,
 } from '../data/talents';
-import { depthOreMult } from '../data/strata';
+import { depthOreMult, stratumAtDepth, STRATA, type StratumId } from '../data/strata';
 import { syncAchievements } from './achievements';
 import {
   digShaft,
@@ -55,6 +60,25 @@ function applyShaftProgress(
   const next = normalizeProgress({ depth, faceDamage });
   state.mineDepth = next.depth;
   state.mineFaceDamage = next.faceDamage;
+  applyStratumDiscoveries(state);
+}
+
+/** First time a stratum is reached this run — grant discovery bonus. */
+export function applyStratumDiscoveries(state: GameState): StratumId[] {
+  const discovered = new Set(state.discoveredStrata ?? ['glow_shallows']);
+  const newly: StratumId[] = [];
+  const depth = state.mineDepth ?? 0;
+  for (const stratum of STRATA) {
+    if (depth < stratum.startDepth) continue;
+    if (discovered.has(stratum.id)) continue;
+    discovered.add(stratum.id);
+    newly.push(stratum.id);
+    if (stratum.discoveryBonus) {
+      grant(state.resources, stratum.discoveryBonus);
+    }
+  }
+  state.discoveredStrata = [...discovered];
+  return newly;
 }
 
 function canAfford(
@@ -122,6 +146,7 @@ export function clickVein(
   const mode: DigMode = opts?.mode ?? 'player';
   const dig = digShaft(shaftProgress(next), 1, { col: opts?.col, mode });
   applyShaftProgress(next, dig.progress.depth, dig.progress.faceDamage);
+  next.lastMineHitCol = dig.hitCol;
   const amount = getClickPower(next);
   next.resources.ore += amount;
   recordOreMined(next, amount);
@@ -179,6 +204,12 @@ export function unlockStation(
   }
   if (station.unlockRequires && !state.stations[station.unlockRequires].unlocked) {
     return { ok: false, reason: `Unlock ${getStation(station.unlockRequires).name} first` };
+  }
+  if (station.unlockAtDepth != null && (state.mineDepth ?? 0) < station.unlockAtDepth) {
+    return {
+      ok: false,
+      reason: `Dig to depth ${station.unlockAtDepth} (${stratumAtDepth(station.unlockAtDepth).name})`,
+    };
   }
   if (!canAfford(state.resources, station.unlockCost)) {
     return { ok: false, reason: 'Not enough resources' };
@@ -307,10 +338,16 @@ export function startExpedition(
     return { ok: false, reason: 'Claim pending loot before sending again' };
   }
   const def = getExpedition(expeditionId);
-  if (state.totalOreProduced < def.unlockAtOreProduced) {
+  if (!expeditionUnlocked(def, state.totalOreProduced, state.mineDepth ?? 0)) {
+    if (state.totalOreProduced < def.unlockAtOreProduced) {
+      return {
+        ok: false,
+        reason: `Need ${def.unlockAtOreProduced} lifetime ore (have ${Math.floor(state.totalOreProduced)})`,
+      };
+    }
     return {
       ok: false,
-      reason: `Need ${def.unlockAtOreProduced} lifetime ore (have ${Math.floor(state.totalOreProduced)})`,
+      reason: `Dig to depth ${def.unlockAtDepth} first`,
     };
   }
   if (!canAfford(state.resources, def.cost)) {
@@ -318,12 +355,13 @@ export function startExpedition(
   }
   const next = structuredClone(state);
   pay(next.resources, def.cost);
+  const durationSec = def.durationSec * effectsFor(next).expeditionDuration;
   next.activeExpeditions = [
     ...(next.activeExpeditions ?? []),
     {
       id: expeditionId,
       startedAt: now,
-      endsAt: now + def.durationSec * 1000,
+      endsAt: now + durationSec * 1000,
       claimed: false,
       doublePending: false,
     },
@@ -441,6 +479,7 @@ export function tickProduction(state: GameState, dt: number): GameState {
       next.mineDigAcc -= digHits;
       const dig = digShaft(shaftProgress(next), digHits, { mode: 'auto' });
       applyShaftProgress(next, dig.progress.depth, dig.progress.faceDamage);
+      next.lastMineHitCol = dig.hitCol;
     }
     const ore = getAutoMineRate(next) * dt;
     next.resources.ore += ore;
@@ -568,7 +607,11 @@ export function prestige(
       reason: `Reforge cools for ${mins} more minute${mins === 1 ? '' : 's'}`,
     };
   }
-  const relics = relicsFromReforge(state.lifetimeOre, state.prestigeCount);
+  const relicMult = effectsFor(state).relicGain;
+  const relics = Math.max(
+    1,
+    Math.floor(relicsFromReforge(state.lifetimeOre, state.prestigeCount) * relicMult),
+  );
   const next = createInitialState(now);
   next.resources.relics = state.resources.relics + relics;
   next.totalRelicsEarned = state.totalRelicsEarned + relics;
@@ -638,7 +681,9 @@ export function applyTimeWarp(
 }
 
 export function availableExpeditions(state: GameState) {
-  return EXPEDITIONS.filter((e) => state.totalOreProduced >= e.unlockAtOreProduced);
+  return EXPEDITIONS.filter((e) =>
+    expeditionUnlocked(e, state.totalOreProduced, state.mineDepth ?? 0),
+  );
 }
 
 export function availableRecipes(state: GameState) {

@@ -147,6 +147,8 @@ describe('save migration', () => {
     delete legacy.extraSquadSlots;
     delete legacy.resources.nightiron;
     delete legacy.resources.starshard;
+    delete legacy.resources.verdiglass;
+    delete legacy.resources.aetherite;
     legacy.activeExpedition = {
       id: 'glow_shalllows',
       startedAt: 1,
@@ -161,5 +163,33 @@ describe('save migration', () => {
     expect(migrated.extraSquadSlots).toBe(0);
     expect(migrated.resources.nightiron).toBe(0);
     expect(migrated.resources.starshard).toBe(0);
+    expect(migrated.resources.verdiglass).toBe(0);
+    expect(migrated.resources.aetherite).toBe(0);
+  });
+
+  it('fills missing late stations and dwarf/stratum fields', () => {
+    const state = createInitialState();
+    const legacy = structuredClone(state) as unknown as {
+      stations: Record<string, unknown>;
+      lastMineHitCol?: number;
+      discoveredStrata?: string[];
+    };
+    delete legacy.stations.crucible;
+    delete legacy.stations.gemcutter;
+    delete legacy.stations.aetherforge;
+    delete legacy.lastMineHitCol;
+    delete legacy.discoveredStrata;
+    legacy.stations = {
+      smelter: legacy.stations.smelter,
+      anvil: legacy.stations.anvil,
+      enchanter: legacy.stations.enchanter,
+    };
+
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.stations.crucible.unlocked).toBe(false);
+    expect(migrated.stations.gemcutter.level).toBe(0);
+    expect(migrated.stations.aetherforge.enabled).toBe(true);
+    expect(migrated.lastMineHitCol).toBe(0);
+    expect(migrated.discoveredStrata).toContain('glow_shallows');
   });
 });

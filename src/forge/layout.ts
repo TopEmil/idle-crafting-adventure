@@ -16,10 +16,14 @@ export const MINE_FOCUS: UvPoint = { x: 0.5, y: 0.48 };
 export const MINE_VEIN_UV: UvPoint = { x: 0.5, y: 0.5 };
 
 export const FORGE_FOCUS: UvPoint = { x: 0.5, y: 0.56 };
+/** Pedestal anchors across the forge hall — six stations in two bands. */
 export const FORGE_STATION_UV: Record<StationId, UvPoint> = {
-  smelter: { x: 0.23, y: 0.55 },
-  anvil: { x: 0.5, y: 0.57 },
-  enchanter: { x: 0.77, y: 0.55 },
+  smelter: { x: 0.14, y: 0.5 },
+  anvil: { x: 0.32, y: 0.54 },
+  enchanter: { x: 0.5, y: 0.5 },
+  crucible: { x: 0.68, y: 0.54 },
+  gemcutter: { x: 0.86, y: 0.5 },
+  aetherforge: { x: 0.5, y: 0.72 },
 };
 
 export interface PlaySafeInsets {

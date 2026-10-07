@@ -14,7 +14,11 @@ export type AchievementId =
   | 'enchanters_oath'
   | 'full_pantry'
   | 'first_reforge'
-  | 'abyss_ready';
+  | 'abyss_ready'
+  | 'moss_touched'
+  | 'crucible_lit'
+  | 'starfall_sight'
+  | 'aether_bound';
 
 /** Instant resource grants (temporary) + permanent power bonuses that survive Reforge. */
 export interface AchievementRewards {
@@ -130,6 +134,34 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     description: 'Produce 2,000 ore to open Abyss Vein.',
     condition: { type: 'total_ore_produced', amount: 2000 },
     rewards: { resources: { relics: 1 }, stationOutput: 1.12 },
+  },
+  {
+    id: 'moss_touched',
+    name: 'Moss Touched',
+    description: 'Hold 10 Verdiglass at once.',
+    condition: { type: 'resource_at_least', resource: 'verdiglass', amount: 10 },
+    rewards: { resources: { glowdust: 25 }, autoMine: 0.04 },
+  },
+  {
+    id: 'crucible_lit',
+    name: 'Crucible Lit',
+    description: 'Unlock the Verdant Crucible.',
+    condition: { type: 'station_unlocked', stationId: 'crucible' },
+    rewards: { resources: { verdiglass: 15 }, stationOutput: 1.06 },
+  },
+  {
+    id: 'starfall_sight',
+    name: 'Starfall Sight',
+    description: 'Hold 15 Starshard at once.',
+    condition: { type: 'resource_at_least', resource: 'starshard', amount: 15 },
+    rewards: { clickPower: 1.08, resources: { nightiron: 10 } },
+  },
+  {
+    id: 'aether_bound',
+    name: 'Aether Bound',
+    description: 'Unlock the Aetherforge.',
+    condition: { type: 'station_unlocked', stationId: 'aetherforge' },
+    rewards: { resources: { aetherite: 4, relics: 2 }, stationOutput: 1.15 },
   },
 ];
 

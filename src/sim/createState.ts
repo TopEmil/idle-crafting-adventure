@@ -1,5 +1,6 @@
 import { emptyUnlockedAchievements } from '../data/achievements';
 import { emptyWallet } from '../data/resources';
+import { emptyStations } from '../data/stations';
 import { emptyTalents } from '../data/talents';
 import { currentSeasonStartMs } from './oreScore';
 import type { GameState } from './types';
@@ -8,11 +9,7 @@ export function createInitialState(now = Date.now()): GameState {
   return {
     version: 1,
     resources: emptyWallet(),
-    stations: {
-      smelter: { unlocked: false, level: 0, runLevel: 0, enabled: true },
-      anvil: { unlocked: false, level: 0, runLevel: 0, enabled: true },
-      enchanter: { unlocked: false, level: 0, runLevel: 0, enabled: true },
-    },
+    stations: emptyStations(),
     ownedRecipes: [],
     talents: emptyTalents(),
     unlockedAchievements: emptyUnlockedAchievements(),
@@ -31,6 +28,8 @@ export function createInitialState(now = Date.now()): GameState {
     mineDepth: 0,
     mineFaceDamage: [0, 0, 0, 0, 0, 0, 0, 0],
     mineDigAcc: 0,
+    lastMineHitCol: 0,
+    discoveredStrata: ['glow_shallows'],
     playTimeSec: 0,
     prestigeCount: 0,
     totalRelicsEarned: 0,

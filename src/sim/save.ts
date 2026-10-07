@@ -5,7 +5,8 @@ import {
 } from '../data/achievements';
 import { BALANCE } from '../data/balance';
 import { RESOURCE_IDS, emptyWallet } from '../data/resources';
-import { STATIONS } from '../data/stations';
+import { emptyStationProgress, STATIONS } from '../data/stations';
+import { STRATA, type StratumId } from '../data/strata';
 import { emptyTalents, TALENTS } from '../data/talents';
 import { createInitialState } from './createState';
 import { emptyFaceDamage, faceHitsToDamage, SHAFT_COLS } from './mineShaft';
@@ -21,12 +22,17 @@ export function serializeState(state: GameState): string {
 /** Fill missing fields from older saves (toggle, runLevel, talents, achievements). */
 export function migrateState(state: GameState): GameState {
   const next = structuredClone(state);
+  if (!next.stations) next.stations = {} as GameState['stations'];
   for (const def of STATIONS) {
-    const st = next.stations[def.id];
-    if (!st) continue;
+    let st = next.stations[def.id];
+    if (!st) {
+      st = emptyStationProgress();
+      next.stations[def.id] = st;
+    }
     if (typeof st.enabled !== 'boolean') st.enabled = true;
     const level = Math.max(0, Math.floor(st.level ?? 0));
     st.level = level;
+    if (typeof st.unlocked !== 'boolean') st.unlocked = level > 0;
     if (typeof st.runLevel !== 'number' || !Number.isFinite(st.runLevel)) {
       st.runLevel = level;
     } else {
@@ -64,6 +70,31 @@ export function migrateState(state: GameState): GameState {
   delete (next as GameState & { mineFaceHits?: number }).mineFaceHits;
   if (typeof next.mineDigAcc !== 'number' || next.mineDigAcc < 0) {
     next.mineDigAcc = 0;
+  }
+  if (typeof next.lastMineHitCol !== 'number' || !Number.isFinite(next.lastMineHitCol)) {
+    next.lastMineHitCol = 0;
+  } else {
+    next.lastMineHitCol = Math.max(0, Math.min(SHAFT_COLS - 1, Math.floor(next.lastMineHitCol)));
+  }
+  if (!Array.isArray(next.discoveredStrata)) {
+    next.discoveredStrata = ['glow_shallows'];
+    const depth = next.mineDepth ?? 0;
+    for (const s of STRATA) {
+      if (depth >= s.startDepth && !next.discoveredStrata.includes(s.id)) {
+        next.discoveredStrata.push(s.id);
+      }
+    }
+  } else {
+    const known = new Set(STRATA.map((s) => s.id));
+    const cleaned: StratumId[] = [];
+    const seen = new Set<StratumId>();
+    for (const id of next.discoveredStrata) {
+      if (!known.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      cleaned.push(id);
+    }
+    if (!cleaned.includes('glow_shallows')) cleaned.unshift('glow_shallows');
+    next.discoveredStrata = cleaned;
   }
   if (typeof next.lifetimeClicks !== 'number' || !Number.isFinite(next.lifetimeClicks)) {
     next.lifetimeClicks = 0;
