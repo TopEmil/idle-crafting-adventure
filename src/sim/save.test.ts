@@ -18,6 +18,18 @@ describe('save migration', () => {
     expect(migrated.stations.enchanter.enabled).toBe(true);
   });
 
+  it('defaults missing station.runLevel to owned level', () => {
+    const state = createInitialState();
+    const legacy = structuredClone(state) as unknown as {
+      stations: Record<string, { unlocked: boolean; level: number; runLevel?: number; enabled: boolean }>;
+    };
+    legacy.stations.smelter = { unlocked: true, level: 5, enabled: true };
+    delete legacy.stations.smelter.runLevel;
+
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.stations.smelter.runLevel).toBe(5);
+  });
+
   it('defaults missing talents and lastPrestigeAt', () => {
     const state = createInitialState();
     const legacy = structuredClone(state) as unknown as {
@@ -33,16 +45,17 @@ describe('save migration', () => {
     expect(migrated.lastPrestigeAt).toBe(0);
   });
 
-  it('round-trips enabled through serialize/deserialize', () => {
+  it('round-trips enabled and runLevel through serialize/deserialize', () => {
     const state = createInitialState();
-    state.stations.smelter = { unlocked: true, level: 2, enabled: false };
+    state.stations.smelter = { unlocked: true, level: 5, runLevel: 2, enabled: false };
     state.talents.scout_instinct = 3;
     state.lastPrestigeAt = 42;
     const raw = serializeState(state);
     const parsed = deserializeState(raw);
     expect(parsed).not.toBeNull();
     expect(parsed?.stations.smelter.enabled).toBe(false);
-    expect(parsed?.stations.smelter.level).toBe(2);
+    expect(parsed?.stations.smelter.level).toBe(5);
+    expect(parsed?.stations.smelter.runLevel).toBe(2);
     expect(parsed?.talents.scout_instinct).toBe(3);
     expect(parsed?.lastPrestigeAt).toBe(42);
   });

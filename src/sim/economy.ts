@@ -15,7 +15,13 @@ import {
 } from '../data/talents';
 import { aggregateEffects } from './effects';
 import { createInitialState } from './createState';
-import type { GameEvent, GameState } from './types';
+import type { GameEvent, GameState, StationProgress } from './types';
+
+/** Clamped production multiplier from the player's chosen run speed. */
+export function stationRunMult(st: Pick<StationProgress, 'level' | 'runLevel'>): number {
+  if (st.level <= 0) return 0;
+  return Math.max(1, Math.min(Math.floor(st.runLevel), st.level));
+}
 
 function canAfford(
   wallet: Record<ResourceId, number>,
@@ -124,6 +130,7 @@ export function unlockStation(
   pay(next.resources, station.unlockCost);
   next.stations[stationId].unlocked = true;
   next.stations[stationId].level = 1;
+  next.stations[stationId].runLevel = 1;
   next.stations[stationId].enabled = true;
   const events: GameEvent = { type: 'unlock_station', stationId };
   if (!next.milestones.firstStation) {
@@ -150,7 +157,13 @@ export function upgradeStation(
   }
   const next = structuredClone(state);
   pay(next.resources, cost);
+  const wasAtMaxSpeed = stationRunMult(current) >= current.level;
   next.stations[stationId].level += 1;
+  if (wasAtMaxSpeed) {
+    next.stations[stationId].runLevel = next.stations[stationId].level;
+  } else {
+    next.stations[stationId].runLevel = stationRunMult(current);
+  }
   return { ok: true, state: next, event: { type: 'upgrade_station', stationId } };
 }
 
@@ -164,6 +177,28 @@ export function toggleStation(
   }
   const next = structuredClone(state);
   next.stations[stationId].enabled = !current.enabled;
+  return { ok: true, state: next };
+}
+
+/** Raise or lower how fast a station runs (1…owned level), without changing upgrades. */
+export function adjustStationRunLevel(
+  state: GameState,
+  stationId: StationId,
+  delta: number,
+): { ok: true; state: GameState } | { ok: false; reason: string } {
+  const current = state.stations[stationId];
+  if (!current.unlocked || current.level <= 0) {
+    return { ok: false, reason: 'Locked' };
+  }
+  const step = Math.trunc(delta);
+  if (step === 0) return { ok: false, reason: 'No change' };
+  const from = stationRunMult(current);
+  const nextLevel = Math.max(1, Math.min(current.level, from + step));
+  if (nextLevel === from) {
+    return { ok: false, reason: step > 0 ? 'Already at max speed' : 'Already at min speed' };
+  }
+  const next = structuredClone(state);
+  next.stations[stationId].runLevel = nextLevel;
   return { ok: true, state: next };
 }
 
@@ -280,7 +315,7 @@ export function tickProduction(state: GameState, dt: number): GameState {
     const st = next.stations[def.id];
     if (!st.unlocked || st.level <= 0 || !st.enabled) continue;
 
-    const levelMult = st.level;
+    const levelMult = stationRunMult(st);
     if (def.inputs) {
       let canRun = true;
       for (const [key, rate] of Object.entries(def.inputs) as [ResourceId, number][]) {

@@ -9,13 +9,21 @@ export function serializeState(state: GameState): string {
   return JSON.stringify(state);
 }
 
-/** Fill missing fields from older saves (toggle, talents, prestige cooldown). */
+/** Fill missing fields from older saves (toggle, runLevel, talents, prestige cooldown). */
 export function migrateState(state: GameState): GameState {
   const next = structuredClone(state);
   for (const def of STATIONS) {
     const st = next.stations[def.id];
     if (!st) continue;
     if (typeof st.enabled !== 'boolean') st.enabled = true;
+    const level = Math.max(0, Math.floor(st.level ?? 0));
+    st.level = level;
+    if (typeof st.runLevel !== 'number' || !Number.isFinite(st.runLevel)) {
+      st.runLevel = level;
+    } else {
+      const run = Math.floor(st.runLevel);
+      st.runLevel = level <= 0 ? 0 : Math.max(1, Math.min(run, level));
+    }
   }
   if (!next.talents) {
     next.talents = emptyTalents();

@@ -20,6 +20,7 @@ import {
   getAutoMineRate,
   prestige,
   startExpedition,
+  adjustStationRunLevel,
   tickProduction,
   toggleStation,
   unlockStation,
@@ -65,6 +66,7 @@ export class GameApp {
       onUnlockStation: (id) => this.handleUnlock(id),
       onUpgradeStation: (id) => this.handleUpgrade(id),
       onToggleStation: (id) => this.handleToggleStation(id),
+      onAdjustStationSpeed: (id, delta) => this.handleAdjustStationSpeed(id, delta),
       onStartExpedition: (id) => this.handleStartExpedition(id as ExpeditionId),
       onRevealExpeditionLoot: () => this.revealExpeditionLoot(),
       onClaimExpedition: (mode) => void this.handleClaim(mode),
@@ -351,6 +353,23 @@ export class GameApp {
     const on = this.state.stations[id].enabled;
     const pretty = id.charAt(0).toUpperCase() + id.slice(1);
     this.hud.toast(on ? `${pretty} On` : `${pretty} Off`, on ? 'gain' : 'info');
+    this.refreshHud();
+    void this.persist();
+  }
+
+  private handleAdjustStationSpeed(id: StationId, delta: number) {
+    const result = adjustStationRunLevel(this.state, id, delta);
+    if (!result.ok) {
+      this.notice = result.reason;
+      this.refreshHud();
+      return;
+    }
+    this.state = result.state;
+    this.audio.click();
+    this.scene.sync(this.state);
+    const st = this.state.stations[id];
+    const pretty = id.charAt(0).toUpperCase() + id.slice(1);
+    this.hud.toast(`${pretty} speed ${st.runLevel}/${st.level}`, 'info');
     this.refreshHud();
     void this.persist();
   }
