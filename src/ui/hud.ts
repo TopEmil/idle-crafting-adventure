@@ -867,7 +867,7 @@ export class Hud {
             <div>
               <h3>This Reforge</h3>
               <div class="cost">${statusLine}</div>
-              <div class="effect-line">Gain ${formatNumber(relicsPreview)} Relics</div>
+              <div class="effect-line">Gain ${formatNumber(relicsPreview)} Relic${relicsPreview === 1 ? '' : 's'}</div>
               <div class="effect-line muted">Run ore ${formatNumber(state.lifetimeOre)} · Past Reforges ${state.prestigeCount}</div>
             </div>
             <button class="btn btn-primary" id="btn-prestige" type="button" ${prestigeReady ? '' : 'disabled'}>${prestigeLabel}</button>
