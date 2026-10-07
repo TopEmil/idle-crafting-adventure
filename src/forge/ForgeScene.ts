@@ -189,7 +189,9 @@ export class ForgeScene {
     this.app.stage.on('pointerdown', (e) => this.handlePointer(e.global.x, e.global.y));
 
     this.app.ticker.add((ticker) => this.update(ticker.deltaMS / 1000));
-    this.applyViewVisibility();
+    this.mineLayer.alpha = 1;
+    this.forgeLayer.alpha = 0;
+    this.applyViewEventModes();
     this.resize();
   }
 
@@ -205,7 +207,7 @@ export class ForgeScene {
     if (this.view === view) return;
     this.view = view;
     this.viewFade = 0;
-    this.applyViewVisibility();
+    this.applyViewEventModes();
     this.redrawStations();
   }
 
@@ -368,12 +370,10 @@ export class ForgeScene {
     }
   }
 
-  private applyViewVisibility() {
+  private applyViewEventModes() {
     const forge = this.view === 'forge';
     this.forgeLayer.visible = true;
     this.mineLayer.visible = true;
-    this.forgeLayer.alpha = forge ? 1 : 0;
-    this.mineLayer.alpha = forge ? 0 : 1;
     this.forgeLayer.eventMode = forge ? 'passive' : 'none';
     this.mineLayer.eventMode = forge ? 'none' : 'passive';
   }
@@ -403,10 +403,18 @@ export class ForgeScene {
   private layoutBackground(sprite: Sprite | null) {
     if (!sprite) return;
     const tex = sprite.texture;
-    const scale = Math.max(this.width / tex.width, this.height / tex.height);
+    // Slight zoom keeps pedestals in the playable mid-band above the HUD.
+    const cover = Math.max(this.width / tex.width, this.height / tex.height);
+    const scale = cover * (sprite === this.forgeBg ? 1.08 : 1);
     sprite.scale.set(scale);
     sprite.x = (this.width - tex.width * scale) / 2;
-    sprite.y = (this.height - tex.height * scale) / 2;
+    if (sprite === this.forgeBg) {
+      // Bias upward so the pedestal band sits above the bottom dock.
+      const rawY = (this.height - tex.height * scale) / 2;
+      sprite.y = Math.min(-this.height * 0.02, rawY + this.height * 0.04);
+    } else {
+      sprite.y = (this.height - tex.height * scale) / 2;
+    }
   }
 
   private drawVignette() {
@@ -562,7 +570,7 @@ export class ForgeScene {
       try {
         const texture = await Assets.load(STATION_ART[def.id]);
         const sprite = new Sprite(texture);
-        sprite.anchor.set(0.5, 0.94);
+        sprite.anchor.set(0.5, 0.98);
         sprite.visible = false;
         sprite.tint = 0xe8f1f2;
         this.spriteByStation.set(def.id, sprite);
@@ -574,8 +582,8 @@ export class ForgeScene {
   }
 
   private stationDisplayScale(): number {
-    // Machines are the forge-view focus — larger, still below brand/HUD.
-    return Math.min(0.72, Math.max(0.42, this.width / 1100));
+    // Sized to sit on hall pedestals without swallowing the hearth.
+    return Math.min(0.58, Math.max(0.36, this.width / 1300));
   }
 
   private redrawStations() {
