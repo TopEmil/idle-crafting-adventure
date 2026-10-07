@@ -12,10 +12,19 @@ export interface ActiveExpedition {
   doublePending: boolean;
 }
 
+/** Per-station progress. `runLevel` throttles rate independently of owned `level`. */
+export interface StationProgress {
+  unlocked: boolean;
+  level: number;
+  /** Effective speed tier (1…level). Can stay lower after upgrades. */
+  runLevel: number;
+  enabled: boolean;
+}
+
 export interface GameState {
   version: 1;
   resources: Record<ResourceId, number>;
-  stations: Record<StationId, { unlocked: boolean; level: number; enabled: boolean }>;
+  stations: Record<StationId, StationProgress>;
   ownedRecipes: RecipeId[];
   /** Permanent talent levels — persist across Reforge. */
   talents: Record<TalentId, number>;

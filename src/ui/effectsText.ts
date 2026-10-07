@@ -71,3 +71,10 @@ export function formatStationIO(station: StationDef, level = 1): string {
 export function formatStationUpgradeHint(level: number): string {
   return `Lv ${level} → Lv ${level + 1}: +100% this station’s rates`;
 }
+
+export function formatStationSpeedHint(runLevel: number, ownedLevel: number): string {
+  if (runLevel >= ownedLevel) {
+    return `Speed ${runLevel}/${ownedLevel} — full rate`;
+  }
+  return `Speed ${runLevel}/${ownedLevel} — throttled to save inputs`;
+}
