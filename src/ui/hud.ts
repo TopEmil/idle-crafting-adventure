@@ -27,7 +27,7 @@ import {
 } from './effectsText';
 import type { SceneView } from '../forge/sceneView';
 
-export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'ledger' | null;
+export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'talents' | 'ledger' | null;
 
 export interface HudActions {
   onClickVein: () => void;
@@ -99,6 +99,7 @@ export class Hud {
           <button class="nav-btn" data-panel="recipes" type="button">Recipes</button>
           <button class="nav-btn" data-panel="expeditions" type="button">Expeditions</button>
           <button class="nav-btn" data-panel="forge" type="button">Stations</button>
+          <button class="nav-btn" data-panel="talents" type="button">Talents</button>
           <button class="nav-btn" data-panel="ledger" type="button">Ledger</button>
         </div>
       </div>
@@ -410,10 +411,29 @@ export class Hud {
   }
 
   private renderPanel(state: GameState, notice?: string) {
-    if (this.panel === 'recipes') this.renderRecipes(state);
-    else if (this.panel === 'expeditions') this.renderExpeditions(state, notice);
-    else if (this.panel === 'forge') this.renderForge(state, notice);
-    else if (this.panel === 'ledger') this.renderLedger(state, notice);
+    switch (this.panel) {
+      case 'recipes':
+        this.renderRecipes(state);
+        return;
+      case 'expeditions':
+        this.renderExpeditions(state, notice);
+        return;
+      case 'forge':
+        this.renderForge(state, notice);
+        return;
+      case 'talents':
+        this.renderTalents(state, notice);
+        return;
+      case 'ledger':
+        this.renderLedger(state, notice);
+        return;
+      case null:
+        return;
+      default: {
+        const _exhaustive: never = this.panel;
+        return _exhaustive;
+      }
+    }
   }
 
   private renderRecipes(state: GameState) {
@@ -690,7 +710,7 @@ export class Hud {
     const coolLeft = prestigeCooldownRemaining(state);
     const prestigeReady = canPrestige(state);
     let prestigeLabel = 'Reforge';
-    let prestigeHint = 'Reset production for Relics — spend them on Talents below.';
+    let prestigeHint = 'Reset production for Relics — spend them on the Talents page.';
     let prestigeCost = `Gain ~${relicsPreview} Relics`;
     if (!prestigeReady && coolLeft > 0) {
       prestigeLabel = formatDuration(coolLeft);
@@ -700,30 +720,6 @@ export class Hud {
       prestigeLabel = 'Locked';
       prestigeHint = `Need ${BALANCE.prestigeMinLifetimeOre} lifetime ore, or unlock the Smelter.`;
     }
-
-    const talentRows = TALENTS.map((t) => {
-      const level = state.talents[t.id] ?? 0;
-      const atMax = level >= t.maxLevel;
-      const cost = atMax ? 0 : talentUpgradeCost(t, level);
-      const affordable = !atMax && state.resources.relics >= cost;
-      let actionLabel = `Buy · ${cost} Relic${cost === 1 ? '' : 's'}`;
-      if (atMax) actionLabel = 'Max';
-      else if (!affordable) actionLabel = `Need ${cost}`;
-      const effectLine = level > 0
-        ? formatTalentEffects(t, level)
-        : formatTalentPerLevel(t);
-      return `
-        <div class="row-item${!atMax && !affordable ? ' row-item-blocked' : ''}">
-          <div>
-            <h3>${t.name} · Lv ${level}/${t.maxLevel}</h3>
-            <div class="cost">${atMax ? 'Maxed' : `${cost} Relic${cost === 1 ? '' : 's'}`}</div>
-            <div class="effect-line">${effectLine}</div>
-          </div>
-          <button class="btn btn-secondary" data-talent="${t.id}" type="button" ${atMax || !affordable ? 'disabled' : ''}>${actionLabel}</button>
-          <p>${t.description}</p>
-        </div>
-      `;
-    }).join('');
 
     this.overlay.innerHTML = `
       <div class="sheet">
@@ -741,9 +737,6 @@ export class Hud {
           <button class="btn btn-primary" id="btn-prestige" type="button" ${prestigeReady ? '' : 'disabled'}>${prestigeLabel}</button>
           <p>${prestigeHint}</p>
         </div>
-        <h3 class="sheet-section">Talents</h3>
-        <p class="muted">Permanent bonuses — survive Reforge. Spend Relics to specialize your forge.</p>
-        <div class="list">${talentRows}</div>
         <div class="row-item">
           <div>
             <h3>Time Warp</h3>
@@ -774,15 +767,56 @@ export class Hud {
     this.overlay.querySelectorAll('[data-upgrade]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUpgradeStation((btn as HTMLElement).dataset.upgrade as StationId));
     });
-    this.overlay.querySelectorAll('[data-talent]').forEach((btn) => {
-      btn.addEventListener('click', () => this.actions.onBuyTalent((btn as HTMLElement).dataset.talent as TalentId));
-    });
     this.overlay.querySelector('#btn-prestige')?.addEventListener('click', () => {
       this.actions.onOpenPanel(null);
       this.showPrestigeConfirm(relicsPreview);
     });
     this.overlay.querySelector('#btn-warp-ad')?.addEventListener('click', () => this.actions.onTimeWarp(true));
     this.overlay.querySelector('#btn-warp-coin')?.addEventListener('click', () => this.actions.onTimeWarp(false));
+  }
+
+  private renderTalents(state: GameState, notice?: string) {
+    const talentLevels = TALENTS.reduce((sum, t) => sum + (state.talents[t.id] ?? 0), 0);
+    const talentRows = TALENTS.map((t) => {
+      const level = state.talents[t.id] ?? 0;
+      const atMax = level >= t.maxLevel;
+      const cost = atMax ? 0 : talentUpgradeCost(t, level);
+      const affordable = !atMax && state.resources.relics >= cost;
+      let actionLabel = `Buy · ${cost} Relic${cost === 1 ? '' : 's'}`;
+      if (atMax) actionLabel = 'Max';
+      else if (!affordable) actionLabel = `Need ${cost}`;
+      const effectLine = level > 0
+        ? formatTalentEffects(t, level)
+        : formatTalentPerLevel(t);
+      return `
+        <div class="row-item${!atMax && !affordable ? ' row-item-blocked' : ''}">
+          <div>
+            <h3>${t.name} · Lv ${level}/${t.maxLevel}</h3>
+            <div class="cost">${atMax ? 'Maxed' : `${cost} Relic${cost === 1 ? '' : 's'}`}</div>
+            <div class="effect-line">${effectLine}</div>
+          </div>
+          <button class="btn btn-secondary" data-talent="${t.id}" type="button" ${atMax || !affordable ? 'disabled' : ''}>${actionLabel}</button>
+          <p>${t.description}</p>
+        </div>
+      `;
+    }).join('');
+
+    this.overlay.innerHTML = `
+      <div class="sheet">
+        <div class="sheet-header">
+          <h2>Talents</h2>
+          <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <p class="muted">Permanent bonuses that survive Reforge · Relics ${formatNumber(state.resources.relics)} · Levels ${talentLevels}</p>
+        <div class="list">${talentRows}</div>
+        ${notice ? `<p class="notice">${notice}</p>` : ''}
+        <p class="muted" style="margin-top:12px">Earn Relics by Reforging from the Stations sheet.</p>
+      </div>
+    `;
+    this.bindSheet();
+    this.overlay.querySelectorAll('[data-talent]').forEach((btn) => {
+      btn.addEventListener('click', () => this.actions.onBuyTalent((btn as HTMLElement).dataset.talent as TalentId));
+    });
   }
 
   private renderLedger(state: GameState, notice?: string) {
