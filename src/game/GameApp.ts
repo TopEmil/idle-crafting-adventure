@@ -101,7 +101,7 @@ export class GameApp {
     window.addEventListener('resize', () => this.scene.resize());
     this.installInputGuards();
 
-    this.scene.setVeinTapHandler(() => this.handleClickVein());
+    this.scene.setVeinTapHandler((col) => this.handleClickVein(col));
     this.scene.setAutoMineRate(getAutoMineRate(this.state));
 
     this.platform.loadingStop();
@@ -238,7 +238,7 @@ export class GameApp {
     }
   }
 
-  private handleClickVein() {
+  private handleClickVein(col?: number) {
     void this.audio.unlock();
     if (this.overlayMode === 'onboarding' && this.state.onboardingStep === 0) {
       // allow click during first step
@@ -248,13 +248,18 @@ export class GameApp {
     if (this.scene.getView() !== 'mine') {
       this.setSceneView('mine');
     }
-    const { state, event } = clickVein(this.state);
+    const digCol = col ?? this.scene.getPendingDigCol() ?? undefined;
+    const { state, event } = clickVein(this.state, { col: digCol, mode: 'player' });
     this.state = state;
     this.scene.sync(this.state);
     const amount = event.type === 'click_vein' ? event.amount : 1;
-    this.scene.triggerVeinHit(amount);
+    const find = event.type === 'click_vein' ? event.find : undefined;
+    this.scene.triggerVeinHit(amount, find);
     this.hud.pulseVeinButton();
     this.audio.click(this.scene.getCombo());
+    if (find) {
+      this.hud.toast(`Found ${find.amount} ${find.label}!`, 'gain');
+    }
     if (!this.state.onboardingDone && this.state.onboardingStep === 0 && this.state.resources.ore >= 3) {
       this.state.onboardingStep = 1;
       this.hud.showOnboarding(1);

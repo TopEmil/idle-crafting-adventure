@@ -24,13 +24,13 @@ describe('save migration', () => {
       talents?: typeof state.talents;
       lastPrestigeAt?: number;
       mineDepth?: number;
-      mineFaceHits?: number;
+      mineFaceDamage?: number[];
       mineDigAcc?: number;
     };
     delete legacy.talents;
     delete legacy.lastPrestigeAt;
     delete legacy.mineDepth;
-    delete legacy.mineFaceHits;
+    delete legacy.mineFaceDamage;
     delete legacy.mineDigAcc;
 
     const migrated = migrateState(legacy as typeof state);
@@ -38,8 +38,20 @@ describe('save migration', () => {
     expect(migrated.talents.hearth_kindling).toBe(0);
     expect(migrated.lastPrestigeAt).toBe(0);
     expect(migrated.mineDepth).toBe(0);
-    expect(migrated.mineFaceHits).toBe(0);
+    expect(migrated.mineFaceDamage).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
     expect(migrated.mineDigAcc).toBe(0);
+  });
+
+  it('migrates legacy mineFaceHits into mineFaceDamage', () => {
+    const state = createInitialState();
+    const legacy = structuredClone(state) as unknown as {
+      mineFaceDamage?: number[];
+      mineFaceHits?: number;
+    };
+    delete legacy.mineFaceDamage;
+    legacy.mineFaceHits = 4;
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.mineFaceDamage.reduce((a, b) => a + b, 0)).toBe(4);
   });
 
   it('round-trips enabled through serialize/deserialize', () => {

@@ -14,7 +14,12 @@ import {
   type TalentId,
 } from '../data/talents';
 import { depthOreMult } from '../data/strata';
-import { digShaft, normalizeProgress } from './mineShaft';
+import {
+  digShaft,
+  emptyFaceDamage,
+  normalizeProgress,
+  type DigMode,
+} from './mineShaft';
 import { aggregateEffects } from './effects';
 import { createInitialState } from './createState';
 import type { GameEvent, GameState } from './types';
@@ -22,14 +27,18 @@ import type { GameEvent, GameState } from './types';
 function shaftProgress(state: GameState) {
   return normalizeProgress({
     depth: state.mineDepth ?? 0,
-    faceHits: state.mineFaceHits ?? 0,
+    faceDamage: state.mineFaceDamage ?? emptyFaceDamage(),
   });
 }
 
-function applyShaftProgress(state: GameState, depth: number, faceHits: number): void {
-  const next = normalizeProgress({ depth, faceHits });
+function applyShaftProgress(
+  state: GameState,
+  depth: number,
+  faceDamage: number[],
+): void {
+  const next = normalizeProgress({ depth, faceDamage });
   state.mineDepth = next.depth;
-  state.mineFaceHits = next.faceHits;
+  state.mineFaceDamage = next.faceDamage;
 }
 
 function canAfford(
@@ -89,14 +98,34 @@ export function getAutoMineRate(state: GameState): number {
   return getClickPower(state) * effects.autoMine;
 }
 
-export function clickVein(state: GameState): { state: GameState; event: GameEvent } {
+export function clickVein(
+  state: GameState,
+  opts?: { col?: number; mode?: DigMode },
+): { state: GameState; event: GameEvent } {
   const next = structuredClone(state);
-  const dig = digShaft(shaftProgress(next), 1);
-  applyShaftProgress(next, dig.progress.depth, dig.progress.faceHits);
+  const mode: DigMode = opts?.mode ?? 'player';
+  const dig = digShaft(shaftProgress(next), 1, { col: opts?.col, mode });
+  applyShaftProgress(next, dig.progress.depth, dig.progress.faceDamage);
   const amount = getClickPower(next);
   next.resources.ore += amount;
   next.totalOreProduced += amount;
   next.lifetimeOre += amount;
+  if (dig.loot) {
+    next.resources[dig.loot.resource] =
+      (next.resources[dig.loot.resource] ?? 0) + dig.loot.amount;
+    return {
+      state: next,
+      event: {
+        type: 'click_vein',
+        amount,
+        find: {
+          resource: dig.loot.resource,
+          amount: dig.loot.amount,
+          label: dig.loot.label,
+        },
+      },
+    };
+  }
   return { state: next, event: { type: 'click_vein', amount } };
 }
 
@@ -294,8 +323,8 @@ export function tickProduction(state: GameState, dt: number): GameState {
     const digHits = Math.floor(next.mineDigAcc);
     if (digHits > 0) {
       next.mineDigAcc -= digHits;
-      const dig = digShaft(shaftProgress(next), digHits);
-      applyShaftProgress(next, dig.progress.depth, dig.progress.faceHits);
+      const dig = digShaft(shaftProgress(next), digHits, { mode: 'auto' });
+      applyShaftProgress(next, dig.progress.depth, dig.progress.faceDamage);
     }
     const ore = getAutoMineRate(next) * dt;
     next.resources.ore += ore;

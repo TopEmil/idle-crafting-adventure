@@ -1,6 +1,7 @@
 import { STATIONS } from '../data/stations';
 import { emptyTalents, TALENTS } from '../data/talents';
 import { createInitialState } from './createState';
+import { emptyFaceDamage, faceHitsToDamage, SHAFT_COLS } from './mineShaft';
 import type { GameState } from './types';
 
 export const SAVE_KEY = 'embervein.save.v1';
@@ -34,11 +35,18 @@ export function migrateState(state: GameState): GameState {
   } else {
     next.mineDepth = Math.floor(next.mineDepth);
   }
-  if (typeof next.mineFaceHits !== 'number' || next.mineFaceHits < 0) {
-    next.mineFaceHits = 0;
+  if (!Array.isArray(next.mineFaceDamage) || next.mineFaceDamage.length !== SHAFT_COLS) {
+    const legacy = next as GameState & { mineFaceHits?: number };
+    if (typeof legacy.mineFaceHits === 'number' && legacy.mineFaceHits > 0) {
+      next.mineFaceDamage = faceHitsToDamage(next.mineDepth, legacy.mineFaceHits);
+    } else {
+      next.mineFaceDamage = emptyFaceDamage();
+    }
   } else {
-    next.mineFaceHits = Math.floor(next.mineFaceHits);
+    next.mineFaceDamage = next.mineFaceDamage.map((n) => Math.max(0, Math.floor(n ?? 0)));
   }
+  // Drop legacy field if present
+  delete (next as GameState & { mineFaceHits?: number }).mineFaceHits;
   if (typeof next.mineDigAcc !== 'number' || next.mineDigAcc < 0) {
     next.mineDigAcc = 0;
   }

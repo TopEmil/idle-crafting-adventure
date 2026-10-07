@@ -18,7 +18,7 @@ export function createInitialState(now = Date.now()): GameState {
     totalOreProduced: 0,
     lifetimeOre: 0,
     mineDepth: 0,
-    mineFaceHits: 0,
+    mineFaceDamage: [0, 0, 0, 0, 0, 0, 0, 0],
     mineDigAcc: 0,
     playTimeSec: 0,
     prestigeCount: 0,

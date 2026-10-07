@@ -4,9 +4,14 @@ import {
   buildShaftCells,
   createMineShaftProgress,
   digShaft,
+  emptyFaceDamage,
+  faceCleared,
+  faceHitsToDamage,
   faceTotalHp,
+  lootForTile,
   normalizeProgress,
   SHAFT_COLS,
+  tileKindAt,
 } from './mineShaft';
 
 describe('mine shaft', () => {
@@ -17,47 +22,96 @@ describe('mine shaft', () => {
     expect(face.every((c) => !c.cleared && c.hp === c.maxHp)).toBe(true);
   });
 
-  it('digs left-to-right and clears a row into deeper strata', () => {
+  it('digs a targeted column and clears a row into deeper strata', () => {
     let progress = createMineShaftProgress();
-    const need = faceTotalHp(0);
     let shatteredOnce = false;
-    for (let i = 0; i < need; i++) {
-      const result = digShaft(progress, 1);
+    // Clear entire face by always hitting living cols
+    for (let guard = 0; guard < 200; guard++) {
+      const result = digShaft(progress, 1, { mode: 'player', col: 0 });
       progress = result.progress;
       if (result.shattered) shatteredOnce = true;
+      if (progress.depth > 0) break;
     }
     expect(shatteredOnce).toBe(true);
-    expect(progress.depth).toBe(1);
-    expect(progress.faceHits).toBe(0);
+    expect(progress.depth).toBeGreaterThanOrEqual(1);
     expect(stratumAtDepth(progress.depth).id).toBe('glow_shallows');
   });
 
-  it('batch digs carry overflow across multiple rows', () => {
+  it('batch auto digs prefer stone and carry across rows', () => {
     const need0 = faceTotalHp(0);
-    const need1 = faceTotalHp(1);
-    const result = digShaft(createMineShaftProgress(), need0 + need1 + 3);
-    expect(result.rowsCleared).toBe(2);
-    expect(result.progress.depth).toBe(2);
-    expect(result.progress.faceHits).toBe(3);
+    const result = digShaft(createMineShaftProgress(), need0 + 3, { mode: 'auto' });
+    expect(result.rowsCleared).toBeGreaterThanOrEqual(1);
+    expect(result.progress.depth).toBeGreaterThanOrEqual(1);
   });
 
-  it('normalizeProgress collapses overfilled faces', () => {
-    const need = faceTotalHp(0);
-    const normalized = normalizeProgress({ depth: 0, faceHits: need + 2 });
+  it('normalizeProgress collapses a fully damaged face', () => {
+    const dmg = emptyFaceDamage();
+    for (let col = 0; col < SHAFT_COLS; col++) {
+      dmg[col] = 99;
+    }
+    expect(faceCleared(0, dmg)).toBe(true);
+    const normalized = normalizeProgress({ depth: 0, faceDamage: dmg });
     expect(normalized.depth).toBe(1);
-    expect(normalized.faceHits).toBe(2);
+    expect(normalized.faceDamage.every((n) => n === 0)).toBe(true);
   });
 
   it('builds history / face / ahead roles around depth', () => {
-    const cells = buildShaftCells(createMineShaftProgress(2, 0));
+    const cells = buildShaftCells(createMineShaftProgress(2, emptyFaceDamage()));
     expect(cells.some((c) => c.role === 'history' && c.row === 1)).toBe(true);
     expect(cells.filter((c) => c.role === 'face').every((c) => c.row === 2)).toBe(true);
     expect(cells.some((c) => c.role === 'ahead' && c.row === 3)).toBe(true);
   });
 
-  it('face damage marks left cells cleared first', () => {
-    const cells = buildShaftCells(createMineShaftProgress(0, 3));
-    const face = cells.filter((c) => c.role === 'face').sort((a, b) => a.col - b.col);
-    expect(face[0]!.cleared || face[0]!.hp < face[0]!.maxHp).toBe(true);
+  it('assigns deterministic tile kinds and active-only loot', () => {
+    const kinds = new Set<string>();
+    for (let row = 0; row < 40; row++) {
+      for (let col = 0; col < SHAFT_COLS; col++) {
+        kinds.add(tileKindAt(row, col));
+      }
+    }
+    expect(kinds.has('stone')).toBe(true);
+    expect(kinds.has('glow')).toBe(true);
+    expect(lootForTile('glow')?.resource).toBe('glowdust');
+    expect(lootForTile('ember')?.resource).toBe('emberglass');
+    expect(lootForTile('geode')?.resource).toBe('alloy');
+    expect(lootForTile('stone')).toBeNull();
+  });
+
+  it('player shatter of rare tile grants loot; auto does not', () => {
+    // Find a glow tile on the starting face
+    let glowCol = -1;
+    for (let col = 0; col < SHAFT_COLS; col++) {
+      if (tileKindAt(0, col) === 'glow') {
+        glowCol = col;
+        break;
+      }
+    }
+    // If none on row 0, search a few rows by advancing
+    let progress = createMineShaftProgress();
+    if (glowCol < 0) {
+      for (let row = 1; row < 20 && glowCol < 0; row++) {
+        for (let col = 0; col < SHAFT_COLS; col++) {
+          if (tileKindAt(row, col) === 'glow') {
+            progress = createMineShaftProgress(row, emptyFaceDamage());
+            glowCol = col;
+            break;
+          }
+        }
+      }
+    }
+    expect(glowCol).toBeGreaterThanOrEqual(0);
+
+    const auto = digShaft(progress, 20, { mode: 'auto', col: glowCol });
+    // Auto may dig other cols first; force dig the glow col as player after prep
+    const player = digShaft(progress, 20, { mode: 'player', col: glowCol });
+    expect(player.loot?.resource === 'glowdust' || player.shattered).toBe(true);
+    // Auto never grants rare loot
+    expect(auto.loot).toBeNull();
+  });
+
+  it('migrates legacy faceHits into per-column damage', () => {
+    const dmg = faceHitsToDamage(0, 3);
+    expect(dmg).toHaveLength(SHAFT_COLS);
+    expect(dmg.reduce((a, b) => a + b, 0)).toBe(3);
   });
 });

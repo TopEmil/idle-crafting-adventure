@@ -55,7 +55,24 @@ describe('click & craft', () => {
     expect(event.type === 'click_vein' && event.amount).toBe(getClickPower(next));
     expect(next.resources.ore).toBe(getClickPower(next));
     expect(next.totalOreProduced).toBe(next.resources.ore);
-    expect(next.mineFaceHits).toBe(1);
+    expect(next.mineFaceDamage.some((d) => d > 0)).toBe(true);
+  });
+
+  it('grants active-only find loot when a rare tile shatters', () => {
+    let state = createInitialState();
+    let found = false;
+    for (let i = 0; i < 400; i++) {
+      // Sweep columns so we eventually crack rares on the face
+      const { state: next, event } = clickVein(state, { col: i % 8, mode: 'player' });
+      state = next;
+      if (event.type === 'click_vein' && event.find) {
+        found = true;
+        expect(event.find.amount).toBeGreaterThan(0);
+        expect(state.resources[event.find.resource]).toBeGreaterThan(0);
+        break;
+      }
+    }
+    expect(found).toBe(true);
   });
 
   it('advances mine depth when the dig face is cleared', () => {

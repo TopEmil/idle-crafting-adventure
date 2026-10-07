@@ -91,7 +91,6 @@ export class ForgeScene {
   private dwarfFrames: Texture[] = [];
   private oreSpritesRoot = new Container();
   private rockSprites: Sprite[] = [];
-  private rockTexture: Texture | null = null;
   private stationsGfx = new Graphics();
   private stationSpritesRoot = new Container();
   private stationLabels = new Container();
@@ -118,20 +117,27 @@ export class ForgeScene {
   private width = 800;
   private height = 600;
   private state: GameState | null = null;
-  private onVeinTap: (() => void) | null = null;
+  private onVeinTap: ((col?: number) => void) | null = null;
   private productionPulse = 0;
   private view: SceneView = 'mine';
   private viewFade = 1;
-  private shaftCells: ShaftCell[] = buildShaftCells({ depth: 0, faceHits: 0 });
+  private shaftCells: ShaftCell[] = buildShaftCells({
+    depth: 0,
+    faceDamage: Array.from({ length: SHAFT_COLS }, () => 0),
+  });
   private cellPositions = new Map<string, { x: number; y: number }>();
+  private cellSize = { w: 40, h: 34 };
   /** Smoothed camera depth for vertical scroll */
   private scrollDepth = 0;
   private lastPointer: { x: number; y: number } | null = null;
+  private lastDigCol: number | null = null;
   private autoMineRate = 0;
   private dwarfTimer = 0;
   private dwarfSwingT = 0;
   private readonly dwarfPeriod = 1.25;
   private lastHitCellKey: string | null = null;
+  private stratumFlash = 0;
+  private lastStratumId = '';
 
   constructor(canvas: HTMLCanvasElement) {
     this.app = new Application();
@@ -264,8 +270,13 @@ export class ForgeScene {
     this.resize();
   }
 
-  setVeinTapHandler(handler: () => void) {
+  setVeinTapHandler(handler: (col?: number) => void) {
     this.onVeinTap = handler;
+  }
+
+  /** Column last aimed by pointer / Mine button (for targeted digs). */
+  getPendingDigCol(): number | null {
+    return this.lastDigCol;
   }
 
   /** Ore/sec from economy — drives dwarf visibility and strike floats. */
@@ -305,33 +316,53 @@ export class ForgeScene {
 
   sync(state: GameState) {
     this.state = state;
+    const depth = state.mineDepth ?? 0;
+    const stratum = stratumAtDepth(depth);
+    if (this.lastStratumId && this.lastStratumId !== stratum.id) {
+      this.stratumFlash = 0.9;
+    }
+    this.lastStratumId = stratum.id;
     this.shaftCells = buildShaftCells({
-      depth: state.mineDepth ?? 0,
-      faceHits: state.mineFaceHits ?? 0,
+      depth,
+      faceDamage: state.mineFaceDamage ?? Array.from({ length: SHAFT_COLS }, () => 0),
     });
     this.redrawStations();
   }
 
   /** Call on successful vein tap — crack/shatter a face cell, sparks, floating +ore */
-  triggerVeinHit(amount: number) {
+  triggerVeinHit(
+    amount: number,
+    find?: { resource: string; amount: number; label: string },
+  ) {
     if (this.view !== 'mine') this.setView('mine');
-    // Economy already dug; rebuild face and aim VFX at the struck cell.
     this.refreshShaftFromState();
     const { x: cx, y: cy } = this.veinPoint();
     this.layoutShaftCells(cx, cy);
 
-    const target =
+    const preferCol = this.lastDigCol;
+    let target =
       this.lastPointer != null
         ? findNearestFaceCell(
             this.shaftCells,
             this.cellPositions,
             this.lastPointer.x,
             this.lastPointer.y,
-            110,
+            140,
             { includeCleared: true },
           )
-        : (pickLivingFaceCell(this.shaftCells) ??
-          this.shaftCells.find((c) => c.role === 'face'));
+        : null;
+    if (!target && preferCol != null) {
+      target =
+        this.shaftCells.find(
+          (c) => c.role === 'face' && c.col === preferCol,
+        ) ?? null;
+    }
+    if (!target) {
+      target =
+        pickLivingFaceCell(this.shaftCells) ??
+        this.shaftCells.find((c) => c.role === 'face') ??
+        null;
+    }
     this.lastPointer = null;
 
     const hitPos = target
@@ -345,8 +376,11 @@ export class ForgeScene {
     this.comboTimer = 0.85;
     this.combo = Math.min(12, this.combo + 1);
 
-    this.spawnRockDebris(hitPos.x, hitPos.y, shattered ? 14 : 8, this.combo);
+    this.spawnRockDebris(hitPos.x, hitPos.y, shattered ? 16 : 8, this.combo);
     this.spawnOreFloater(hitPos.x, hitPos.y, amount, 18 + Math.min(10, this.combo));
+    if (find) {
+      this.spawnFindFloater(hitPos.x, hitPos.y - 18, find.label, find.amount);
+    }
   }
 
   triggerCraftBurst() {
@@ -500,29 +534,48 @@ export class ForgeScene {
     if (this.view !== 'mine' || !this.onVeinTap) return;
     const { x, y } = this.veinPoint();
     this.layoutShaftCells(x, y);
-    const hitR = Math.min(120, Math.max(72, Math.min(this.width, this.height) * 0.18));
-    const nearCenter = (px - x) * (px - x) + (py - y) * (py - y) <= hitR * hitR;
-    const nearRock =
-      findNearestFaceCell(this.shaftCells, this.cellPositions, px, py, 56) != null;
-    if (nearCenter || nearRock) {
+    const hitDist = Math.max(this.cellSize.w, this.cellSize.h) * 0.85;
+    const nearRock = findNearestFaceCell(
+      this.shaftCells,
+      this.cellPositions,
+      px,
+      py,
+      hitDist,
+    );
+    // Generous shaft band so taps on the tunnel still dig
+    const bandW = this.cellSize.w * (SHAFT_COLS * 0.55 + 0.5);
+    const bandH = this.cellSize.h * (SHAFT_LOOKAHEAD + SHAFT_LOOKBEHIND + 1.2);
+    const inShaft =
+      Math.abs(px - x) <= bandW && Math.abs(py - (y + this.cellSize.h * 0.4)) <= bandH;
+    if (nearRock || inShaft) {
       this.lastPointer = { x: px, y: py };
-      this.onVeinTap();
+      this.lastDigCol = nearRock?.col ?? this.colFromPointer(px, x);
+      this.onVeinTap(this.lastDigCol ?? undefined);
     }
+  }
+
+  private colFromPointer(px: number, cx: number): number {
+    const pitch = this.cellSize.w + 3;
+    const rel = (px - cx) / pitch + (SHAFT_COLS - 1) / 2;
+    return Math.max(0, Math.min(SHAFT_COLS - 1, Math.round(rel)));
   }
 
   private refreshShaftFromState() {
     if (!this.state) return;
     this.shaftCells = buildShaftCells({
       depth: this.state.mineDepth ?? 0,
-      faceHits: this.state.mineFaceHits ?? 0,
+      faceDamage:
+        this.state.mineFaceDamage ?? Array.from({ length: SHAFT_COLS }, () => 0),
     });
   }
 
   private layoutShaftCells(cx: number, cy: number) {
     const short = Math.min(this.width, this.height);
-    const colPitch = Math.min(56, Math.max(36, short * 0.07));
-    const rowPitch = Math.min(50, Math.max(34, short * 0.065));
-    const faceY = cy + 10;
+    // Full-bleed Terraria-ish tiles — dominate the play band
+    const colPitch = Math.min(58, Math.max(34, short * 0.078));
+    const rowPitch = Math.min(50, Math.max(30, short * 0.07));
+    this.cellSize = { w: colPitch - 3, h: rowPitch - 3 };
+    const faceY = cy + rowPitch * 0.15;
     this.cellPositions.clear();
     for (const cell of this.shaftCells) {
       const x = cx + (cell.col - (SHAFT_COLS - 1) / 2) * colPitch;
@@ -546,6 +599,8 @@ export class ForgeScene {
         { x: 0.5, y: playY },
         mineZoom,
       );
+      // Dim painted cavern so the tile shaft reads as the main play surface
+      this.mineBg.alpha = 0.55;
     }
     if (this.forgeBg) {
       if (portrait) {
@@ -604,6 +659,7 @@ export class ForgeScene {
       if (this.comboTimer <= 0) this.combo = 0;
     }
     if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
+    if (this.stratumFlash > 0) this.stratumFlash = Math.max(0, this.stratumFlash - dt);
     if (this.shakeT > 0) this.shakeT = Math.max(0, this.shakeT - dt);
     if (this.craftBurstT > 0) this.craftBurstT = Math.max(0, this.craftBurstT - dt);
 
@@ -776,33 +832,56 @@ export class ForgeScene {
     });
   }
 
+  private spawnFindFloater(x: number, y: number, labelText: string, amount: number) {
+    const label = new Text({
+      text: `+${amount} ${labelText}!`,
+      style: {
+        fontFamily: 'Fraunces, Georgia, serif',
+        fontSize: 16,
+        fontWeight: '600',
+        fill: COLORS.amber,
+        dropShadow: { color: 0x0b1c22, blur: 5, distance: 1, alpha: 0.9 },
+      },
+    });
+    label.anchor.set(0.5, 1);
+    label.x = x;
+    label.y = y;
+    this.floatLayer.addChild(label);
+    this.floaters.push({ text: label, life: 1.25, max: 1.25, vy: -42 });
+  }
+
   private redrawOreFace() {
     const g = this.vein;
     g.clear();
+    for (const sprite of this.rockSprites) sprite.visible = false;
+
     const { x: cx, y: cy } = this.veinPoint();
     this.layoutShaftCells(cx, cy);
     const depth = this.state?.mineDepth ?? 0;
     const stratum = stratumAtDepth(depth);
-    const useArt = Boolean(this.rockTexture && this.rockSprites.length);
-    const short = Math.min(this.width, this.height);
-    const cellW = Math.min(44, Math.max(28, short * 0.055));
-    const cellH = Math.min(36, Math.max(22, short * 0.045));
+    const { w: cellW, h: cellH } = this.cellSize;
+    const shaftW = cellW * SHAFT_COLS + 18;
+    const shaftH = cellH * (SHAFT_LOOKAHEAD + SHAFT_LOOKBEHIND + 1.4);
 
-    // Open shaft tunnel above the dig face
-    const tunnelH = (SHAFT_LOOKBEHIND + 0.6) * Math.min(50, Math.max(34, short * 0.065));
-    g.roundRect(cx - cellW * 3.1, cy - tunnelH - 8, cellW * 6.2, tunnelH + 24, 18);
-    g.fill({ color: stratum.wall, alpha: 0.72 });
-    g.roundRect(cx - cellW * 2.6, cy - tunnelH, cellW * 5.2, tunnelH + 10, 14);
-    g.fill({ color: COLORS.void, alpha: 0.55 });
+    // Side walls + open tunnel — Terraria shaft silhouette
+    const wallAlpha = 0.82 + this.stratumFlash * 0.12;
+    g.rect(cx - shaftW * 0.5 - 22, cy - shaftH * 0.55, 22, shaftH * 1.15);
+    g.fill({ color: stratum.wall, alpha: wallAlpha });
+    g.rect(cx + shaftW * 0.5, cy - shaftH * 0.55, 22, shaftH * 1.15);
+    g.fill({ color: stratum.wall, alpha: wallAlpha });
+    g.rect(cx - shaftW * 0.5, cy - shaftH * 0.55, shaftW, shaftH * 1.15);
+    g.fill({ color: COLORS.void, alpha: 0.5 + this.stratumFlash * 0.15 });
 
-    const shimmer = 0.08 + Math.sin(this.pulse * 2.8) * 0.03 + this.hitFlash * 0.35;
-    g.ellipse(cx, cy + 6, cellW * 2.8, cellH * 1.1);
-    g.fill({ color: stratum.fleck, alpha: shimmer });
+    // Torch glow in cleared tunnel
+    for (let i = 0; i < SHAFT_LOOKBEHIND; i++) {
+      const ty = cy - cellH * (i + 0.8);
+      const flicker = 0.25 + Math.sin(this.pulse * 5 + i) * 0.06;
+      g.circle(cx - shaftW * 0.42, ty, 10);
+      g.fill({ color: COLORS.amber, alpha: flicker * 0.55 });
+      g.circle(cx + shaftW * 0.42, ty, 10);
+      g.fill({ color: COLORS.ember, alpha: flicker * 0.4 });
+    }
 
-    let spriteIdx = 0;
-    for (const sprite of this.rockSprites) sprite.visible = false;
-
-    // Draw ahead → face → history so face rocks sit on top
     const ordered = [...this.shaftCells].sort((a, b) => {
       const rank = (c: ShaftCell) => (c.role === 'ahead' ? 0 : c.role === 'face' ? 1 : 2);
       return rank(a) - rank(b) || a.row - b.row || a.col - b.col;
@@ -811,65 +890,34 @@ export class ForgeScene {
     for (const cell of ordered) {
       const pos = this.cellPositions.get(cellKey(cell.row, cell.col));
       if (!pos) continue;
-      if (cell.role === 'history') {
-        if (cell.cleared) {
-          g.ellipse(pos.x, pos.y + 6, cellW * 0.28, cellH * 0.12);
-          g.fill({ color: COLORS.tealLight, alpha: 0.12 });
+      if (cell.role === 'history' || cell.cleared) {
+        // Empty dug cell — faint back wall
+        g.rect(pos.x - cellW * 0.5, pos.y - cellH * 0.5, cellW, cellH);
+        g.fill({ color: stratum.wall, alpha: cell.role === 'history' ? 0.22 : 0.18 });
+        if (cell.rare && cell.cleared) {
+          g.circle(pos.x, pos.y, 4);
+          g.fill({ color: cell.fleck, alpha: 0.25 });
         }
         continue;
       }
-      if (cell.cleared) {
-        g.ellipse(pos.x, pos.y + 4, cellW * 0.32, cellH * 0.14);
-        g.fill({ color: stratum.fleck, alpha: 0.16 });
-        continue;
-      }
-
-      const dim = cell.role === 'ahead' ? 0.55 : 1;
-      if (useArt && spriteIdx < this.rockSprites.length) {
-        const sprite = this.rockSprites[spriteIdx++]!;
-        this.placeShaftSprite(sprite, cell, pos.x, pos.y, cellW, cellH, dim);
-      } else {
-        this.drawShaftCell(g, cell, pos.x, pos.y, cellW, cellH, dim);
-      }
+      const dim = cell.role === 'ahead' ? 0.62 : 1;
+      this.drawBlockTile(g, cell, pos.x, pos.y, cellW, cellH, dim);
     }
 
+    // Dig-face highlight
     if (this.combo === 0 && this.autoMineRate <= 0) {
-      const ring = cellW * 2.4 + (this.pulse % 1.6) * 14;
-      const a = 0.22 * (1 - (this.pulse % 1.6) / 1.6);
-      g.ellipse(cx, cy + 8, ring, ring * 0.45);
+      const a = 0.18 + Math.sin(this.pulse * 3) * 0.06;
+      g.rect(cx - shaftW * 0.5, cy - cellH * 0.55, shaftW, cellH * 1.1);
       g.stroke({ width: 2, color: stratum.fleck, alpha: a });
     }
+
+    if (this.stratumFlash > 0) {
+      g.rect(cx - shaftW * 0.5, cy - shaftH * 0.55, shaftW, shaftH * 1.15);
+      g.fill({ color: stratum.fleck, alpha: this.stratumFlash * 0.12 });
+    }
   }
 
-  private placeShaftSprite(
-    sprite: Sprite,
-    cell: ShaftCell,
-    x: number,
-    y: number,
-    cellW: number,
-    cellH: number,
-    dim: number,
-  ) {
-    const dmg = 1 - cell.hp / cell.maxHp;
-    const hit =
-      this.hitFlash > 0 && this.lastHitCellKey === cellKey(cell.row, cell.col);
-    const wobble = hit ? Math.sin(this.pulse * 40) * 1.2 : 0;
-    const scale = Math.min(0.48, Math.max(0.26, cellW / 70)) * (1 - dmg * 0.08);
-
-    sprite.visible = true;
-    sprite.x = x + wobble;
-    sprite.y = y + cellH * 0.1;
-    sprite.rotation = ((cell.seed * 0.7) % 1.2) - 0.6;
-    sprite.scale.set(scale);
-    sprite.alpha = (0.9 + this.hitFlash * 0.08) * dim;
-    sprite.tint = dmg > 0.45 ? 0xc8d8e0 : 0xffffff;
-
-    const g = this.vein;
-    g.ellipse(x + wobble, y + cellH * 0.28, cellW * 0.42, cellH * 0.14);
-    g.fill({ color: COLORS.void, alpha: 0.35 * dim });
-  }
-
-  private drawShaftCell(
+  private drawBlockTile(
     g: Graphics,
     cell: ShaftCell,
     x: number,
@@ -881,35 +929,48 @@ export class ForgeScene {
     const dmg = 1 - cell.hp / cell.maxHp;
     const hit =
       this.hitFlash > 0 && this.lastHitCellKey === cellKey(cell.row, cell.col);
-    const wobble = hit ? Math.sin(this.pulse * 40) * 1.2 : 0;
+    const wobble = hit ? Math.sin(this.pulse * 40) * 1.4 : 0;
+    const pulseRare = cell.rare ? 0.08 + Math.sin(this.pulse * 4 + cell.seed) * 0.05 : 0;
 
-    g.ellipse(x + wobble, y + cellH * 0.28, cellW * 0.5, cellH * 0.18);
-    g.fill({ color: COLORS.void, alpha: 0.4 * dim });
+    const left = x - cellW * 0.5 + wobble;
+    const top = y - cellH * 0.5;
 
-    g.ellipse(x + wobble, y, cellW * 0.55, cellH * 0.48);
+    g.rect(left, top, cellW, cellH);
     g.fill({ color: cell.tint, alpha: dim });
-    g.ellipse(x - cellW * 0.12 + wobble, y - cellH * 0.14, cellW * 0.34, cellH * 0.3);
-    g.fill({ color: 0x5a6b74, alpha: 0.8 * dim });
 
-    g.ellipse(x + wobble, y, cellW * 0.55, cellH * 0.48);
-    g.stroke({ width: 2, color: COLORS.void, alpha: 0.5 * dim });
+    // Bevel
+    g.rect(left, top, cellW, 3);
+    g.fill({ color: 0xffffff, alpha: 0.08 * dim });
+    g.rect(left, top + cellH - 3, cellW, 3);
+    g.fill({ color: COLORS.void, alpha: 0.35 * dim });
+    g.rect(left, top, cellW, cellH);
+    g.stroke({ width: 1.5, color: COLORS.void, alpha: 0.55 * dim });
 
-    const flecks = Math.max(1, 4 - Math.floor(dmg * 3));
+    // Ore flecks / rare glow
+    const flecks = cell.rare ? 5 : Math.max(1, 3 - Math.floor(dmg * 2));
     for (let i = 0; i < flecks; i++) {
-      const fx = x + Math.cos(cell.seed + i * 2.1) * cellW * 0.24;
-      const fy = y + Math.sin(cell.seed * 1.3 + i) * cellH * 0.2;
-      g.circle(fx + wobble, fy, 3 - dmg);
-      g.fill({ color: cell.fleck, alpha: (0.75 + this.hitFlash * 0.2) * dim });
+      const fx = x + Math.cos(cell.seed + i * 2.1) * cellW * 0.28;
+      const fy = y + Math.sin(cell.seed * 1.3 + i) * cellH * 0.24;
+      g.circle(fx + wobble, fy, cell.rare ? 3.2 : 2.4 - dmg * 0.5);
+      g.fill({
+        color: cell.fleck,
+        alpha: (0.7 + pulseRare + this.hitFlash * 0.2) * dim,
+      });
+    }
+
+    if (cell.rare) {
+      g.rect(left + 2, top + 2, cellW - 4, cellH - 4);
+      g.stroke({ width: 1.5, color: cell.fleck, alpha: (0.35 + pulseRare) * dim });
     }
 
     if (dmg > 0.05) {
-      g.moveTo(x - cellW * 0.28, y - cellH * 0.12);
-      g.lineTo(x + cellW * 0.12 * dmg, y + cellH * 0.22 * dmg);
+      g.moveTo(left + cellW * 0.15, top + cellH * 0.2);
+      g.lineTo(left + cellW * (0.4 + dmg * 0.3), top + cellH * (0.55 + dmg * 0.2));
       if (dmg > 0.4) {
-        g.moveTo(x + cellW * 0.18, y - cellH * 0.22);
-        g.lineTo(x - cellW * 0.06, y + cellH * 0.28);
+        g.moveTo(left + cellW * 0.7, top + cellH * 0.15);
+        g.lineTo(left + cellW * 0.35, top + cellH * 0.75);
       }
-      g.stroke({ width: 2, color: COLORS.void, alpha: (0.7 + dmg * 0.25) * dim });
+      g.stroke({ width: 2, color: COLORS.void, alpha: (0.75 + dmg * 0.2) * dim });
     }
   }
 
@@ -1052,7 +1113,6 @@ export class ForgeScene {
 
     try {
       const rockTex = (await Assets.load(ORE_ROCK_ART)) as Texture;
-      this.rockTexture = rockTex;
       const pool = SHAFT_COLS * (SHAFT_LOOKAHEAD + SHAFT_LOOKBEHIND + 1);
       for (let i = 0; i < pool; i++) {
         const sprite = new Sprite(rockTex);

@@ -12,7 +12,7 @@ import {
   prestigeCooldownRemaining,
   stationUpgradeCostMap,
 } from '../sim/economy';
-import { faceTotalHp } from '../sim/mineShaft';
+import { faceDamageSum, faceTotalHp } from '../sim/mineShaft';
 import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
 import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
@@ -225,10 +225,10 @@ export class Hud {
     const strip = this.root.querySelector('#depth-strip') as HTMLElement | null;
     if (!strip) return;
     const depth = state.mineDepth ?? 0;
-    const faceHits = state.mineFaceHits ?? 0;
+    const faceDmg = faceDamageSum(state.mineFaceDamage ?? []);
     const stratum = stratumAtDepth(depth);
     const need = faceTotalHp(depth);
-    const faceProgress = need > 0 ? Math.min(1, faceHits / need) : 0;
+    const faceProgress = need > 0 ? Math.min(1, faceDmg / need) : 0;
     const nextStratum = STRATA.find((s) => s.startDepth > depth);
     const toNext = nextStratum ? nextStratum.startDepth - depth : 0;
 
@@ -263,7 +263,7 @@ export class Hud {
     const copy = [
       {
         title: 'Dig the shaft',
-        body: 'Tap the ore face to chip downward. Each row clears into deeper strata — keep mining to descend.',
+        body: 'Tap blocks on the dig face to descend. Glow pockets and rare seams only burst for you — keep digging actively.',
       },
       {
         title: 'Craft your first tool',
