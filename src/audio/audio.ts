@@ -1,11 +1,14 @@
-/** Lightweight WebAudio bed + SFX — no large assets. */
+/** WebAudio SFX + looping mine bed music. */
+
+const BED_URL = `${import.meta.env.BASE_URL}audio/embervein-mine-bed.ogg`;
 
 export class AudioBus {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private muted = false;
-  private bedTimer: number | null = null;
   private unlocked = false;
+  private bed: HTMLAudioElement | null = null;
+  private bedStarted = false;
 
   get isMuted() {
     return this.muted;
@@ -18,12 +21,17 @@ export class AudioBus {
       await ctx.resume();
     }
     this.unlocked = true;
+    void this.playBed();
   }
 
   setMuted(muted: boolean) {
     this.muted = muted;
     if (this.master) {
       this.master.gain.value = muted ? 0 : 0.55;
+    }
+    if (this.bed) {
+      this.bed.muted = muted;
+      this.bed.volume = muted ? 0 : 0.28;
     }
   }
 
@@ -33,18 +41,13 @@ export class AudioBus {
   }
 
   startBed() {
-    if (this.bedTimer != null) return;
-    const pulse = () => {
-      if (!this.muted) this.playTone(110, 0.35, 'sine', 0.03);
-      this.bedTimer = window.setTimeout(pulse, 2400);
-    };
-    pulse();
+    void this.playBed();
   }
 
   stopBed() {
-    if (this.bedTimer != null) {
-      clearTimeout(this.bedTimer);
-      this.bedTimer = null;
+    if (this.bed) {
+      this.bed.pause();
+      this.bedStarted = false;
     }
   }
 
@@ -81,6 +84,32 @@ export class AudioBus {
   resumeAfterAd() {
     if (this.master) this.master.gain.value = this.muted ? 0 : 0.55;
     this.startBed();
+  }
+
+  private ensureBed(): HTMLAudioElement {
+    if (!this.bed) {
+      const el = new Audio(BED_URL);
+      el.loop = true;
+      el.preload = 'auto';
+      el.volume = this.muted ? 0 : 0.28;
+      el.muted = this.muted;
+      this.bed = el;
+    }
+    return this.bed;
+  }
+
+  private async playBed() {
+    const el = this.ensureBed();
+    el.muted = this.muted;
+    el.volume = this.muted ? 0 : 0.28;
+    if (this.bedStarted && !el.paused) return;
+    try {
+      await el.play();
+      this.bedStarted = true;
+    } catch {
+      // Autoplay blocked until unlock() after a user gesture.
+      this.bedStarted = false;
+    }
   }
 
   private ensure(): AudioContext {
