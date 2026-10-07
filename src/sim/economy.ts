@@ -62,6 +62,13 @@ export function getClickPower(state: GameState): number {
   return BALANCE.baseClickOre * effects.clickPower * prestigeMult(state.totalRelicsEarned);
 }
 
+/** Ore/sec from the dwarf miner when autoMine recipes are owned. */
+export function getAutoMineRate(state: GameState): number {
+  const effects = aggregateEffects(state.ownedRecipes);
+  if (effects.autoMine <= 0) return 0;
+  return getClickPower(state) * effects.autoMine;
+}
+
 export function clickVein(state: GameState): { state: GameState; event: GameEvent } {
   const amount = getClickPower(state);
   const next = structuredClone(state);
@@ -237,6 +244,13 @@ export function tickProduction(state: GameState, dt: number): GameState {
   const next = structuredClone(state);
   const effects = aggregateEffects(next.ownedRecipes);
   const pMult = prestigeMult(next.totalRelicsEarned) * effects.stationOutput;
+
+  const autoOre = getAutoMineRate(next) * dt;
+  if (autoOre > 0) {
+    next.resources.ore += autoOre;
+    next.totalOreProduced += autoOre;
+    next.lifetimeOre += autoOre;
+  }
 
   for (const def of STATIONS) {
     const st = next.stations[def.id];

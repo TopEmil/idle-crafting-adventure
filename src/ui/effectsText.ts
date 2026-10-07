@@ -11,6 +11,7 @@ export function formatRecipeEffects(recipe: RecipeDef): string {
   const parts: string[] = [];
   const e = recipe.effects;
   if (e.clickPower) parts.push(`Tap power ×${e.clickPower}`);
+  if (e.autoMine) parts.push(`Dwarf mine +${Math.round(e.autoMine * 100)}% tap/s`);
   if (e.stationOutput) parts.push(`Station output ×${e.stationOutput}`);
   if (e.expeditionLoot) parts.push(`Expedition loot ×${e.expeditionLoot}`);
   if (e.offlineRate) parts.push(`Offline rate ×${e.offlineRate}`);

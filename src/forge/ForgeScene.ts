@@ -2,6 +2,15 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 
 import type { GameState } from '../sim/types';
 import { getStation, STATIONS, type StationId } from '../data/stations';
 import type { ResourceId } from '../data/resources';
+import {
+  createOreRocks,
+  damageRock,
+  findNearestLivingRock,
+  pickLivingRock,
+  rockWorldPos,
+  tickRockRespawns,
+  type OreRock,
+} from './miningFace';
 
 /** Served from `public/art/` — painted cavern backdrop */
 const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-bg.jpg`;
@@ -16,6 +25,9 @@ const COLORS = {
   cyan: 0x2ec4b6,
   mist: 0xe8f1f2,
   slate: 0x8fa8b0,
+  dwarfSkin: 0xc4a574,
+  dwarfCoat: 0x3d5a4c,
+  dwarfHelm: 0xb87333,
 };
 
 interface BurstParticle {
@@ -43,6 +55,7 @@ export class ForgeScene {
   private vignette = new Graphics();
   private hearth = new Graphics();
   private vein = new Graphics();
+  private dwarfGfx = new Graphics();
   private stationsGfx = new Graphics();
   private stationLabels = new Container();
   private fx = new Graphics();
@@ -51,6 +64,7 @@ export class ForgeScene {
   private floatLayer = new Container();
   private brand!: Text;
   private comboLabel!: Text;
+  private dwarfLabel!: Text;
   private labelByStation = new Map<StationId, Text>();
   private sparkTimer = 0;
   private pulse = 0;
@@ -68,6 +82,12 @@ export class ForgeScene {
   private state: GameState | null = null;
   private onVeinTap: (() => void) | null = null;
   private productionPulse = 0;
+  private rocks: OreRock[] = createOreRocks();
+  private lastPointer: { x: number; y: number } | null = null;
+  private autoMineRate = 0;
+  private dwarfTimer = 0;
+  private dwarfSwingT = 0;
+  private readonly dwarfPeriod = 1.25;
 
   constructor(canvas: HTMLCanvasElement) {
     this.app = new Application();
@@ -106,6 +126,7 @@ export class ForgeScene {
     this.root.addChild(this.stationLabels);
     this.root.addChild(this.hearth);
     this.root.addChild(this.vein);
+    this.root.addChild(this.dwarfGfx);
     this.root.addChild(this.scout);
     this.root.addChild(this.particles);
     this.root.addChild(this.fx);
@@ -160,6 +181,20 @@ export class ForgeScene {
     this.comboLabel.visible = false;
     this.root.addChild(this.comboLabel);
 
+    this.dwarfLabel = new Text({
+      text: 'Dwarf mining',
+      style: {
+        fontFamily: 'DM Sans, sans-serif',
+        fontSize: 11,
+        fontWeight: '600',
+        fill: COLORS.cyan,
+        dropShadow: { color: 0x0b1c22, blur: 3, distance: 1, alpha: 0.8 },
+      },
+    });
+    this.dwarfLabel.anchor.set(0.5, 0);
+    this.dwarfLabel.visible = false;
+    this.root.addChild(this.dwarfLabel);
+
     this.app.stage.eventMode = 'static';
     this.app.stage.hitArea = this.app.screen;
     this.app.stage.on('pointerdown', (e) => this.handlePointer(e.global.x, e.global.y));
@@ -170,6 +205,11 @@ export class ForgeScene {
 
   setVeinTapHandler(handler: () => void) {
     this.onVeinTap = handler;
+  }
+
+  /** Ore/sec from economy — drives dwarf visibility and strike floats. */
+  setAutoMineRate(rate: number) {
+    this.autoMineRate = Math.max(0, rate);
   }
 
   resize() {
@@ -191,45 +231,28 @@ export class ForgeScene {
     this.redrawStations();
   }
 
-  /** Call on successful vein tap — sparks, shockwave, floating +ore */
+  /** Call on successful vein tap — crack/shatter a rock, sparks, floating +ore */
   triggerVeinHit(amount: number) {
-    const { x, y } = this.veinPoint();
+    const { x: cx, y: cy } = this.veinPoint();
+    const target =
+      this.lastPointer != null
+        ? findNearestLivingRock(this.rocks, cx, cy, this.lastPointer.x, this.lastPointer.y, 110)
+        : pickLivingRock(this.rocks);
+    this.lastPointer = null;
+
+    const hitPos = target ? rockWorldPos(target, cx, cy) : { x: cx, y: cy };
+    let shattered = false;
+    if (target) {
+      shattered = damageRock(target, 1);
+    }
+
     this.hitFlash = 0.28;
     this.shakeT = 0.12;
     this.comboTimer = 0.85;
     this.combo = Math.min(12, this.combo + 1);
 
-    const count = 10 + Math.min(10, this.combo);
-    for (let i = 0; i < count; i++) {
-      const ang = Math.random() * Math.PI * 2;
-      const speed = 40 + Math.random() * 120 + this.combo * 6;
-      this.bursts.push({
-        x,
-        y,
-        vx: Math.cos(ang) * speed,
-        vy: Math.sin(ang) * speed - 40,
-        life: 0.35 + Math.random() * 0.35,
-        max: 0.55,
-        size: 2 + Math.random() * 3,
-        color: Math.random() > 0.45 ? COLORS.cyan : COLORS.amber,
-      });
-    }
-
-    const label = new Text({
-      text: `+${trimAmount(amount)} Ore`,
-      style: {
-        fontFamily: 'DM Sans, sans-serif',
-        fontSize: 18 + Math.min(10, this.combo),
-        fontWeight: '700',
-        fill: COLORS.mist,
-        dropShadow: { color: 0x0b1c22, blur: 4, distance: 1, alpha: 0.8 },
-      },
-    });
-    label.anchor.set(0.5, 1);
-    label.x = x + (Math.random() * 24 - 12);
-    label.y = y - 20;
-    this.floatLayer.addChild(label);
-    this.floaters.push({ text: label, life: 0.85, max: 0.85, vy: -48 - this.combo * 2 });
+    this.spawnRockDebris(hitPos.x, hitPos.y, shattered ? 14 : 8, this.combo);
+    this.spawnOreFloater(hitPos.x, hitPos.y, amount, 18 + Math.min(10, this.combo));
   }
 
   triggerCraftBurst() {
@@ -320,6 +343,11 @@ export class ForgeScene {
     return { x: this.width * 0.28, y: this.height * 0.55 };
   }
 
+  private dwarfPoint() {
+    const { x, y } = this.veinPoint();
+    return { x: x - 58, y: y + 28 };
+  }
+
   private stationLayout(): { id: StationId; x: number; y: number }[] {
     return [
       { id: 'smelter', x: this.width * 0.7, y: this.height * 0.48 },
@@ -331,9 +359,10 @@ export class ForgeScene {
   private handlePointer(px: number, py: number) {
     if (!this.onVeinTap) return;
     const { x, y } = this.veinPoint();
-    const dx = px - x;
-    const dy = py - y;
-    if (dx * dx + dy * dy <= 70 * 70) {
+    const nearCenter = (px - x) * (px - x) + (py - y) * (py - y) <= 100 * 100;
+    const nearRock = findNearestLivingRock(this.rocks, x, y, px, py, 42) != null;
+    if (nearCenter || nearRock) {
+      this.lastPointer = { x: px, y: py };
       this.onVeinTap();
     }
   }
@@ -368,6 +397,20 @@ export class ForgeScene {
     if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
     if (this.shakeT > 0) this.shakeT = Math.max(0, this.shakeT - dt);
     if (this.craftBurstT > 0) this.craftBurstT = Math.max(0, this.craftBurstT - dt);
+
+    tickRockRespawns(this.rocks, dt);
+
+    if (this.autoMineRate > 0) {
+      this.dwarfTimer += dt;
+      this.dwarfSwingT = this.dwarfTimer / this.dwarfPeriod;
+      if (this.dwarfTimer >= this.dwarfPeriod) {
+        this.dwarfTimer -= this.dwarfPeriod;
+        this.performDwarfStrike();
+      }
+    } else {
+      this.dwarfTimer = 0;
+      this.dwarfSwingT = 0;
+    }
 
     // Camera shake
     if (this.shakeT > 0) {
@@ -416,7 +459,8 @@ export class ForgeScene {
     }
 
     this.redrawHearth();
-    this.redrawVeinHighlight();
+    this.redrawOreFace();
+    this.redrawDwarf();
     this.redrawStations();
     this.redrawParticles();
     this.redrawFx();
@@ -427,6 +471,55 @@ export class ForgeScene {
     } else {
       this.scout.clear();
     }
+  }
+
+  private performDwarfStrike() {
+    const { x: cx, y: cy } = this.veinPoint();
+    const rock = pickLivingRock(this.rocks);
+    if (!rock) return;
+    const pos = rockWorldPos(rock, cx, cy);
+    const shattered = damageRock(rock, 1);
+    this.hitFlash = Math.max(this.hitFlash, 0.14);
+    this.spawnRockDebris(pos.x, pos.y, shattered ? 10 : 5, 2);
+    const amount = this.autoMineRate * this.dwarfPeriod;
+    if (amount > 0.05) {
+      this.spawnOreFloater(pos.x, pos.y - 6, amount, 14);
+    }
+  }
+
+  private spawnRockDebris(x: number, y: number, count: number, comboBoost: number) {
+    for (let i = 0; i < count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const speed = 35 + Math.random() * 110 + comboBoost * 5;
+      this.bursts.push({
+        x,
+        y,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed - 50,
+        life: 0.3 + Math.random() * 0.35,
+        max: 0.55,
+        size: 2 + Math.random() * 3.5,
+        color: Math.random() > 0.4 ? COLORS.cyan : Math.random() > 0.5 ? COLORS.slate : COLORS.tealLight,
+      });
+    }
+  }
+
+  private spawnOreFloater(x: number, y: number, amount: number, fontSize: number) {
+    const label = new Text({
+      text: `+${trimAmount(amount)} Ore`,
+      style: {
+        fontFamily: 'DM Sans, sans-serif',
+        fontSize,
+        fontWeight: '700',
+        fill: COLORS.mist,
+        dropShadow: { color: 0x0b1c22, blur: 4, distance: 1, alpha: 0.8 },
+      },
+    });
+    label.anchor.set(0.5, 1);
+    label.x = x + (Math.random() * 24 - 12);
+    label.y = y - 16;
+    this.floatLayer.addChild(label);
+    this.floaters.push({ text: label, life: 0.85, max: 0.85, vy: -48 - Math.min(12, this.combo) * 2 });
   }
 
   private redrawHearth() {
@@ -450,24 +543,136 @@ export class ForgeScene {
     }
   }
 
-  private redrawVeinHighlight() {
+  private redrawOreFace() {
     const g = this.vein;
     g.clear();
-    const { x, y } = this.veinPoint();
-    const shimmer = 0.1 + Math.sin(this.pulse * 2.8) * 0.06 + this.hitFlash * 0.55;
-    const r = 38 + Math.sin(this.pulse * 2.2) * 5 + this.hitFlash * 22;
-    g.circle(x, y, r);
-    g.fill({ color: COLORS.cyan, alpha: shimmer });
-    g.circle(x, y, r * 0.45);
-    g.fill({ color: COLORS.mist, alpha: 0.08 + this.hitFlash * 0.25 });
+    const { x: cx, y: cy } = this.veinPoint();
 
-    // Hint ring when idle (invite tap)
-    if (this.combo === 0) {
-      const ring = 48 + (this.pulse % 1.6) * 18;
-      const a = 0.22 * (1 - (this.pulse % 1.6) / 1.6);
-      g.circle(x, y, ring);
+    // Soft cyan seam behind the rocks
+    const shimmer = 0.06 + Math.sin(this.pulse * 2.8) * 0.03 + this.hitFlash * 0.35;
+    g.circle(cx, cy, 52 + this.hitFlash * 18);
+    g.fill({ color: COLORS.cyan, alpha: shimmer });
+
+    for (const rock of this.rocks) {
+      if (rock.respawn > 0) {
+        // Faint reforming dust
+        const reform = 1 - rock.respawn / 1.8;
+        if (reform > 0.35) {
+          const { x, y } = rockWorldPos(rock, cx, cy);
+          g.ellipse(x, y, rock.w * 0.35 * reform, rock.h * 0.3 * reform);
+          g.fill({ color: COLORS.tealLight, alpha: 0.2 * reform });
+        }
+        continue;
+      }
+      this.drawRock(g, rock, cx, cy);
+    }
+
+    // Idle invite ring when no combo
+    if (this.combo === 0 && this.autoMineRate <= 0) {
+      const ring = 62 + (this.pulse % 1.6) * 16;
+      const a = 0.2 * (1 - (this.pulse % 1.6) / 1.6);
+      g.circle(cx, cy, ring);
       g.stroke({ width: 2, color: COLORS.cyan, alpha: a });
     }
+  }
+
+  private drawRock(g: Graphics, rock: OreRock, cx: number, cy: number) {
+    const { x, y } = rockWorldPos(rock, cx, cy);
+    const dmg = 1 - rock.hp / rock.maxHp;
+    const wobble = this.hitFlash > 0 && dmg > 0 ? Math.sin(this.pulse * 40) * 1.2 : 0;
+
+    // Irregular stone blob (ellipse cluster)
+    g.ellipse(x + wobble, y, rock.w * 0.55, rock.h * 0.5);
+    g.fill({ color: rock.tint, alpha: 0.95 });
+    g.ellipse(x - rock.w * 0.15 + wobble, y - rock.h * 0.12, rock.w * 0.32, rock.h * 0.28);
+    g.fill({ color: COLORS.stone, alpha: 0.55 });
+
+    // Cyan ore flecks — fewer as rock cracks
+    const flecks = Math.max(1, 3 - Math.floor(dmg * 3));
+    for (let i = 0; i < flecks; i++) {
+      const fx = x + Math.cos(rock.seed + i * 2.1) * rock.w * 0.22;
+      const fy = y + Math.sin(rock.seed * 1.3 + i) * rock.h * 0.18;
+      g.circle(fx + wobble, fy, 2.2 - dmg);
+      g.fill({ color: COLORS.cyan, alpha: 0.55 + this.hitFlash * 0.3 });
+    }
+
+    // Crack lines when damaged
+    if (dmg > 0.05) {
+      g.moveTo(x - rock.w * 0.25, y - rock.h * 0.1);
+      g.lineTo(x + rock.w * 0.1 * dmg, y + rock.h * 0.2 * dmg);
+      if (dmg > 0.4) {
+        g.moveTo(x + rock.w * 0.15, y - rock.h * 0.2);
+        g.lineTo(x - rock.w * 0.05, y + rock.h * 0.25);
+      }
+      g.stroke({ width: 1.5, color: COLORS.void, alpha: 0.45 + dmg * 0.4 });
+    }
+  }
+
+  private redrawDwarf() {
+    const g = this.dwarfGfx;
+    g.clear();
+    if (this.autoMineRate <= 0) {
+      this.dwarfLabel.visible = false;
+      return;
+    }
+
+    const { x, y } = this.dwarfPoint();
+    const swing = Math.sin(this.dwarfSwingT * Math.PI * 2);
+    // Wind-up then strike: pick arm angle
+    const pickAng = -0.9 + swing * 1.1;
+    const bob = Math.abs(swing) * 2;
+
+    // Shadow
+    g.ellipse(x, y + 18, 14, 5);
+    g.fill({ color: COLORS.void, alpha: 0.35 });
+
+    // Legs
+    g.roundRect(x - 8, y + 4 - bob, 6, 12, 2);
+    g.fill(COLORS.dwarfCoat);
+    g.roundRect(x + 2, y + 4 - bob, 6, 12, 2);
+    g.fill(COLORS.dwarfCoat);
+
+    // Body
+    g.roundRect(x - 11, y - 14 - bob, 22, 20, 5);
+    g.fill(COLORS.dwarfCoat);
+
+    // Head
+    g.circle(x, y - 22 - bob, 8);
+    g.fill(COLORS.dwarfSkin);
+
+    // Helm
+    g.roundRect(x - 9, y - 30 - bob, 18, 8, 3);
+    g.fill(COLORS.dwarfHelm);
+    g.moveTo(x, y - 34 - bob);
+    g.lineTo(x + 5, y - 28 - bob);
+    g.lineTo(x - 5, y - 28 - bob);
+    g.closePath();
+    g.fill(COLORS.amber);
+
+    // Beard
+    g.moveTo(x - 6, y - 18 - bob);
+    g.lineTo(x, y - 8 - bob);
+    g.lineTo(x + 6, y - 18 - bob);
+    g.closePath();
+    g.fill({ color: COLORS.slate, alpha: 0.95 });
+
+    // Pickaxe arm + head
+    const ax = x + 10;
+    const ay = y - 10 - bob;
+    const px = ax + Math.cos(pickAng) * 26;
+    const py = ay + Math.sin(pickAng) * 26;
+    g.moveTo(ax, ay);
+    g.lineTo(px, py);
+    g.stroke({ width: 3, color: COLORS.slate, alpha: 0.95 });
+    // Pick head
+    g.moveTo(px + Math.cos(pickAng - 1.2) * 10, py + Math.sin(pickAng - 1.2) * 10);
+    g.lineTo(px + Math.cos(pickAng + 1.2) * 10, py + Math.sin(pickAng + 1.2) * 10);
+    g.stroke({ width: 4, color: COLORS.amber, alpha: 0.95 });
+
+    this.dwarfLabel.visible = true;
+    this.dwarfLabel.text = 'Mining…';
+    this.dwarfLabel.x = x;
+    this.dwarfLabel.y = y + 22;
   }
 
   private isStationRunning(id: StationId): boolean {
@@ -622,16 +827,16 @@ export class ForgeScene {
     if (this.hitFlash > 0) {
       const { x, y } = this.veinPoint();
       const p = 1 - this.hitFlash / 0.28;
-      g.circle(x, y, 20 + p * 55);
-      g.stroke({ width: 3, color: COLORS.mist, alpha: 0.55 * (1 - p) });
+      g.circle(x, y, 28 + p * 50);
+      g.stroke({ width: 3, color: COLORS.mist, alpha: 0.45 * (1 - p) });
     }
 
     if (this.combo >= 3) {
       const { x, y } = this.veinPoint();
       this.comboLabel.visible = true;
       this.comboLabel.text = `×${this.combo}`;
-      this.comboLabel.x = x + 52;
-      this.comboLabel.y = y - 36;
+      this.comboLabel.x = x + 58;
+      this.comboLabel.y = y - 42;
     } else {
       this.comboLabel.visible = false;
     }

@@ -26,6 +26,8 @@ export interface RecipeDef {
     stationOutput?: number;
     expeditionLoot?: number;
     offlineRate?: number;
+    /** Fraction of click power granted as ore/sec by the dwarf miner (sums across recipes). */
+    autoMine?: number;
   };
   category: 'tool' | 'gear' | 'forge';
 }
@@ -34,9 +36,9 @@ export const RECIPES: RecipeDef[] = [
   {
     id: 'copper_pick',
     name: 'Copper Pick',
-    description: 'Sharper taps on the ore vein.',
+    description: 'Sharper taps — a forge dwarf joins the dig.',
     cost: { ore: 15 },
-    effects: { clickPower: 1.5 },
+    effects: { clickPower: 1.5, autoMine: 0.25 },
     category: 'tool',
   },
   {
@@ -69,10 +71,10 @@ export const RECIPES: RecipeDef[] = [
   {
     id: 'alloy_hammer',
     name: 'Alloy Hammer',
-    description: 'Heavy strikes for faster forging.',
+    description: 'Heavy strikes for faster forging — and harder dwarf swings.',
     cost: { alloy: 20, emberglass: 60 },
     requires: ['glow_chisel'],
-    effects: { clickPower: 1.4, stationOutput: 1.1 },
+    effects: { clickPower: 1.4, stationOutput: 1.1, autoMine: 0.15 },
     category: 'tool',
   },
   {

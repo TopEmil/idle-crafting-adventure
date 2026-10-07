@@ -14,6 +14,7 @@ import {
   clickVein,
   completeExpeditionIfReady,
   craftRecipe,
+  getAutoMineRate,
   prestige,
   startExpedition,
   tickProduction,
@@ -92,6 +93,7 @@ export class GameApp {
     this.installInputGuards();
 
     this.scene.setVeinTapHandler(() => this.handleClickVein());
+    this.scene.setAutoMineRate(getAutoMineRate(this.state));
 
     this.platform.loadingStop();
     this.platform.gameplayStart();
@@ -130,6 +132,7 @@ export class GameApp {
         }
         this.accum -= SIM_DT;
       }
+      this.scene.setAutoMineRate(getAutoMineRate(this.state));
       this.scene.sync(this.state);
     }
 
@@ -234,6 +237,7 @@ export class GameApp {
     this.state = result.state;
     this.audio.craft();
     this.scene.triggerCraftBurst();
+    this.scene.setAutoMineRate(getAutoMineRate(this.state));
     this.hud.toast(`${getRecipe(id).name}: ${formatRecipeEffects(getRecipe(id))}`, 'gain');
     if (!this.state.onboardingDone && this.state.onboardingStep <= 1) {
       this.state.onboardingStep = 2;

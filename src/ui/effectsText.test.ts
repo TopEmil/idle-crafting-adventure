@@ -5,7 +5,8 @@ import { formatRecipeEffects, formatStationIO, formatStationUpgradeHint } from '
 
 describe('effects text', () => {
   it('explains recipe multipliers', () => {
-    expect(formatRecipeEffects(getRecipe('copper_pick'))).toBe('Tap power ×1.5');
+    expect(formatRecipeEffects(getRecipe('copper_pick'))).toContain('Tap power ×1.5');
+    expect(formatRecipeEffects(getRecipe('copper_pick'))).toContain('Dwarf mine');
     expect(formatRecipeEffects(getRecipe('scout_kit'))).toContain('Expedition loot');
   });
 
