@@ -13,6 +13,7 @@ import {
 import { prestigeMult } from '../data/balance';
 import type { GameState } from '../sim/types';
 import { formatCost, formatDuration, formatNumber } from './format';
+import { nextGoal } from './goals';
 
 export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'ledger' | null;
 
@@ -38,6 +39,9 @@ export class Hud {
   private overlay: HTMLElement;
   private panel: PanelId = null;
   private actions: HudActions;
+  private lastResources: Partial<Record<ResourceId, number>> = {};
+  private floatRoot: HTMLElement | null = null;
+
   constructor(root: HTMLElement, overlay: HTMLElement, actions: HudActions) {
     this.root = root;
     this.overlay = overlay;
@@ -48,7 +52,16 @@ export class Hud {
         <div class="resources" id="resources"></div>
         <button class="icon-btn" id="btn-mute" type="button" aria-label="Mute">♪</button>
       </div>
-      <div class="mid-space"></div>
+      <div class="mid-space">
+        <div class="goal-strip" id="goal-strip" hidden>
+          <div class="goal-copy">
+            <div class="goal-title" id="goal-title">Next goal</div>
+            <div class="goal-detail" id="goal-detail"></div>
+          </div>
+          <div class="goal-meter"><span id="goal-meter"></span></div>
+        </div>
+        <div class="float-layer" id="float-layer" aria-hidden="true"></div>
+      </div>
       <div class="bottom-dock">
         <div class="cta-row">
           <button class="btn btn-primary" id="btn-vein" type="button">Tap Vein</button>
@@ -62,6 +75,7 @@ export class Hud {
         </div>
       </div>
     `;
+    this.floatRoot = this.root.querySelector('#float-layer');
 
     this.root.querySelector('#btn-vein')?.addEventListener('click', () => this.actions.onClickVein());
     this.root.querySelector('#btn-craft')?.addEventListener('click', () => this.actions.onCraftQuick());
@@ -91,11 +105,14 @@ export class Hud {
 
   render(state: GameState, opts?: { notice?: string }) {
     this.renderResources(state);
+    this.renderGoal(state);
     const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
     const next = availableRecipes(state)[0];
     if (craftBtn) {
+      const goal = nextGoal(state);
       craftBtn.textContent = next ? `Craft ${next.name}` : 'Crafted out';
       craftBtn.disabled = !next;
+      craftBtn.classList.toggle('btn-ready', Boolean(next && goal.ready && goal.id.startsWith('recipe:')));
     }
     const veinBtn = this.root.querySelector('#btn-vein') as HTMLButtonElement | null;
     if (veinBtn) {
@@ -107,6 +124,42 @@ export class Hud {
     } else if (!this.overlay.querySelector('.modal') && !this.overlay.querySelector('.onboarding')) {
       // keep overlay empty unless modal/onboarding managed elsewhere
     }
+  }
+
+  /** Short HUD toast — e.g. craft / unlock feedback */
+  toast(message: string, kind: 'gain' | 'info' = 'info') {
+    if (!this.floatRoot) return;
+    const el = document.createElement('div');
+    el.className = `hud-toast hud-toast-${kind}`;
+    el.textContent = message;
+    this.floatRoot.appendChild(el);
+    window.setTimeout(() => el.classList.add('show'), 10);
+    window.setTimeout(() => {
+      el.classList.remove('show');
+      window.setTimeout(() => el.remove(), 280);
+    }, 1400);
+  }
+
+  pulseVeinButton() {
+    const veinBtn = this.root.querySelector('#btn-vein');
+    veinBtn?.classList.remove('btn-pulse');
+    // reflow
+    void (veinBtn as HTMLElement | null)?.offsetWidth;
+    veinBtn?.classList.add('btn-pulse');
+  }
+
+  private renderGoal(state: GameState) {
+    const strip = this.root.querySelector('#goal-strip') as HTMLElement | null;
+    if (!strip) return;
+    const goal = nextGoal(state);
+    strip.hidden = false;
+    strip.classList.toggle('goal-ready', goal.ready);
+    const title = this.root.querySelector('#goal-title');
+    const detail = this.root.querySelector('#goal-detail');
+    const meter = this.root.querySelector('#goal-meter') as HTMLElement | null;
+    if (title) title.textContent = goal.ready ? `Ready · ${goal.title}` : goal.title;
+    if (detail) detail.textContent = goal.detail;
+    if (meter) meter.style.width = `${Math.round(goal.progress * 100)}%`;
   }
 
   showOnboarding(step: number) {
@@ -242,8 +295,11 @@ export class Hud {
     el.innerHTML = RESOURCES.map((r) => {
       const value = state.resources[r.id];
       if (r.id === 'relics' && value <= 0 && state.totalRelicsEarned <= 0) return '';
-      return `<div class="res-chip"><span class="dot" style="background:${r.color}"></span>${r.short} ${formatNumber(value)}</div>`;
+      const prev = this.lastResources[r.id] ?? value;
+      const grew = value > prev + 0.01;
+      return `<div class="res-chip${grew ? ' res-pop' : ''}" data-res="${r.id}"><span class="dot" style="background:${r.color};color:${r.color}"></span>${r.short} ${formatNumber(value)}</div>`;
     }).join('');
+    this.lastResources = { ...state.resources };
   }
 
   private renderPanel(state: GameState, notice?: string) {

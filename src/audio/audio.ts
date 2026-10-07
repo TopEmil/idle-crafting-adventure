@@ -48,9 +48,13 @@ export class AudioBus {
     }
   }
 
-  click() {
-    this.playTone(220, 0.06, 'triangle', 0.08);
-    this.playTone(440, 0.04, 'sine', 0.04);
+  click(combo = 1) {
+    const bump = Math.min(8, Math.max(0, combo - 1)) * 18;
+    this.playTone(220 + bump, 0.055, 'triangle', 0.09);
+    this.playTone(440 + bump * 1.5, 0.04, 'sine', 0.045);
+    if (combo >= 5) {
+      this.playTone(660 + bump, 0.05, 'sine', 0.03);
+    }
   }
 
   craft() {

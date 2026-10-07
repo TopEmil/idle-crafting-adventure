@@ -89,6 +89,8 @@ export class GameApp {
     window.addEventListener('resize', () => this.scene.resize());
     this.installInputGuards();
 
+    this.scene.setVeinTapHandler(() => this.handleClickVein());
+
     this.platform.loadingStop();
     this.platform.gameplayStart();
     this.running = true;
@@ -201,9 +203,12 @@ export class GameApp {
     } else if (this.overlayMode !== 'none' && this.overlayMode !== 'onboarding') {
       return;
     }
-    const { state } = clickVein(this.state);
+    const { state, event } = clickVein(this.state);
     this.state = state;
-    this.audio.click();
+    const amount = event.type === 'click_vein' ? event.amount : 1;
+    this.scene.triggerVeinHit(amount);
+    this.hud.pulseVeinButton();
+    this.audio.click(this.scene.getCombo());
     if (!this.state.onboardingDone && this.state.onboardingStep === 0 && this.state.resources.ore >= 3) {
       this.state.onboardingStep = 1;
       this.hud.showOnboarding(1);
@@ -227,6 +232,7 @@ export class GameApp {
     this.state = result.state;
     this.audio.craft();
     this.scene.triggerCraftBurst();
+    this.hud.toast(`Forged ${id.replace(/_/g, ' ')}`, 'gain');
     if (!this.state.onboardingDone && this.state.onboardingStep <= 1) {
       this.state.onboardingStep = 2;
       this.overlayMode = 'onboarding';
@@ -245,7 +251,9 @@ export class GameApp {
     }
     this.state = result.state;
     this.audio.craft();
+    this.scene.triggerCraftBurst();
     this.scene.sync(this.state);
+    this.hud.toast(`${id} unlocked`, 'gain');
     if (id === 'smelter' && result.state.milestones.firstStation) {
       this.overlayMode = 'milestone';
       this.panel = null;
@@ -280,6 +288,7 @@ export class GameApp {
     }
     this.state = result.state;
     this.audio.click();
+    this.hud.toast('Scouts dispatched', 'info');
     this.refreshHud();
     void this.persist();
   }
