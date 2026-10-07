@@ -33,7 +33,7 @@ export function createOreRocks(count = 10): OreRock[] {
       maxHp,
       respawn: 0,
       seed: 1.1 + i * 0.37,
-      // Warm stone tones so they read against the cyan cavern painting
+      // Cool stone tones that sit on the timber-framed shaft backdrop
       tint: i % 3 === 0 ? 0x3a4a52 : i % 3 === 1 ? 0x2c383f : 0x46565e,
     });
   }

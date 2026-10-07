@@ -11,8 +11,9 @@ export interface UvPoint {
  * Focal points painted into the art — used both for cover framing
  * and for converting UV → screen so props track the image when cropped.
  */
-export const MINE_FOCUS: UvPoint = { x: 0.36, y: 0.52 };
-export const MINE_VEIN_UV: UvPoint = { x: 0.34, y: 0.54 };
+/** Center of the timber-framed dig shaft painted into mine-cavern-bg. */
+export const MINE_FOCUS: UvPoint = { x: 0.5, y: 0.48 };
+export const MINE_VEIN_UV: UvPoint = { x: 0.5, y: 0.5 };
 
 export const FORGE_FOCUS: UvPoint = { x: 0.5, y: 0.56 };
 export const FORGE_STATION_UV: Record<StationId, UvPoint> = {
