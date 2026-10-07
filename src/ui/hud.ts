@@ -14,6 +14,11 @@ import { prestigeMult } from '../data/balance';
 import type { GameState } from '../sim/types';
 import { formatCost, formatDuration, formatNumber } from './format';
 import { nextGoal } from './goals';
+import {
+  formatRecipeEffects,
+  formatStationIO,
+  formatStationUpgradeHint,
+} from './effectsText';
 
 export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'ledger' | null;
 
@@ -315,14 +320,19 @@ export class Hud {
       const have = owned.has(r.id);
       const unlocked = !r.requires || r.requires.every((req) => owned.has(req));
       const disabled = have || !unlocked;
+      const effects = formatRecipeEffects(r);
+      const req = r.requires?.length
+        ? `Needs ${r.requires.map((id) => RECIPES.find((x) => x.id === id)?.name ?? id).join(', ')}`
+        : 'Starter recipe';
       return `
         <div class="row-item">
           <div>
             <h3>${r.name}${have ? ' ✓' : ''}</h3>
             <div class="cost">${formatCost(r.cost)} · ${r.category}</div>
+            <div class="effect-line">${effects}</div>
           </div>
           <button class="btn btn-secondary" data-craft="${r.id}" type="button" ${disabled ? 'disabled' : ''}>${have ? 'Owned' : 'Craft'}</button>
-          <p>${r.description}</p>
+          <p>${r.description} <span class="muted">(${req})</span></p>
         </div>
       `;
     }).join('');
@@ -364,11 +374,15 @@ export class Hud {
         status = left > 0 ? `Returning in ${formatDuration(left)}` : 'Ready to claim';
         action = `<div class="progress-bar" style="width:88px"><span style="width:${pct}%"></span></div>`;
       }
+      const lootHint = Object.entries(e.baseLoot)
+        .map(([k, v]) => `+${v} ${k}`)
+        .join(' · ');
       return `
         <div class="row-item">
           <div>
             <h3>${e.name}</h3>
             <div class="cost">${status}</div>
+            <div class="effect-line">Loot: ${lootHint}</div>
           </div>
           ${action}
           <p>${e.description}</p>
@@ -397,14 +411,18 @@ export class Hud {
     const stationRows = STATIONS.map((s) => {
       const st = state.stations[s.id as StationId];
       if (!st.unlocked) {
+        const gate = s.unlockRequires
+          ? `Requires ${STATIONS.find((x) => x.id === s.unlockRequires)?.name ?? s.unlockRequires} first`
+          : 'Appears in the forge when unlocked';
         return `
           <div class="row-item">
             <div>
               <h3>${s.name}</h3>
               <div class="cost">${formatCost(s.unlockCost)}</div>
+              <div class="effect-line">${formatStationIO(s, 1)}</div>
             </div>
             <button class="btn btn-secondary" data-unlock="${s.id}" type="button">Unlock</button>
-            <p>${s.description}</p>
+            <p>${s.description} <span class="muted">(${gate})</span></p>
           </div>
         `;
       }
@@ -414,9 +432,11 @@ export class Hud {
           <div>
             <h3>${s.name} · Lv ${st.level}</h3>
             <div class="cost">Upgrade ${formatCost(cost)}</div>
+            <div class="effect-line">${formatStationIO(s, st.level)}</div>
+            <div class="effect-line muted">${formatStationUpgradeHint(st.level)}</div>
           </div>
           <button class="btn btn-secondary" data-upgrade="${s.id}" type="button">Upgrade</button>
-          <p>${s.description}</p>
+          <p>${s.description} <span class="muted">(runs automatically when inputs are available)</span></p>
         </div>
       `;
     }).join('');

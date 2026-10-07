@@ -1,6 +1,7 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { GameState } from '../sim/types';
-import type { StationId } from '../data/stations';
+import { getStation, STATIONS, type StationId } from '../data/stations';
+import type { ResourceId } from '../data/resources';
 
 /** Served from `public/art/` — painted cavern backdrop */
 const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-bg.jpg`;
@@ -43,12 +44,14 @@ export class ForgeScene {
   private hearth = new Graphics();
   private vein = new Graphics();
   private stationsGfx = new Graphics();
+  private stationLabels = new Container();
   private fx = new Graphics();
   private particles = new Graphics();
   private scout = new Graphics();
   private floatLayer = new Container();
   private brand!: Text;
   private comboLabel!: Text;
+  private labelByStation = new Map<StationId, Text>();
   private sparkTimer = 0;
   private pulse = 0;
   private craftBurstT = 0;
@@ -59,6 +62,7 @@ export class ForgeScene {
   private comboTimer = 0;
   private bursts: BurstParticle[] = [];
   private floaters: Floater[] = [];
+  private spawnAnim: Partial<Record<StationId, number>> = {};
   private width = 800;
   private height = 600;
   private state: GameState | null = null;
@@ -99,12 +103,30 @@ export class ForgeScene {
 
     this.root.addChild(this.vignette);
     this.root.addChild(this.stationsGfx);
+    this.root.addChild(this.stationLabels);
     this.root.addChild(this.hearth);
     this.root.addChild(this.vein);
     this.root.addChild(this.scout);
     this.root.addChild(this.particles);
     this.root.addChild(this.fx);
     this.root.addChild(this.floatLayer);
+
+    for (const def of STATIONS) {
+      const label = new Text({
+        text: def.name,
+        style: {
+          fontFamily: 'DM Sans, sans-serif',
+          fontSize: 11,
+          fontWeight: '700',
+          fill: COLORS.mist,
+          dropShadow: { color: 0x0b1c22, blur: 3, distance: 1, alpha: 0.85 },
+        },
+      });
+      label.anchor.set(0.5, 0);
+      label.visible = false;
+      this.labelByStation.set(def.id, label);
+      this.stationLabels.addChild(label);
+    }
 
     this.brand = new Text({
       text: 'Embervein',
@@ -250,6 +272,42 @@ export class ForgeScene {
     }
   }
 
+  /** Pop-in animation when a station is purchased */
+  triggerStationUnlock(stationId: StationId) {
+    this.spawnAnim[stationId] = 0.7;
+    const slot = this.stationLayout().find((s) => s.id === stationId);
+    if (!slot) return;
+    for (let i = 0; i < 18; i++) {
+      const ang = (i / 18) * Math.PI * 2;
+      this.bursts.push({
+        x: slot.x,
+        y: slot.y,
+        vx: Math.cos(ang) * 90,
+        vy: Math.sin(ang) * 70,
+        life: 0.55,
+        max: 0.55,
+        size: 3,
+        color: getStation(stationId).visualTint,
+      });
+    }
+    const name = getStation(stationId).name;
+    const label = new Text({
+      text: `${name} online`,
+      style: {
+        fontFamily: 'Fraunces, Georgia, serif',
+        fontSize: 16,
+        fontWeight: '600',
+        fill: COLORS.amber,
+        dropShadow: { color: 0x0b1c22, blur: 4, distance: 1, alpha: 0.85 },
+      },
+    });
+    label.anchor.set(0.5, 1);
+    label.x = slot.x;
+    label.y = slot.y - 36;
+    this.floatLayer.addChild(label);
+    this.floaters.push({ text: label, life: 1.2, max: 1.2, vy: -36 });
+  }
+
   getCombo() {
     return this.combo;
   }
@@ -340,11 +398,18 @@ export class ForgeScene {
     }
     this.floaters = this.floaters.filter((f) => f.life > 0);
 
+    for (const id of Object.keys(this.spawnAnim) as StationId[]) {
+      const t = this.spawnAnim[id];
+      if (t == null) continue;
+      this.spawnAnim[id] = t - dt;
+      if ((this.spawnAnim[id] ?? 0) <= 0) delete this.spawnAnim[id];
+    }
+
     // Ambient station puffs when producing
-    if (this.state && this.productionPulse > 1.4) {
+    if (this.state && this.productionPulse > 0.9) {
       this.productionPulse = 0;
       for (const slot of this.stationLayout()) {
-        if (this.state.stations[slot.id].unlocked) {
+        if (this.isStationRunning(slot.id)) {
           this.triggerStationPuff(slot.id);
         }
       }
@@ -352,6 +417,7 @@ export class ForgeScene {
 
     this.redrawHearth();
     this.redrawVeinHighlight();
+    this.redrawStations();
     this.redrawParticles();
     this.redrawFx();
 
@@ -404,21 +470,119 @@ export class ForgeScene {
     }
   }
 
+  private isStationRunning(id: StationId): boolean {
+    if (!this.state) return false;
+    const st = this.state.stations[id];
+    if (!st.unlocked || st.level <= 0) return false;
+    const def = getStation(id);
+    if (!def.inputs) return true;
+    for (const [key, rate] of Object.entries(def.inputs) as [ResourceId, number][]) {
+      if ((this.state.resources[key] ?? 0) < rate * st.level * 0.05) return false;
+    }
+    return true;
+  }
+
   private redrawStations() {
     const g = this.stationsGfx;
     g.clear();
-    if (!this.state) return;
+    if (!this.state) {
+      for (const label of this.labelByStation.values()) label.visible = false;
+      return;
+    }
 
     for (const slot of this.stationLayout()) {
       const st = this.state.stations[slot.id];
-      if (!st.unlocked) continue;
-      const glow = slot.id === 'enchanter' ? COLORS.cyan : COLORS.ember;
-      const pulse = 1 + Math.sin(this.pulse * 3 + st.level) * 0.12;
-      g.circle(slot.x, slot.y, 11 * pulse);
-      g.fill({ color: glow, alpha: 0.5 });
-      g.circle(slot.x, slot.y, 4);
-      g.fill({ color: COLORS.mist, alpha: 0.75 });
+      const label = this.labelByStation.get(slot.id);
+      if (!st.unlocked) {
+        // Ghost silhouette — shows where the station will appear
+        this.drawStationBody(g, slot.id, slot.x, slot.y, 0.22, false, 1);
+        if (label) {
+          label.visible = true;
+          label.text = `${getStation(slot.id).name}?`;
+          label.alpha = 0.35;
+          label.x = slot.x;
+          label.y = slot.y + 28;
+        }
+        continue;
+      }
+
+      const spawn = this.spawnAnim[slot.id];
+      const spawnScale = spawn != null ? 0.6 + (1 - spawn / 0.7) * 0.55 : 1;
+      const running = this.isStationRunning(slot.id);
+      const workPulse = running ? 1 + Math.sin(this.pulse * 5 + st.level) * 0.08 : 1;
+      this.drawStationBody(g, slot.id, slot.x, slot.y, 1, running, spawnScale * workPulse);
+
+      if (label) {
+        label.visible = true;
+        label.text = running ? `${getStation(slot.id).name} · Lv${st.level}` : `${getStation(slot.id).name} (idle)`;
+        label.alpha = 0.95;
+        label.x = slot.x;
+        label.y = slot.y + 30;
+      }
+
+      if (running) {
+        // Rising product motes
+        for (let i = 0; i < 3; i++) {
+          const t = this.sparkTimer * 0.9 + i * 0.4 + st.level;
+          const px = slot.x + Math.sin(t * 2) * 10;
+          const py = slot.y - 18 - ((t * 28 + i * 10) % 36);
+          g.circle(px, py, 2);
+          g.fill({
+            color: slot.id === 'enchanter' ? COLORS.cyan : COLORS.amber,
+            alpha: 0.65,
+          });
+        }
+      }
     }
+  }
+
+  private drawStationBody(
+    g: Graphics,
+    id: StationId,
+    x: number,
+    y: number,
+    alpha: number,
+    running: boolean,
+    scale: number,
+  ) {
+    const s = 18 * scale;
+    const accent = id === 'enchanter' ? COLORS.cyan : id === 'anvil' ? COLORS.amber : COLORS.ember;
+
+    // Base plinth
+    g.roundRect(x - s * 1.1, y + s * 0.35, s * 2.2, s * 0.55, 6);
+    g.fill({ color: COLORS.stone, alpha: 0.85 * alpha });
+
+    if (id === 'smelter') {
+      g.roundRect(x - s * 0.85, y - s * 0.9, s * 1.7, s * 1.4, 8);
+      g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+      g.roundRect(x - s * 0.45, y - s * 0.55, s * 0.9, s * 0.7, 5);
+      g.fill({ color: running ? COLORS.ember : COLORS.void, alpha: (running ? 0.95 : 0.5) * alpha });
+      if (running) {
+        g.circle(x, y - s * 0.2, s * 0.28);
+        g.fill({ color: COLORS.amber, alpha: 0.85 * alpha });
+      }
+    } else if (id === 'anvil') {
+      g.roundRect(x - s * 0.9, y - s * 0.15, s * 1.8, s * 0.55, 4);
+      g.fill({ color: COLORS.slate, alpha: 0.95 * alpha });
+      g.roundRect(x - s * 0.35, y + s * 0.2, s * 0.7, s * 0.45, 3);
+      g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+      if (running) {
+        g.circle(x + s * 0.55, y - s * 0.35, 3 + Math.sin(this.pulse * 8) * 1.5);
+        g.fill({ color: COLORS.amber, alpha: 0.9 * alpha });
+      }
+    } else {
+      // enchanter — crystal pedestal
+      g.moveTo(x, y - s);
+      g.lineTo(x + s * 0.7, y + s * 0.2);
+      g.lineTo(x - s * 0.7, y + s * 0.2);
+      g.closePath();
+      g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+      g.circle(x, y - s * 0.35, s * 0.28);
+      g.fill({ color: running ? COLORS.cyan : COLORS.slate, alpha: (running ? 0.95 : 0.45) * alpha });
+    }
+
+    g.circle(x, y - s * 1.15, running ? 4 : 2.5);
+    g.fill({ color: accent, alpha: (running ? 0.95 : 0.4) * alpha });
   }
 
   private redrawParticles() {

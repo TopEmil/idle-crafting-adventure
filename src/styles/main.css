@@ -490,6 +490,19 @@ body {
   font-weight: 600;
 }
 
+.effect-line {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--amber);
+  letter-spacing: 0.01em;
+}
+
+.effect-line.muted {
+  color: var(--slate);
+  font-weight: 600;
+}
+
 .modal {
   position: absolute;
   left: 50%;

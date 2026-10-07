@@ -23,6 +23,8 @@ import {
 import { deserializeState, loadLocalState, SAVE_KEY, saveLocalState, serializeState } from '../sim/save';
 import type { GameState } from '../sim/types';
 import { Hud, type PanelId } from '../ui/hud';
+import { formatRecipeEffects } from '../ui/effectsText';
+import { getRecipe } from '../data/recipes';
 
 export class GameApp {
   private state: GameState;
@@ -232,7 +234,7 @@ export class GameApp {
     this.state = result.state;
     this.audio.craft();
     this.scene.triggerCraftBurst();
-    this.hud.toast(`Forged ${id.replace(/_/g, ' ')}`, 'gain');
+    this.hud.toast(`${getRecipe(id).name}: ${formatRecipeEffects(getRecipe(id))}`, 'gain');
     if (!this.state.onboardingDone && this.state.onboardingStep <= 1) {
       this.state.onboardingStep = 2;
       this.overlayMode = 'onboarding';
@@ -252,13 +254,18 @@ export class GameApp {
     this.state = result.state;
     this.audio.craft();
     this.scene.triggerCraftBurst();
+    this.scene.triggerStationUnlock(id);
     this.scene.sync(this.state);
-    this.hud.toast(`${id} unlocked`, 'gain');
+    const pretty = id.charAt(0).toUpperCase() + id.slice(1);
+    this.hud.toast(`${pretty} built in the forge`, 'gain');
     if (id === 'smelter' && result.state.milestones.firstStation) {
       this.overlayMode = 'milestone';
       this.panel = null;
       this.hud.setPanel(null);
-      this.hud.showMilestone('Smelter lit', 'Your forge breathes on its own. Expeditions await in the tunnels.');
+      this.hud.showMilestone(
+        'Smelter lit',
+        'The Smelter appears beside the hearth and converts Ore → Emberglass automatically while fueled.',
+      );
       this.platform.gameplayStop();
     } else {
       this.refreshHud();
@@ -275,7 +282,9 @@ export class GameApp {
     }
     this.state = result.state;
     this.audio.click();
+    this.scene.triggerStationPuff(id);
     this.scene.sync(this.state);
+    this.hud.toast(`${id} → Lv ${result.state.stations[id].level}`, 'gain');
     this.refreshHud();
   }
 
