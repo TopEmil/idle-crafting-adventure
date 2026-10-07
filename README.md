@@ -20,9 +20,11 @@ Open the printed localhost URL. The CrazyGames SDK script loads from CDN; outsid
 | `npm test` | Economy & ad-gate unit tests |
 | `npm run preview` | Preview `dist/` |
 
-## Screenshots
+## Screenshots & storefront art
 
-Preview captures (desktop + mobile) live in [`docs/screenshots/`](docs/screenshots/).
+- Gameplay: [`docs/screenshots/`](docs/screenshots/)
+- CrazyGames covers (title **Embervein** only): `release/covers/*.jpg`
+- In-game cavern backdrop: `public/art/forge-bg.jpg`
 
 ## Submission package
 
@@ -31,9 +33,9 @@ After `npm run build`:
 | Asset | Path |
 | --- | --- |
 | Game zip | `release/embervein.zip` |
-| Landscape cover 1920×1080 | `release/covers/cover-1920x1080.png` |
-| Portrait cover 800×1200 | `release/covers/cover-800x1200.png` |
-| Square cover 800×800 | `release/covers/cover-800x800.png` |
+| Landscape cover 1920×1080 | `release/covers/cover-1920x1080.jpg` |
+| Portrait cover 800×1200 | `release/covers/cover-800x1200.jpg` |
+| Square cover 800×800 | `release/covers/cover-800x800.jpg` |
 | Landscape trailer ~18s | `release/trailers/embervein-landscape-18s.mp4` |
 | Portrait trailer ~18s | `release/trailers/embervein-portrait-18s.mp4` |
 | Metadata draft | `docs/store-metadata.md` |

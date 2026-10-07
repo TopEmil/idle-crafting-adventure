@@ -50,10 +50,10 @@ Use with the [CrazyGames Developer Portal](https://developer.crazygames.com/) QA
 
 ## Store assets
 
-- [ ] Cover 1920×1080 (landscape)
-- [ ] Cover 800×1200 (portrait)
-- [ ] Cover 800×800 (square)
-- [ ] Title only on covers — no borders, badges, or CrazyGames logo
+- [ ] Cover 1920×1080 (landscape) — `release/covers/cover-1920x1080.jpg`
+- [ ] Cover 800×1200 (portrait) — `release/covers/cover-800x1200.jpg`
+- [ ] Cover 800×800 (square) — `release/covers/cover-800x800.jpg`
+- [ ] Title only on covers (**Embervein**) — no borders, badges, taglines, or CrazyGames logo
 - [ ] Trailers 15–20s landscape + portrait **or** recorded gameplay clips + high-quality stills
 - [ ] Metadata draft in `docs/store-metadata.md`
 
