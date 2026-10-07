@@ -48,7 +48,8 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 - Fixed-timestep sim at **10 Hz**; rendering independent.
 - Soft cost curves (roughly ×1.15–1.22 per level).
 - Always one visible next goal (recipe, station, or expedition).
-- Prestige grants permanent production multiplier + cosmetic forge skin unlocks.
+- Prestige (Reforge) grants Relics to spend on permanent Talents + cosmetic forge skin unlocks.
+- Reforge has a 10-minute cooldown so runs cannot be chained instantly.
 - Data-driven tables in `src/data/` — balance without code rewrites.
 
 ## Systems summary
@@ -58,7 +59,7 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 3. **Recipes:** Tools and gear that boost click power / station output.
 4. **Expeditions:** Timed scout runs; return modal is primary midgame-ad hook.
 5. **Offline:** Simulated ticks up to cap; summary lists gains.
-6. **Reforge:** Reset production progress for Relics + permanent mult.
+6. **Reforge:** Reset production progress for Relics (10 min cooldown). Spend Relics on Talents for permanent bonuses.
 
 ## HUD wireframes (notes)
 
@@ -95,10 +96,12 @@ Equal-weight “No thanks”; coin alternative when available; no reward on `adE
 ```
 ┌────────────────────────────┐
 │  Reforge the Forge         │
-│  Gain Relics + permanent × │
+│  Gain Relics for Talents   │
 │  [ Reforge ] [ Not yet ]   │
 └────────────────────────────┘
 ```
+
+Talents (Stations sheet): Vein Attunement, Hearth Kindling, Scout Instinct, Deep Slumber — spend Relics; levels persist across Reforge.
 
 Midgame ad may fire **after** confirm modal closes — never mid-animation freeze without SDK callbacks.
 

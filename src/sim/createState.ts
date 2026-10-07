@@ -1,4 +1,5 @@
 import { emptyWallet } from '../data/resources';
+import { emptyTalents } from '../data/talents';
 import type { GameState } from './types';
 
 export function createInitialState(now = Date.now()): GameState {
@@ -11,6 +12,7 @@ export function createInitialState(now = Date.now()): GameState {
       enchanter: { unlocked: false, level: 0, enabled: true },
     },
     ownedRecipes: [],
+    talents: emptyTalents(),
     activeExpedition: null,
     pendingLoot: null,
     totalOreProduced: 0,
@@ -18,6 +20,7 @@ export function createInitialState(now = Date.now()): GameState {
     playTimeSec: 0,
     prestigeCount: 0,
     totalRelicsEarned: 0,
+    lastPrestigeAt: 0,
     unlockedCosmetics: ['default'],
     activeCosmetic: 'default',
     onboardingStep: 0,

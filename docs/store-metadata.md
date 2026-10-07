@@ -12,7 +12,7 @@ Idle crafting in a bioluminescent underground forge. Gather ore, craft gear, sen
 
 Embervein is an idle crafting adventure set in a glowing subterranean forge. Tap living ore veins, craft tools, unlock smelters and anvils, and send scouts into cyan tunnels for rare loot.
 
-Progress through a soft-gated recipe tree, claim offline gains when you return, and Reforge the forge for permanent multipliers and new hearth cosmetics. Short sessions feel punchy; longer runs unlock deeper stations and prestige.
+Progress through a soft-gated recipe tree, claim offline gains when you return, and Reforge the forge for Relics spent on permanent Talents plus new hearth cosmetics. Short sessions feel punchy; longer runs unlock deeper stations and prestige.
 
 Built for CrazyGames HTML5 — instant play, mobile-friendly controls, optional rewarded boosts that never block the core loop.
 

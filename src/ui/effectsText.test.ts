@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { getRecipe } from '../data/recipes';
 import { getStation } from '../data/stations';
-import { formatRecipeEffects, formatStationIO, formatStationUpgradeHint } from './effectsText';
+import { getTalent } from '../data/talents';
+import {
+  formatRecipeEffects,
+  formatStationIO,
+  formatStationUpgradeHint,
+  formatTalentEffects,
+  formatTalentPerLevel,
+} from './effectsText';
 
 describe('effects text', () => {
   it('explains recipe multipliers', () => {
@@ -15,5 +22,11 @@ describe('effects text', () => {
     expect(text).toContain('/s');
     expect(text).toContain('auto');
     expect(formatStationUpgradeHint(2)).toContain('Lv 2 → Lv 3');
+  });
+
+  it('explains talent bonuses', () => {
+    const talent = getTalent('vein_attunement');
+    expect(formatTalentPerLevel(talent)).toContain('+10% tap');
+    expect(formatTalentEffects(talent, 3)).toContain('Tap power ×1.30');
   });
 });

@@ -1,15 +1,16 @@
-import { BALANCE } from '../data/balance';
+import { BALANCE, relicsFromReforge } from '../data/balance';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
 import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
+import { TALENTS, talentUpgradeCost, type TalentId } from '../data/talents';
 import {
   canAfford,
   canPrestige,
   getClickPower,
+  prestigeCooldownRemaining,
   stationUpgradeCostMap,
 } from '../sim/economy';
-import { prestigeMult } from '../data/balance';
 import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
 import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
@@ -19,6 +20,8 @@ import {
   formatRecipeEffects,
   formatStationIO,
   formatStationUpgradeHint,
+  formatTalentEffects,
+  formatTalentPerLevel,
 } from './effectsText';
 import type { SceneView } from '../forge/sceneView';
 
@@ -38,6 +41,7 @@ export interface HudActions {
   onRevealExpeditionLoot: () => void;
   onClaimExpedition: (mode: 'normal' | 'ad' | 'coin') => void;
   onPrestige: () => void;
+  onBuyTalent: (id: TalentId) => void;
   onTimeWarp: (viaAd: boolean) => void;
   onSkipOnboarding: () => void;
   onAdvanceOnboarding: () => void;
@@ -318,11 +322,11 @@ export class Hud {
     this.overlay.querySelector('#claim-coin')?.addEventListener('click', () => this.actions.onClaimExpedition('coin'));
   }
 
-  showPrestigeConfirm(relicsPreview: number, mult: number) {
+  showPrestigeConfirm(relicsPreview: number) {
     this.overlay.innerHTML = `
       <div class="modal">
         <h2>Reforge the Forge</h2>
-        <p>Reset production for <strong>${relicsPreview} Relics</strong>. Permanent power becomes ×${mult.toFixed(2)}.</p>
+        <p>Reset production for <strong>${relicsPreview} Relics</strong>. Spend them on permanent Talents — then wait ${BALANCE.prestigeCooldownSec / 60} min before the next Reforge.</p>
         <div class="modal-actions">
           <button class="btn btn-primary" id="prestige-yes" type="button">Reforge</button>
           <button class="btn btn-ghost" id="prestige-no" type="button">Not yet</button>
@@ -668,8 +672,44 @@ export class Hud {
       `;
     }).join('');
 
-    const relicsPreview = Math.max(1, Math.floor(1 + state.lifetimeOre * 0.015 + state.prestigeCount * 0.5));
-    const nextMult = prestigeMult(state.totalRelicsEarned + relicsPreview);
+    const relicsPreview = relicsFromReforge(state.lifetimeOre, state.prestigeCount);
+    const coolLeft = prestigeCooldownRemaining(state);
+    const prestigeReady = canPrestige(state);
+    let prestigeLabel = 'Reforge';
+    let prestigeHint = 'Reset production for Relics — spend them on Talents below.';
+    let prestigeCost = `Gain ~${relicsPreview} Relics`;
+    if (!prestigeReady && coolLeft > 0) {
+      prestigeLabel = formatDuration(coolLeft);
+      prestigeHint = `Reforge cools ${BALANCE.prestigeCooldownSec / 60} min between runs.`;
+      prestigeCost = `Ready in ${formatDuration(coolLeft)}`;
+    } else if (!prestigeReady) {
+      prestigeLabel = 'Locked';
+      prestigeHint = `Need ${BALANCE.prestigeMinLifetimeOre} lifetime ore, or unlock the Smelter.`;
+    }
+
+    const talentRows = TALENTS.map((t) => {
+      const level = state.talents[t.id] ?? 0;
+      const atMax = level >= t.maxLevel;
+      const cost = atMax ? 0 : talentUpgradeCost(t, level);
+      const affordable = !atMax && state.resources.relics >= cost;
+      let actionLabel = `Buy · ${cost} Relic${cost === 1 ? '' : 's'}`;
+      if (atMax) actionLabel = 'Max';
+      else if (!affordable) actionLabel = `Need ${cost}`;
+      const effectLine = level > 0
+        ? formatTalentEffects(t, level)
+        : formatTalentPerLevel(t);
+      return `
+        <div class="row-item${!atMax && !affordable ? ' row-item-blocked' : ''}">
+          <div>
+            <h3>${t.name} · Lv ${level}/${t.maxLevel}</h3>
+            <div class="cost">${atMax ? 'Maxed' : `${cost} Relic${cost === 1 ? '' : 's'}`}</div>
+            <div class="effect-line">${effectLine}</div>
+          </div>
+          <button class="btn btn-secondary" data-talent="${t.id}" type="button" ${atMax || !affordable ? 'disabled' : ''}>${actionLabel}</button>
+          <p>${t.description}</p>
+        </div>
+      `;
+    }).join('');
 
     this.overlay.innerHTML = `
       <div class="sheet">
@@ -677,16 +717,19 @@ export class Hud {
           <h2>Stations</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Machines sit on the Forge hall pedestals · Prestige ×${prestigeMult(state.totalRelicsEarned).toFixed(2)} · Cosmetic: ${state.activeCosmetic}</p>
+        <p class="muted">Machines sit on the Forge hall pedestals · Relics ${formatNumber(state.resources.relics)} · Cosmetic: ${state.activeCosmetic}</p>
         <div class="list">${stationRows}</div>
         <div class="row-item">
           <div>
             <h3>Reforge</h3>
-            <div class="cost">Gain ~${relicsPreview} Relics → ×${nextMult.toFixed(2)}</div>
+            <div class="cost">${prestigeCost}</div>
           </div>
-          <button class="btn btn-primary" id="btn-prestige" type="button" ${canPrestige(state) ? '' : 'disabled'}>Reforge</button>
-          <p>Reset production for permanent power and a forge crest.</p>
+          <button class="btn btn-primary" id="btn-prestige" type="button" ${prestigeReady ? '' : 'disabled'}>${prestigeLabel}</button>
+          <p>${prestigeHint}</p>
         </div>
+        <h3 class="sheet-section">Talents</h3>
+        <p class="muted">Permanent bonuses — survive Reforge. Spend Relics to specialize your forge.</p>
+        <div class="list">${talentRows}</div>
         <div class="row-item">
           <div>
             <h3>Time Warp</h3>
@@ -709,17 +752,19 @@ export class Hud {
     this.overlay.querySelectorAll('[data-upgrade]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUpgradeStation((btn as HTMLElement).dataset.upgrade as StationId));
     });
+    this.overlay.querySelectorAll('[data-talent]').forEach((btn) => {
+      btn.addEventListener('click', () => this.actions.onBuyTalent((btn as HTMLElement).dataset.talent as TalentId));
+    });
     this.overlay.querySelector('#btn-prestige')?.addEventListener('click', () => {
       this.actions.onOpenPanel(null);
-      // prestige confirm via dedicated flow
-      const preview = relicsPreview;
-      this.showPrestigeConfirm(preview, nextMult);
+      this.showPrestigeConfirm(relicsPreview);
     });
     this.overlay.querySelector('#btn-warp-ad')?.addEventListener('click', () => this.actions.onTimeWarp(true));
     this.overlay.querySelector('#btn-warp-coin')?.addEventListener('click', () => this.actions.onTimeWarp(false));
   }
 
   private renderLedger(state: GameState, notice?: string) {
+    const talentLevels = TALENTS.reduce((sum, t) => sum + (state.talents[t.id] ?? 0), 0);
     this.overlay.innerHTML = `
       <div class="sheet">
         <div class="sheet-header">
@@ -731,6 +776,7 @@ export class Hud {
           <div class="row-item"><div><h3>Play time</h3></div><div>${formatDuration(state.playTimeSec)}</div></div>
           <div class="row-item"><div><h3>Reforges</h3></div><div>${state.prestigeCount}</div></div>
           <div class="row-item"><div><h3>Relics earned</h3></div><div>${formatNumber(state.totalRelicsEarned)}</div></div>
+          <div class="row-item"><div><h3>Talent levels</h3></div><div>${talentLevels}</div></div>
           <div class="row-item"><div><h3>Recipes owned</h3></div><div>${state.ownedRecipes.length}/${RECIPES.length}</div></div>
         </div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
