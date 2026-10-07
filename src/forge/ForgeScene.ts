@@ -2,7 +2,18 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 
 import type { GameState } from '../sim/types';
 import { getStation, STATIONS, type StationId } from '../data/stations';
 import type { ResourceId } from '../data/resources';
-import { FORGE_STATION_SLOTS, type SceneView } from './sceneView';
+import type { SceneView } from './sceneView';
+import {
+  FORGE_FOCUS,
+  FORGE_STATION_UV,
+  MINE_FOCUS,
+  MINE_VEIN_UV,
+  layoutFocusedCover,
+  layoutForgeHall,
+  playBandCenterY,
+  playSafeInsets,
+  uvToScreen,
+} from './layout';
 
 /** Mine grotto + forge workshop hall */
 const MINE_BG_URL = `${import.meta.env.BASE_URL}art/mine-cavern-bg.jpg`;
@@ -140,7 +151,7 @@ export class ForgeScene {
         text: def.name,
         style: {
           fontFamily: 'DM Sans, sans-serif',
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: '700',
           fill: COLORS.mist,
           dropShadow: { color: 0x0b1c22, blur: 3, distance: 1, alpha: 0.85 },
@@ -169,6 +180,9 @@ export class ForgeScene {
       },
     });
     this.brand.alpha = 0.96;
+    // Keep brand inside the padded safe area (HUD pad + notch).
+    this.brand.x = 22;
+    this.brand.y = 16;
     this.root.addChild(this.brand);
 
     this.comboLabel = new Text({
@@ -217,11 +231,14 @@ export class ForgeScene {
     this.height = parent?.clientHeight || window.innerHeight;
     this.app.renderer.resize(this.width, this.height);
     this.app.stage.hitArea = this.app.screen;
-    this.brand.x = 22;
-    this.brand.y = 16;
-    this.brand.style.fontSize = this.width < 520 ? 26 : 40;
-    this.layoutBackground(this.mineBg);
-    this.layoutBackground(this.forgeBg);
+    const narrow = this.width < 520;
+    this.brand.x = narrow ? 12 : 22;
+    this.brand.y = narrow ? 10 : 16;
+    this.brand.style.fontSize = narrow ? 20 : this.width < 900 ? 32 : 40;
+    for (const label of this.labelByStation.values()) {
+      label.style.fontSize = narrow ? 10 : 12;
+    }
+    this.layoutBackgrounds();
     this.drawVignette();
     this.redrawStations();
   }
@@ -379,16 +396,40 @@ export class ForgeScene {
   }
 
   private veinPoint() {
-    // Anchored on the hero cyan crystal cluster in mine-cavern-bg.
-    return { x: this.width * 0.34, y: this.height * 0.54 };
+    if (this.mineBg) return uvToScreen(this.mineBg, MINE_VEIN_UV);
+    return { x: this.width * MINE_VEIN_UV.x, y: this.height * MINE_VEIN_UV.y };
   }
 
   private stationLayout(): { id: StationId; x: number; y: number }[] {
-    return (Object.keys(FORGE_STATION_SLOTS) as StationId[]).map((id) => ({
-      id,
-      x: this.width * FORGE_STATION_SLOTS[id].x,
-      y: this.height * FORGE_STATION_SLOTS[id].y,
-    }));
+    const ids = Object.keys(FORGE_STATION_UV) as StationId[];
+    const portrait = this.height > this.width * 1.05;
+
+    // Portrait: keep a readable 3-up row in the play band (cover-crop hides side pedestals).
+    if (portrait) {
+      const insets = playSafeInsets(this.width, this.height);
+      const bandTop = this.height * insets.top;
+      const bandBottom = this.height * (1 - insets.bottom);
+      const y = bandTop + (bandBottom - bandTop) * 0.62;
+      const pad = Math.min(28, this.width * 0.07);
+      const usable = this.width - pad * 2;
+      return ids.map((id, i) => ({
+        id,
+        x: pad + usable * ((i + 0.5) / ids.length),
+        y,
+      }));
+    }
+
+    return ids.map((id) => {
+      if (this.forgeBg) {
+        const p = uvToScreen(this.forgeBg, FORGE_STATION_UV[id]);
+        return { id, x: p.x, y: p.y };
+      }
+      return {
+        id,
+        x: this.width * FORGE_STATION_UV[id].x,
+        y: this.height * FORGE_STATION_UV[id].y,
+      };
+    });
   }
 
   private handlePointer(px: number, py: number) {
@@ -396,35 +437,61 @@ export class ForgeScene {
     const { x, y } = this.veinPoint();
     const dx = px - x;
     const dy = py - y;
-    if (dx * dx + dy * dy <= 70 * 70) {
+    const hitR = Math.min(90, Math.max(56, Math.min(this.width, this.height) * 0.12));
+    if (dx * dx + dy * dy <= hitR * hitR) {
       this.onVeinTap();
     }
   }
 
-  private layoutBackground(sprite: Sprite | null) {
-    if (!sprite) return;
-    const tex = sprite.texture;
-    // Slight zoom keeps pedestals in the playable mid-band above the HUD.
-    const cover = Math.max(this.width / tex.width, this.height / tex.height);
-    const scale = cover * (sprite === this.forgeBg ? 1.08 : 1);
-    sprite.scale.set(scale);
-    sprite.x = (this.width - tex.width * scale) / 2;
-    if (sprite === this.forgeBg) {
-      // Bias upward so the pedestal band sits above the bottom dock.
-      const rawY = (this.height - tex.height * scale) / 2;
-      sprite.y = Math.min(-this.height * 0.02, rawY + this.height * 0.04);
-    } else {
-      sprite.y = (this.height - tex.height * scale) / 2;
+  private layoutBackgrounds() {
+    const insets = playSafeInsets(this.width, this.height);
+    const playY = playBandCenterY(insets);
+    const portrait = this.height > this.width * 1.05;
+    const mineZoom = portrait ? 1.1 : 1.02;
+
+    if (this.mineBg) {
+      layoutFocusedCover(
+        this.mineBg,
+        this.width,
+        this.height,
+        MINE_FOCUS,
+        { x: 0.5, y: playY },
+        mineZoom,
+      );
+    }
+    if (this.forgeBg) {
+      if (portrait) {
+        // Full-bleed cover on phones; stations use a screen-space row instead of UV pedestals.
+        layoutFocusedCover(
+          this.forgeBg,
+          this.width,
+          this.height,
+          FORGE_FOCUS,
+          { x: 0.5, y: playY },
+          1.08,
+        );
+      } else {
+        layoutForgeHall(
+          this.forgeBg,
+          this.width,
+          this.height,
+          FORGE_FOCUS,
+          { x: 0.5, y: playY },
+          Object.values(FORGE_STATION_UV),
+          1.06,
+        );
+      }
     }
   }
 
   private drawVignette() {
     const g = this.vignette;
     g.clear();
-    g.rect(0, 0, this.width, this.height * 0.2);
-    g.fill({ color: COLORS.void, alpha: 0.4 });
-    g.rect(0, this.height * 0.74, this.width, this.height * 0.26);
-    g.fill({ color: COLORS.void, alpha: 0.52 });
+    const insets = playSafeInsets(this.width, this.height);
+    g.rect(0, 0, this.width, this.height * insets.top);
+    g.fill({ color: COLORS.void, alpha: 0.42 });
+    g.rect(0, this.height * (1 - insets.bottom), this.width, this.height * insets.bottom);
+    g.fill({ color: COLORS.void, alpha: 0.55 });
   }
 
   private update(dt: number) {
@@ -583,8 +650,9 @@ export class ForgeScene {
   }
 
   private stationDisplayScale(): number {
-    // Sized to sit on hall pedestals without swallowing the hearth.
-    return Math.min(0.58, Math.max(0.36, this.width / 1300));
+    // Scale with the shorter canvas axis so machines stay on pedestals in portrait.
+    const short = Math.min(this.width, this.height);
+    return Math.min(0.62, Math.max(0.3, short / 1100));
   }
 
   private redrawStations() {
@@ -604,9 +672,11 @@ export class ForgeScene {
       const sprite = this.spriteByStation.get(slot.id);
       const hasArt = Boolean(sprite);
 
-      // Pedestal top already in the painting — reinforce with a soft contact oval.
+      // Contact shadow + light plinth so machines read grounded even when UV pedestals are cropped.
       g.ellipse(slot.x, slot.y + 6, 52 * baseScale, 14 * baseScale);
-      g.fill({ color: COLORS.void, alpha: st.unlocked ? 0.38 : 0.22 });
+      g.fill({ color: COLORS.void, alpha: st.unlocked ? 0.4 : 0.24 });
+      g.roundRect(slot.x - 40 * baseScale, slot.y - 4, 80 * baseScale, 14 * baseScale, 5);
+      g.fill({ color: COLORS.stone, alpha: st.unlocked ? 0.35 : 0.22 });
 
       if (!st.unlocked) {
         if (sprite) {
