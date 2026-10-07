@@ -20,6 +20,10 @@ Open the printed localhost URL. The CrazyGames SDK script loads from CDN; outsid
 | `npm test` | Economy & ad-gate unit tests |
 | `npm run preview` | Preview `dist/` |
 
+## Screenshots
+
+Preview captures (desktop + mobile) live in [`docs/screenshots/`](docs/screenshots/).
+
 ## Submission package
 
 After `npm run build`:
