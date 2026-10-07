@@ -5,7 +5,7 @@ export const SHAFT_COLS = 8;
 export const SHAFT_LOOKAHEAD = 5;
 export const SHAFT_LOOKBEHIND = 3;
 
-export type TileKind = 'stone' | 'glow' | 'ember' | 'geode';
+export type TileKind = 'stone' | 'glow' | 'ember' | 'geode' | 'night' | 'star';
 
 export interface TileLoot {
   resource: ResourceId;
@@ -79,6 +79,9 @@ export function tileKindAt(row: number, col: number): TileKind {
   if (roll < 0.07 + rareBoost) return 'glow';
   if (roll < 0.11 + rareBoost * 1.4 && stratum.startDepth >= 12) return 'ember';
   if (roll < 0.14 + rareBoost * 1.8 && stratum.startDepth >= 30) return 'geode';
+  // Late-game ores — only after digging into Abyss / Deep Dark
+  if (roll < 0.165 + rareBoost * 2 && stratum.startDepth >= 55) return 'night';
+  if (roll < 0.185 + rareBoost * 2.2 && stratum.startDepth >= 90) return 'star';
   // Early glow pockets even in shallows
   if (stratum.id === 'glow_shallows' && roll < 0.09) return 'glow';
   return 'stone';
@@ -87,7 +90,27 @@ export function tileKindAt(row: number, col: number): TileKind {
 function cellMaxHp(row: number, col: number): number {
   const stratum = stratumAtDepth(row);
   const kind = tileKindAt(row, col);
-  const kindBonus = kind === 'stone' ? 0 : kind === 'glow' ? 1 : kind === 'ember' ? 1 : 2;
+  let kindBonus = 0;
+  switch (kind) {
+    case 'stone':
+      kindBonus = 0;
+      break;
+    case 'glow':
+    case 'ember':
+      kindBonus = 1;
+      break;
+    case 'geode':
+    case 'night':
+      kindBonus = 2;
+      break;
+    case 'star':
+      kindBonus = 3;
+      break;
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
   return stratum.hardness + ((row * 3 + col * 7) % 2) + kindBonus;
 }
 
@@ -95,6 +118,8 @@ function cellTint(stratum: StratumDef, row: number, col: number, kind: TileKind)
   if (kind === 'glow') return 0x2a5a58;
   if (kind === 'ember') return 0x5a3a28;
   if (kind === 'geode') return 0x3a3a5a;
+  if (kind === 'night') return 0x2a2a48;
+  if (kind === 'star') return 0x4a4530;
   const shift = ((row + col) % 3) * 0x060808;
   return (stratum.tint + shift) & 0xffffff;
 }
@@ -103,6 +128,8 @@ function cellFleck(stratum: StratumDef, kind: TileKind): number {
   if (kind === 'glow') return 0x2ec4b6;
   if (kind === 'ember') return 0xe85d04;
   if (kind === 'geode') return 0xa8c8e8;
+  if (kind === 'night') return 0x7b8cde;
+  if (kind === 'star') return 0xe8d5a3;
   return stratum.fleck;
 }
 
@@ -153,6 +180,10 @@ export function lootForTile(kind: TileKind): TileLoot | null {
       return { resource: 'emberglass', amount: 1, label: 'Emberglass' };
     case 'geode':
       return { resource: 'alloy', amount: 1, label: 'Alloy' };
+    case 'night':
+      return { resource: 'nightiron', amount: 1, label: 'Nightiron' };
+    case 'star':
+      return { resource: 'starshard', amount: 1, label: 'Starshard' };
     case 'stone':
       return null;
     default: {

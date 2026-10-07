@@ -3,11 +3,13 @@ import {
   emptyUnlockedAchievements,
   type AchievementId,
 } from '../data/achievements';
+import { BALANCE } from '../data/balance';
+import { RESOURCE_IDS, emptyWallet } from '../data/resources';
 import { STATIONS } from '../data/stations';
 import { emptyTalents, TALENTS } from '../data/talents';
 import { createInitialState } from './createState';
 import { emptyFaceDamage, faceHitsToDamage, SHAFT_COLS } from './mineShaft';
-import type { GameState } from './types';
+import type { ActiveExpedition, GameState } from './types';
 
 export const SAVE_KEY = 'embervein.save.v1';
 
@@ -80,6 +82,35 @@ export function migrateState(state: GameState): GameState {
     }
     next.unlockedAchievements = cleaned;
   }
+
+  // Fill newly added resource keys on older saves.
+  const wallet = emptyWallet();
+  for (const id of RESOURCE_IDS) {
+    const value = next.resources?.[id];
+    wallet[id] = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  }
+  next.resources = wallet;
+
+  // Migrate legacy single activeExpedition → activeExpeditions[].
+  const legacy = next as GameState & { activeExpedition?: ActiveExpedition | null };
+  if (!Array.isArray(next.activeExpeditions)) {
+    next.activeExpeditions = legacy.activeExpedition ? [legacy.activeExpedition] : [];
+  }
+  delete legacy.activeExpedition;
+
+  if (typeof next.extraSquadSlots !== 'number' || !Number.isFinite(next.extraSquadSlots)) {
+    next.extraSquadSlots = 0;
+  } else {
+    next.extraSquadSlots = Math.max(
+      0,
+      Math.min(BALANCE.maxExtraSquadSlots, Math.floor(next.extraSquadSlots)),
+    );
+  }
+
+  if (next.pendingLootExpeditionId === undefined) {
+    next.pendingLootExpeditionId = null;
+  }
+
   return next;
 }
 

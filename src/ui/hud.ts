@@ -8,8 +8,11 @@ import { TALENTS, talentUpgradeCost, type TalentId } from '../data/talents';
 import { STRATA, stratumAtDepth } from '../data/strata';
 import { achievementProgress } from '../sim/achievements';
 import {
+  activeSquadCount,
   canAfford,
+  canBuySquadSlot,
   canPrestige,
+  expeditionSlotCount,
   getClickPower,
   prestigeCooldownRemaining,
   stationRunMult,
@@ -46,6 +49,8 @@ export interface HudActions {
   onToggleStation: (id: StationId) => void;
   onAdjustStationSpeed: (id: StationId, delta: number) => void;
   onStartExpedition: (id: string) => void;
+  onRushExpedition: (id: string) => void;
+  onBuySquadSlot: () => void;
   onRevealExpeditionLoot: () => void;
   onClaimExpedition: (mode: 'normal' | 'ad' | 'coin') => void;
   onPrestige: () => void;
@@ -440,6 +445,7 @@ export class Hud {
     el.innerHTML = RESOURCES.map((r) => {
       const value = state.resources[r.id];
       if (r.id === 'relics' && value <= 0 && state.totalRelicsEarned <= 0) return '';
+      if (r.hideUntilOwned && value <= 0) return '';
       const prev = this.lastResources[r.id] ?? value;
       const grew = value > prev + 0.01;
       return `<div class="res-chip${grew ? ' res-pop' : ''}" data-res="${r.id}"><span class="dot" style="background:${r.color};color:${r.color}"></span>${r.short} ${formatNumber(value)}</div>`;
@@ -526,7 +532,18 @@ export class Hud {
   private renderExpeditions(state: GameState, notice?: string) {
     const now = Date.now();
     const pending = state.pendingLoot;
-    const orphanClaim = Boolean(pending) && !state.activeExpedition;
+    const living = (state.activeExpeditions ?? []).filter((e) => !e.claimed);
+    const orphanClaim = Boolean(pending) && living.length === 0;
+    const slots = expeditionSlotCount(state);
+    const busy = activeSquadCount(state);
+    const squadGate = canBuySquadSlot(state);
+    const extras = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
+    const canBuyMore = extras < BALANCE.maxExtraSquadSlots;
+    const squadBuyLabel = squadGate.ok
+      ? `Buy squad · ${BALANCE.extraSquadRelicCost} Relics`
+      : canBuyMore
+        ? `Need ${BALANCE.extraSquadRelicCost} Relics`
+        : 'Roster full';
 
     const rows = EXPEDITIONS.map((e) => {
       const row = getExpeditionRowState(state, e, now);
@@ -570,7 +587,15 @@ export class Hud {
           <h2>Expeditions</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="sheet-intro">Unlock destinations with lifetime ore, spend the listed cost, then wait for scouts to return. Only one party at a time.</p>
+        <p class="sheet-intro">Unlock destinations with lifetime ore, spend the listed cost, then wait — or watch an ad to Rush a squad home. Squads ${busy}/${slots}.</p>
+        <div class="row-item" data-squad-buy>
+          <div>
+            <h3>Extra squad</h3>
+            <div class="cost">${BALANCE.extraSquadRelicCost} Relics · permanent across Reforge</div>
+            <div class="req-line">More concurrent scout parties (${extras}/${BALANCE.maxExtraSquadSlots} bought)</div>
+          </div>
+          <button class="btn btn-secondary" id="btn-buy-squad" type="button" ${squadGate.ok ? '' : 'disabled'}>${squadBuyLabel}</button>
+        </div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
         <div class="list">${orphan}${rows}</div>
       </div>
@@ -582,7 +607,8 @@ export class Hud {
   private patchExpeditionRows(state: GameState) {
     const now = Date.now();
     const pending = state.pendingLoot;
-    const orphanClaim = Boolean(pending) && !state.activeExpedition;
+    const living = (state.activeExpeditions ?? []).filter((e) => !e.claimed);
+    const orphanClaim = Boolean(pending) && living.length === 0;
 
     const list = this.overlay.querySelector('[data-expedition-sheet] .list');
     if (list) {
@@ -636,6 +662,8 @@ export class Hud {
         const bar = actionEl.querySelector('[data-exp-bar]') as HTMLElement | null;
         if (bar) bar.style.width = `${row.activePct ?? 0}%`;
         statusEl.textContent = row.status;
+        // Keep rush button bound if DOM was rebuilt elsewhere.
+        this.bindExpeditionActions();
       } else if (
         row.mode === 'send' ||
         row.mode === 'need_cost' ||
@@ -662,6 +690,21 @@ export class Hud {
         this.actions.onStartExpedition(el.dataset.exp!);
       });
     });
+    this.overlay.querySelectorAll('[data-exp-rush]').forEach((btn) => {
+      const el = btn as HTMLElement;
+      if (el.dataset.bound === '1') return;
+      el.dataset.bound = '1';
+      el.addEventListener('click', () => {
+        this.actions.onRushExpedition(el.dataset.expRush!);
+      });
+    });
+    const buySquad = this.overlay.querySelector('#btn-buy-squad') as HTMLElement | null;
+    if (buySquad && buySquad.dataset.bound !== '1') {
+      buySquad.dataset.bound = '1';
+      buySquad.addEventListener('click', () => {
+        this.actions.onBuySquadSlot();
+      });
+    }
     const claim = this.overlay.querySelector('#exp-claim') as HTMLElement | null;
     if (claim && claim.dataset.bound !== '1') {
       claim.dataset.bound = '1';

@@ -87,6 +87,9 @@ describe('save migration', () => {
     state.lastPrestigeAt = 42;
     state.unlockedAchievements = ['first_strike', 'vein_warmup'];
     state.lifetimeClicks = 120;
+    state.extraSquadSlots = 2;
+    state.resources.nightiron = 4;
+    state.resources.starshard = 1;
     const raw = serializeState(state);
     const parsed = deserializeState(raw);
     expect(parsed).not.toBeNull();
@@ -97,5 +100,42 @@ describe('save migration', () => {
     expect(parsed?.lastPrestigeAt).toBe(42);
     expect(parsed?.unlockedAchievements).toEqual(['first_strike', 'vein_warmup']);
     expect(parsed?.lifetimeClicks).toBe(120);
+    expect(parsed?.extraSquadSlots).toBe(2);
+    expect(parsed?.resources.nightiron).toBe(4);
+    expect(parsed?.resources.starshard).toBe(1);
+  });
+
+  it('migrates legacy activeExpedition and missing late resources', () => {
+    const state = createInitialState();
+    const legacy = structuredClone(state) as unknown as {
+      activeExpeditions?: typeof state.activeExpeditions;
+      activeExpedition?: {
+        id: string;
+        startedAt: number;
+        endsAt: number;
+        claimed: boolean;
+        doublePending: boolean;
+      } | null;
+      extraSquadSlots?: number;
+      resources: Record<string, number>;
+    };
+    delete legacy.activeExpeditions;
+    delete legacy.extraSquadSlots;
+    delete legacy.resources.nightiron;
+    delete legacy.resources.starshard;
+    legacy.activeExpedition = {
+      id: 'glow_shalllows',
+      startedAt: 1,
+      endsAt: 2,
+      claimed: false,
+      doublePending: false,
+    };
+
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.activeExpeditions).toHaveLength(1);
+    expect(migrated.activeExpeditions[0]?.id).toBe('glow_shalllows');
+    expect(migrated.extraSquadSlots).toBe(0);
+    expect(migrated.resources.nightiron).toBe(0);
+    expect(migrated.resources.starshard).toBe(0);
   });
 });

@@ -38,6 +38,8 @@ describe('getCraftQuickState', () => {
       'resonance_core',
       'forge_crown',
       'mythic_crucible',
+      'nightiron_pick',
+      'starshard_lens',
     ];
     const craft = getCraftQuickState(state);
     expect(craft.recipe).toBeNull();
@@ -56,6 +58,8 @@ describe('formatCostProgress', () => {
         emberglass: 5,
         glowdust: 0,
         alloy: 0,
+        nightiron: 0,
+        starshard: 0,
         relics: 0,
       },
     );

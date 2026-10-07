@@ -22,6 +22,12 @@ export const BALANCE = {
   stationLevelCap: 50,
   timeWarpSeconds: 300,
   timeWarpCoinCost: 120,
+  /** Starting concurrent scout parties (squads). */
+  baseExpeditionSlots: 1,
+  /** Relic cost to unlock one extra concurrent squad. */
+  extraSquadRelicCost: 100,
+  /** Cap on bought extra slots (total slots = base + extras). */
+  maxExtraSquadSlots: 3,
 } as const;
 
 export function stationUpgradeCost(

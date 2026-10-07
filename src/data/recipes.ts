@@ -12,7 +12,9 @@ export type RecipeId =
   | 'deep_gauntlets'
   | 'resonance_core'
   | 'forge_crown'
-  | 'mythic_crucible';
+  | 'mythic_crucible'
+  | 'nightiron_pick'
+  | 'starshard_lens';
 
 export interface RecipeDef {
   id: RecipeId;
@@ -139,6 +141,24 @@ export const RECIPES: RecipeDef[] = [
     requires: ['forge_crown'],
     effects: { stationOutput: 1.4, offlineRate: 1.3, clickPower: 1.25 },
     category: 'forge',
+  },
+  {
+    id: 'nightiron_pick',
+    name: 'Nightiron Pick',
+    description: 'Cuts Abyss stone — and wakes a tireless dwarf.',
+    cost: { nightiron: 25, alloy: 80, ore: 200 },
+    requires: ['alloy_hammer'],
+    effects: { clickPower: 1.45, autoMine: 0.2 },
+    category: 'tool',
+  },
+  {
+    id: 'starshard_lens',
+    name: 'Starshard Lens',
+    description: 'Reads Deep Dark seams for richer scout packs.',
+    cost: { starshard: 15, nightiron: 20, glowdust: 100 },
+    requires: ['cyan_lens', 'nightiron_pick'],
+    effects: { expeditionLoot: 1.35, clickPower: 1.2, offlineRate: 1.1 },
+    category: 'gear',
   },
 ];
 

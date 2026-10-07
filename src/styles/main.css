@@ -946,6 +946,23 @@ body {
   border-radius: inherit;
 }
 
+.exp-progress-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.exp-progress-actions .progress-bar {
+  margin: 0;
+}
+
+.btn-rush {
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  min-height: 0;
+}
+
 .muted {
   color: var(--slate);
   font-size: 0.85rem;
