@@ -5,15 +5,19 @@ import { createInitialState } from './createState';
 import {
   adjustStationRunLevel,
   applyOfflineProgress,
+  buySquadSlot,
   buyTalent,
   canPrestige,
   claimExpedition,
   clickVein,
+  completeExpeditionIfReady,
   craftRecipe,
+  expeditionSlotCount,
   getAutoMineRate,
   getClickPower,
   prestige,
   prestigeCooldownRemaining,
+  rushExpedition,
   simulateSeconds,
   startExpedition,
   tickProduction,
@@ -225,22 +229,22 @@ describe('expeditions', () => {
 
     const { state: after } = simulateSeconds(state, 50, now + 50_000, () => 0.99);
     expect(after.pendingLoot).not.toBeNull();
-    expect(after.activeExpedition?.claimed).toBe(true);
+    expect(after.activeExpeditions.some((e) => e.claimed)).toBe(true);
 
     const claimed = claimExpedition(after, false);
     expect(claimed.ok).toBe(true);
     if (claimed.ok) {
       expect(claimed.state.pendingLoot).toBeNull();
-      expect(claimed.state.activeExpedition).toBeNull();
+      expect(claimed.state.activeExpeditions).toHaveLength(0);
       expect(claimed.state.milestones.firstExpeditionClaimed).toBe(true);
       expect(claimed.state.resources.glowdust).toBeGreaterThan(0);
     }
   });
 
-  it('claims pending loot even if activeExpedition was lost', () => {
+  it('claims pending loot even if activeExpeditions were lost', () => {
     const state = createInitialState();
     state.pendingLoot = { glowdust: 18, ore: 12 };
-    state.activeExpedition = null;
+    state.activeExpeditions = [];
     const claimed = claimExpedition(state, false);
     expect(claimed.ok).toBe(true);
     if (claimed.ok) {
@@ -251,21 +255,82 @@ describe('expeditions', () => {
   });
 
   it('doubles loot when rewarded', () => {
-    let state = createInitialState();
+    const state = createInitialState();
     state.pendingLoot = { glowdust: 10, ore: 5 };
-    state.activeExpedition = {
-      id: 'glow_shalllows',
-      startedAt: 0,
-      endsAt: 0,
-      claimed: true,
-      doublePending: true,
-    };
+    state.pendingLootExpeditionId = 'glow_shalllows';
+    state.activeExpeditions = [
+      {
+        id: 'glow_shalllows',
+        startedAt: 0,
+        endsAt: 0,
+        claimed: true,
+        doublePending: true,
+      },
+    ];
     const single = claimExpedition(structuredClone(state), false);
     const doubled = claimExpedition(structuredClone(state), true);
     expect(single.ok && doubled.ok).toBe(true);
     if (single.ok && doubled.ok) {
       expect(doubled.state.resources.glowdust).toBe(single.state.resources.glowdust * 2);
     }
+  });
+
+  it('rushes an en-route squad to completion', () => {
+    let state = createInitialState();
+    state.totalOreProduced = 100;
+    state.resources.ore = 50;
+    const now = 1_000_000;
+    const started = startExpedition(state, 'glow_shalllows', now);
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    state = started.state;
+
+    const rushed = rushExpedition(state, 'glow_shalllows', now + 5_000);
+    expect(rushed.ok).toBe(true);
+    if (!rushed.ok) return;
+    const ready = completeExpeditionIfReady(rushed.state, now + 5_000, () => 0.99);
+    expect(ready.event?.type).toBe('expedition_ready');
+    expect(ready.state.pendingLoot).not.toBeNull();
+  });
+
+  it('buys an extra squad slot for Relics and allows parallel sends', () => {
+    let state = createInitialState();
+    state.totalOreProduced = 250;
+    state.resources.ore = 200;
+    state.resources.glowdust = 50;
+    state.resources.relics = BALANCE.extraSquadRelicCost;
+    expect(expeditionSlotCount(state)).toBe(BALANCE.baseExpeditionSlots);
+
+    const bought = buySquadSlot(state);
+    expect(bought.ok).toBe(true);
+    if (!bought.ok) return;
+    state = bought.state;
+    expect(state.extraSquadSlots).toBe(1);
+    expect(state.resources.relics).toBe(0);
+    expect(expeditionSlotCount(state)).toBe(BALANCE.baseExpeditionSlots + 1);
+
+    const now = 2_000_000;
+    const first = startExpedition(state, 'glow_shalllows', now);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    state = first.state;
+    const second = startExpedition(state, 'crystal_fault', now);
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.state.activeExpeditions).toHaveLength(2);
+    }
+  });
+
+  it('keeps bought squad slots across Reforge', () => {
+    const state = createInitialState(1_000_000);
+    state.lifetimeOre = 2000;
+    state.extraSquadSlots = 2;
+    state.resources.relics = 1;
+    const result = prestige(state, 1_000_000);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.extraSquadSlots).toBe(2);
+    expect(expeditionSlotCount(result.state)).toBe(BALANCE.baseExpeditionSlots + 2);
   });
 });
 

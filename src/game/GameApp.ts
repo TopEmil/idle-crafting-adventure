@@ -12,6 +12,7 @@ import {
   applyOfflineProgress,
   applyTimeWarp,
   availableRecipes,
+  buySquadSlot,
   buyTalent,
   canAfford,
   claimExpedition,
@@ -20,6 +21,7 @@ import {
   craftRecipe,
   getAutoMineRate,
   prestige,
+  rushExpedition,
   startExpedition,
   adjustStationRunLevel,
   tickProduction,
@@ -69,6 +71,8 @@ export class GameApp {
       onToggleStation: (id) => this.handleToggleStation(id),
       onAdjustStationSpeed: (id, delta) => this.handleAdjustStationSpeed(id, delta),
       onStartExpedition: (id) => this.handleStartExpedition(id as ExpeditionId),
+      onRushExpedition: (id) => void this.handleRushExpedition(id as ExpeditionId),
+      onBuySquadSlot: () => this.handleBuySquadSlot(),
       onRevealExpeditionLoot: () => this.revealExpeditionLoot(),
       onClaimExpedition: (mode) => void this.handleClaim(mode),
       onPrestige: () => void this.handlePrestige(),
@@ -396,6 +400,76 @@ export class GameApp {
     this.state = result.state;
     this.audio.click();
     this.hud.toast('Scouts dispatched', 'info');
+    this.refreshHud();
+    void this.persist();
+  }
+
+  /** Rewarded ad: finish an en-route squad immediately. */
+  private async handleRushExpedition(id: ExpeditionId) {
+    if (!this.platform.adsEnabled) {
+      this.notice = 'Ads disabled — wait for the squad, or buy more squads with Relics.';
+      this.refreshHud();
+      return;
+    }
+    if (this.platform.adblock) {
+      this.notice = 'Ad blocked — rush unavailable.';
+      this.refreshHud();
+      return;
+    }
+    const gate = this.ads.canShowRewarded(this.state);
+    if (!gate.ok) {
+      this.notice = 'Reward boost cooling down.';
+      this.refreshHud();
+      return;
+    }
+
+    this.pausedForAd = true;
+    this.platform.gameplayStop();
+    this.audio.pauseForAd();
+    const adResult = await this.ads.runAd(this.platform, 'rewarded', {});
+    this.audio.resumeAfterAd();
+    this.pausedForAd = false;
+    this.platform.gameplayStart();
+
+    if (adResult.status !== 'finished') {
+      this.notice = 'No reward — ad did not complete.';
+      this.refreshHud();
+      return;
+    }
+
+    this.state = this.ads.markRewardedUsed(this.state);
+    const rushed = rushExpedition(this.state, id);
+    if (!rushed.ok) {
+      this.notice = rushed.reason;
+      this.refreshHud();
+      return;
+    }
+    this.state = rushed.state;
+    const ready = completeExpeditionIfReady(this.state);
+    this.state = ready.state;
+    this.audio.claim();
+    if (ready.event) {
+      this.scene.triggerExpeditionReturn();
+      this.showLootModal();
+    } else {
+      this.hud.toast('Squad rushed home', 'gain');
+      this.refreshHud();
+    }
+    void this.persist();
+  }
+
+  private handleBuySquadSlot() {
+    const result = buySquadSlot(this.state);
+    if (!result.ok) {
+      this.notice = result.reason;
+      this.refreshHud();
+      return;
+    }
+    this.state = result.state;
+    this.audio.craft();
+    this.scene.triggerCraftBurst();
+    this.hud.toast('Extra squad unlocked', 'gain');
+    this.notice = '';
     this.refreshHud();
     void this.persist();
   }

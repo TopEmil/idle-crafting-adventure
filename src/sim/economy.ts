@@ -259,13 +259,49 @@ export function adjustStationRunLevel(
   return { ok: true, state: next };
 }
 
+export function expeditionSlotCount(state: GameState): number {
+  const extras = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
+  return BALANCE.baseExpeditionSlots + Math.min(BALANCE.maxExtraSquadSlots, extras);
+}
+
+/** Parties still out (not yet claimed into pending loot). */
+export function activeSquadCount(state: GameState): number {
+  return (state.activeExpeditions ?? []).filter((e) => !e.claimed).length;
+}
+
+export function canBuySquadSlot(state: GameState): { ok: true } | { ok: false; reason: string } {
+  const extras = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
+  if (extras >= BALANCE.maxExtraSquadSlots) {
+    return { ok: false, reason: 'Squad roster is full' };
+  }
+  if ((state.resources.relics ?? 0) < BALANCE.extraSquadRelicCost) {
+    return { ok: false, reason: `Need ${BALANCE.extraSquadRelicCost} Relics` };
+  }
+  return { ok: true };
+}
+
+export function buySquadSlot(
+  state: GameState,
+): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
+  const gate = canBuySquadSlot(state);
+  if (!gate.ok) return gate;
+  const next = structuredClone(state);
+  next.resources.relics -= BALANCE.extraSquadRelicCost;
+  next.extraSquadSlots = Math.max(0, Math.floor(next.extraSquadSlots ?? 0)) + 1;
+  return { ok: true, state: next, event: { type: 'buy_squad_slot' } };
+}
+
 export function startExpedition(
   state: GameState,
   expeditionId: ExpeditionId,
   now = Date.now(),
 ): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
-  if (state.activeExpedition && !state.activeExpedition.claimed) {
-    return { ok: false, reason: 'Only one scout party at a time' };
+  const active = state.activeExpeditions ?? [];
+  if (active.some((e) => e.id === expeditionId && !e.claimed)) {
+    return { ok: false, reason: 'That destination is already out' };
+  }
+  if (activeSquadCount(state) >= expeditionSlotCount(state)) {
+    return { ok: false, reason: 'All squads are busy' };
   }
   if (state.pendingLoot) {
     return { ok: false, reason: 'Claim pending loot before sending again' };
@@ -282,14 +318,38 @@ export function startExpedition(
   }
   const next = structuredClone(state);
   pay(next.resources, def.cost);
-  next.activeExpedition = {
-    id: expeditionId,
-    startedAt: now,
-    endsAt: now + def.durationSec * 1000,
-    claimed: false,
-    doublePending: false,
-  };
+  next.activeExpeditions = [
+    ...(next.activeExpeditions ?? []),
+    {
+      id: expeditionId,
+      startedAt: now,
+      endsAt: now + def.durationSec * 1000,
+      claimed: false,
+      doublePending: false,
+    },
+  ];
   return { ok: true, state: next, event: { type: 'start_expedition', expeditionId } };
+}
+
+/** Instantly finish a running expedition timer (rewarded-ad rush). */
+export function rushExpedition(
+  state: GameState,
+  expeditionId: ExpeditionId,
+  now = Date.now(),
+): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
+  const active = state.activeExpeditions ?? [];
+  const idx = active.findIndex((e) => e.id === expeditionId && !e.claimed);
+  if (idx < 0) {
+    return { ok: false, reason: 'No squad en route there' };
+  }
+  if (now >= active[idx].endsAt) {
+    return { ok: false, reason: 'Squad already returning' };
+  }
+  const next = structuredClone(state);
+  next.activeExpeditions = (next.activeExpeditions ?? []).map((e, i) =>
+    i === idx ? { ...e, endsAt: now } : e,
+  );
+  return { ok: true, state: next, event: { type: 'rush_expedition', expeditionId } };
 }
 
 export function rollExpeditionLoot(
@@ -314,19 +374,24 @@ export function completeExpeditionIfReady(
   now = Date.now(),
   rng: () => number = Math.random,
 ): { state: GameState; event: GameEvent | null } {
-  const active = state.activeExpedition;
-  if (!active || active.claimed || state.pendingLoot) {
+  if (state.pendingLoot) {
     return { state, event: null };
   }
-  if (now < active.endsAt) {
+  const active = state.activeExpeditions ?? [];
+  const readyIdx = active.findIndex((e) => !e.claimed && now >= e.endsAt);
+  if (readyIdx < 0) {
     return { state, event: null };
   }
+  const ready = active[readyIdx];
   const next = structuredClone(state);
-  next.pendingLoot = rollExpeditionLoot(next, active.id, rng);
-  next.activeExpedition = { ...active, claimed: true };
+  next.pendingLoot = rollExpeditionLoot(next, ready.id, rng);
+  next.pendingLootExpeditionId = ready.id;
+  next.activeExpeditions = (next.activeExpeditions ?? []).map((e, i) =>
+    i === readyIdx ? { ...e, claimed: true } : e,
+  );
   return {
     state: next,
-    event: { type: 'expedition_ready', expeditionId: active.id },
+    event: { type: 'expedition_ready', expeditionId: ready.id },
   };
 }
 
@@ -334,12 +399,13 @@ export function claimExpedition(
   state: GameState,
   doubled: boolean,
 ): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
-  // Only pendingLoot is required — older saves / edge paths can drop activeExpedition
+  // Only pendingLoot is required — older saves / edge paths can drop active parties
   // while loot is still waiting, and that must not soft-lock the player.
   if (!state.pendingLoot) {
     return { ok: false, reason: 'Nothing to claim' };
   }
   const loot = state.pendingLoot;
+  const lootId = state.pendingLootExpeditionId;
   const next = structuredClone(state);
   const mult = doubled ? 2 : 1;
   grant(next.resources, loot, mult);
@@ -348,7 +414,13 @@ export function claimExpedition(
     next.lifetimeOre += loot.ore * mult;
   }
   next.pendingLoot = null;
-  next.activeExpedition = null;
+  next.pendingLootExpeditionId = null;
+  // Drop the claimed party that produced this loot (or any claimed stubs).
+  next.activeExpeditions = (next.activeExpeditions ?? []).filter((e) => {
+    if (lootId && e.id === lootId && e.claimed) return false;
+    if (!lootId && e.claimed) return false;
+    return true;
+  });
   if (!next.milestones.firstExpeditionClaimed) {
     next.milestones.firstExpeditionClaimed = true;
   }
@@ -506,6 +578,7 @@ export function prestige(
   next.prestigeCount = state.prestigeCount + 1;
   next.lastPrestigeAt = now;
   next.talents = structuredClone(state.talents);
+  next.extraSquadSlots = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
   next.unlockedAchievements = [...(state.unlockedAchievements ?? [])];
   next.lifetimeClicks = state.lifetimeClicks ?? 0;
   next.unlockedCosmetics = [...new Set([...state.unlockedCosmetics, cosmeticForPrestige(state.prestigeCount + 1)])];

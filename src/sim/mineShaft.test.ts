@@ -74,7 +74,20 @@ describe('mine shaft', () => {
     expect(lootForTile('glow')?.resource).toBe('glowdust');
     expect(lootForTile('ember')?.resource).toBe('emberglass');
     expect(lootForTile('geode')?.resource).toBe('alloy');
+    expect(lootForTile('night')?.resource).toBe('nightiron');
+    expect(lootForTile('star')?.resource).toBe('starshard');
     expect(lootForTile('stone')).toBeNull();
+  });
+
+  it('spawns late-game Nightiron and Starshard pockets at depth', () => {
+    const deepKinds = new Set<string>();
+    for (let row = 55; row < 120; row++) {
+      for (let col = 0; col < SHAFT_COLS; col++) {
+        deepKinds.add(tileKindAt(row, col));
+      }
+    }
+    expect(deepKinds.has('night')).toBe(true);
+    expect(deepKinds.has('star')).toBe(true);
   });
 
   it('player shatter of rare tile grants loot; auto does not', () => {

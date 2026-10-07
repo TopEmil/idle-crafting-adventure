@@ -23,13 +23,15 @@ describe('nextGoal', () => {
     const state = createInitialState();
     state.ownedRecipes = ['copper_pick', 'ember_tongs'];
     state.pendingLoot = { glowdust: 18, ore: 12 };
-    state.activeExpedition = {
-      id: 'glow_shalllows',
-      startedAt: 0,
-      endsAt: 0,
-      claimed: false,
-      doublePending: false,
-    };
+    state.activeExpeditions = [
+      {
+        id: 'glow_shalllows',
+        startedAt: 0,
+        endsAt: 0,
+        claimed: false,
+        doublePending: false,
+      },
+    ];
     const goal = nextGoal(state);
     expect(goal.id).toBe('exp-claim');
     expect(goal.ready).toBe(true);

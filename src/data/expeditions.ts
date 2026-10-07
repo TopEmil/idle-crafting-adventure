@@ -1,6 +1,11 @@
 import type { ResourceId } from './resources';
 
-export type ExpeditionId = 'glow_shalllows' | 'crystal_fault' | 'ember_rift' | 'abyss_vein';
+export type ExpeditionId =
+  | 'glow_shalllows'
+  | 'crystal_fault'
+  | 'ember_rift'
+  | 'abyss_vein'
+  | 'deep_dark';
 
 export interface ExpeditionDef {
   id: ExpeditionId;
@@ -57,9 +62,20 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     durationSec: 360,
     unlockAtOreProduced: 2000,
     cost: { alloy: 30, glowdust: 40, emberglass: 50 },
-    baseLoot: { alloy: 50, glowdust: 45, emberglass: 60 },
+    baseLoot: { alloy: 50, glowdust: 45, emberglass: 60, nightiron: 8 },
     bonusChance: 0.4,
-    bonusLoot: { relics: 2 },
+    bonusLoot: { relics: 2, nightiron: 4 },
+  },
+  {
+    id: 'deep_dark',
+    name: 'Deep Dark',
+    description: 'Where Nightiron cools and Starshards wake.',
+    durationSec: 480,
+    unlockAtOreProduced: 5000,
+    cost: { nightiron: 12, alloy: 40, glowdust: 60 },
+    baseLoot: { nightiron: 20, starshard: 10, alloy: 40 },
+    bonusChance: 0.35,
+    bonusLoot: { starshard: 6, relics: 2 },
   },
 ];
 

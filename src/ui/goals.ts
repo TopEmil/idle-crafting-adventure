@@ -25,15 +25,19 @@ export function nextGoal(state: GameState): GoalInfo {
     };
   }
 
-  if (state.activeExpedition) {
-    const left = Math.max(0, state.activeExpedition.endsAt - Date.now());
-    const def = EXPEDITIONS.find((e) => e.id === state.activeExpedition!.id);
+  const living = (state.activeExpeditions ?? []).filter((e) => !e.claimed);
+  if (living.length > 0) {
+    const soonest = living.reduce((a, b) => (a.endsAt <= b.endsAt ? a : b));
+    const left = Math.max(0, soonest.endsAt - Date.now());
+    const def = EXPEDITIONS.find((e) => e.id === soonest.id);
     const dur = (def?.durationSec ?? 60) * 1000;
     const p = 1 - Math.min(1, left / dur);
+    const label =
+      living.length > 1 ? `${living.length} squads en route` : 'Scouts en route';
     return {
       id: 'exp-active',
-      title: 'Scouts en route',
-      detail: left > 0 ? 'Await their return…' : 'Loot ready — open Expeditions',
+      title: label,
+      detail: left > 0 ? 'Await their return — or Rush with an ad' : 'Loot ready — open Expeditions',
       progress: p,
       ready: left <= 0,
     };

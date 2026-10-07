@@ -33,8 +33,16 @@ export interface GameState {
   unlockedAchievements: AchievementId[];
   /** Lifetime vein taps — persist across Reforge (achievement progress). */
   lifetimeClicks: number;
-  activeExpedition: ActiveExpedition | null;
+  /** Concurrent scout parties currently out (or waiting to claim). */
+  activeExpeditions: ActiveExpedition[];
+  /**
+   * Bought extra concurrent squad slots (on top of BALANCE.baseExpeditionSlots).
+   * Persists across Reforge.
+   */
+  extraSquadSlots: number;
   pendingLoot: Partial<Record<ResourceId, number>> | null;
+  /** Which expedition the pending loot belongs to (optional for legacy saves). */
+  pendingLootExpeditionId: ExpeditionId | null;
   totalOreProduced: number;
   lifetimeOre: number;
   /** Fully cleared mine-shaft rows this run (resets on Reforge). */
@@ -76,7 +84,9 @@ export type GameEvent =
   | { type: 'upgrade_station'; stationId: StationId }
   | { type: 'start_expedition'; expeditionId: ExpeditionId }
   | { type: 'expedition_ready'; expeditionId: ExpeditionId }
+  | { type: 'rush_expedition'; expeditionId: ExpeditionId }
   | { type: 'claim_expedition'; doubled: boolean }
+  | { type: 'buy_squad_slot' }
   | { type: 'prestige' }
   | { type: 'buy_talent'; talentId: TalentId }
   | { type: 'offline_summary'; seconds: number; gains: Partial<Record<ResourceId, number>> }
