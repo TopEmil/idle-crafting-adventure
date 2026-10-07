@@ -404,6 +404,7 @@ body {
   pointer-events: none;
 }
 
+.overlay-root.is-open,
 .overlay-root:has(.sheet),
 .overlay-root:has(.modal),
 .overlay-root:has(.onboarding) {
@@ -417,8 +418,10 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  max-height: min(74vh, 680px);
+  max-height: min(74dvh, 74vh, 680px);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--teal-light) 92%, white), var(--void) 70%);
   border-radius: var(--sheet-radius);
@@ -426,6 +429,7 @@ body {
   box-shadow: 0 -16px 48px color-mix(in srgb, var(--void) 55%, transparent);
   padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0));
   animation: sheet-up 0.28s ease;
+  touch-action: pan-y;
 }
 
 @keyframes sheet-up {
@@ -440,10 +444,19 @@ body {
 }
 
 .sheet-header {
+  position: sticky;
+  top: -18px;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  margin: -18px -16px 14px;
+  padding: 18px 16px 12px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--teal-light) 96%, white) 70%,
+    color-mix(in srgb, var(--teal-light) 92%, white) 100%
+  );
 }
 
 .sheet-header h2 {

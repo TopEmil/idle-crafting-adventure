@@ -185,13 +185,13 @@ export class GameApp {
   private closeOverlay() {
     const was = this.overlayMode;
     this.overlayMode = 'none';
+    // Always dismiss sheets/modals fully. Re-rendering an open panel here made the
+    // sheet ✕ button appear to do nothing (clear → immediately reopen).
+    this.panel = null;
     this.hud.clearOverlay();
-    if (this.panel) {
-      this.refreshHud();
-    } else {
-      this.platform.gameplayStart();
-      this.refreshHudLight();
-    }
+    this.hud.setPanel(null);
+    this.platform.gameplayStart();
+    this.refreshHudLight();
 
     if (was === 'loot' || was === 'prestige' || was === 'milestone') {
       void this.maybeMidgame(was === 'loot' ? 'expedition_claim' : was === 'prestige' ? 'prestige' : 'milestone');
@@ -468,9 +468,16 @@ export class GameApp {
     document.body.addEventListener(
       'touchmove',
       (e) => {
-        if (!(e.target as HTMLElement).closest('.sheet')) {
+        const target = e.target;
+        if (!(target instanceof Element)) {
           e.preventDefault();
+          return;
         }
+        // Allow native scrolling inside sheet lists / modals (iOS Safari).
+        if (target.closest('.sheet .list, .sheet, .modal, .onboarding')) {
+          return;
+        }
+        e.preventDefault();
       },
       { passive: false },
     );

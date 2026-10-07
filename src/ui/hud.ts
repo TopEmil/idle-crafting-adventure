@@ -193,6 +193,7 @@ export class Hud {
         </div>
       </div>
     `;
+    this.markOverlayOpen();
     this.overlay.querySelector('#ob-next')?.addEventListener('click', () => this.actions.onAdvanceOnboarding());
     this.overlay.querySelector('#ob-skip')?.addEventListener('click', () => this.actions.onSkipOnboarding());
   }
@@ -214,6 +215,7 @@ export class Hud {
         </div>
       </div>
     `;
+    this.markOverlayOpen();
     this.overlay.querySelector('#offline-ok')?.addEventListener('click', () => this.actions.onCloseOverlay());
   }
 
@@ -256,6 +258,7 @@ export class Hud {
         </div>
       </div>
     `;
+    this.markOverlayOpen();
     this.overlay.querySelector('#claim-normal')?.addEventListener('click', () => this.actions.onClaimExpedition('normal'));
     this.overlay.querySelector('#claim-nothanks')?.addEventListener('click', () => this.actions.onClaimExpedition('normal'));
     this.overlay.querySelector('#claim-double')?.addEventListener('click', () => this.actions.onClaimExpedition('ad'));
@@ -273,6 +276,7 @@ export class Hud {
         </div>
       </div>
     `;
+    this.markOverlayOpen();
     this.overlay.querySelector('#prestige-yes')?.addEventListener('click', () => this.actions.onPrestige());
     this.overlay.querySelector('#prestige-no')?.addEventListener('click', () => this.actions.onCloseOverlay());
   }
@@ -287,11 +291,14 @@ export class Hud {
         </div>
       </div>
     `;
+    this.markOverlayOpen();
     this.overlay.querySelector('#ms-ok')?.addEventListener('click', () => this.actions.onCloseOverlay());
   }
 
   clearOverlay() {
     this.overlay.innerHTML = '';
+    this.overlay.classList.remove('is-open');
+    this.overlay.onclick = null;
   }
 
   private renderResources(state: GameState) {
@@ -511,6 +518,17 @@ export class Hud {
   }
 
   private bindSheet() {
+    this.overlay.classList.add('is-open');
     this.overlay.querySelector('#sheet-close')?.addEventListener('click', () => this.actions.onCloseOverlay());
+    const sheet = this.overlay.querySelector('.sheet');
+    sheet?.addEventListener('click', (e) => e.stopPropagation());
+    // Backdrop tap dismisses — needed on mobile where the sheet covers the nav row.
+    this.overlay.onclick = () => this.actions.onCloseOverlay();
+  }
+
+  private markOverlayOpen() {
+    this.overlay.classList.add('is-open');
+    // Modals/onboarding manage their own dismiss controls — don't inherit sheet backdrop taps.
+    this.overlay.onclick = null;
   }
 }
