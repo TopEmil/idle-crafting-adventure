@@ -555,6 +555,14 @@ body {
   min-width: 2.4rem;
 }
 
+.row-item-done {
+  opacity: 0.88;
+}
+
+.row-item-done h3 {
+  color: color-mix(in srgb, var(--cyan) 55%, var(--mist));
+}
+
 .row-item-paused h3 {
   color: color-mix(in srgb, var(--mist) 72%, var(--slate));
 }

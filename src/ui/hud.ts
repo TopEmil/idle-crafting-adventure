@@ -1,9 +1,11 @@
+import { ACHIEVEMENTS } from '../data/achievements';
 import { BALANCE, relicsFromReforge } from '../data/balance';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
 import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import { TALENTS, talentUpgradeCost, type TalentId } from '../data/talents';
+import { achievementProgress } from '../sim/achievements';
 import {
   canAfford,
   canPrestige,
@@ -18,6 +20,7 @@ import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
 import { formatCost, formatDuration, formatMissingCost, formatNumber } from './format';
 import { nextGoal } from './goals';
 import {
+  formatAchievementRewardLine,
   formatRecipeEffects,
   formatStationIO,
   formatStationSpeedHint,
@@ -821,6 +824,28 @@ export class Hud {
 
   private renderLedger(state: GameState, notice?: string) {
     const talentLevels = TALENTS.reduce((sum, t) => sum + (state.talents[t.id] ?? 0), 0);
+    const unlockedSet = new Set(state.unlockedAchievements ?? []);
+    const unlockedCount = unlockedSet.size;
+    const achievementRows = ACHIEVEMENTS.map((def) => {
+      const done = unlockedSet.has(def.id);
+      const progress = achievementProgress(state, def.condition);
+      const ratio = progress.target > 0 ? Math.min(1, progress.current / progress.target) : 0;
+      const progressLabel = done
+        ? 'Complete'
+        : `${formatNumber(Math.min(progress.current, progress.target))} / ${formatNumber(progress.target)}`;
+      return `
+        <div class="row-item${done ? ' row-item-done' : ''}">
+          <div>
+            <h3>${def.name}${done ? ' ✓' : ''}</h3>
+            <div class="cost">${progressLabel}</div>
+            <div class="req-meter" aria-hidden="true"><span style="width:${Math.round(ratio * 100)}%"></span></div>
+            <div class="effect-line">${formatAchievementRewardLine(def)}</div>
+          </div>
+          <p>${def.description}</p>
+        </div>
+      `;
+    }).join('');
+
     this.overlay.innerHTML = `
       <div class="sheet">
         <div class="sheet-header">
@@ -829,12 +854,17 @@ export class Hud {
         </div>
         <div class="list">
           <div class="row-item"><div><h3>Lifetime ore</h3></div><div>${formatNumber(state.lifetimeOre)}</div></div>
+          <div class="row-item"><div><h3>Vein taps</h3></div><div>${formatNumber(state.lifetimeClicks ?? 0)}</div></div>
           <div class="row-item"><div><h3>Play time</h3></div><div>${formatDuration(state.playTimeSec)}</div></div>
           <div class="row-item"><div><h3>Reforges</h3></div><div>${state.prestigeCount}</div></div>
           <div class="row-item"><div><h3>Relics earned</h3></div><div>${formatNumber(state.totalRelicsEarned)}</div></div>
           <div class="row-item"><div><h3>Talent levels</h3></div><div>${talentLevels}</div></div>
           <div class="row-item"><div><h3>Recipes owned</h3></div><div>${state.ownedRecipes.length}/${RECIPES.length}</div></div>
+          <div class="row-item"><div><h3>Achievements</h3></div><div>${unlockedCount}/${ACHIEVEMENTS.length}</div></div>
         </div>
+        <h3 class="sheet-section">Achievements</h3>
+        <p class="sheet-intro">Temporary resource packs and permanent tap / dwarf / station bonuses. Permanent rewards survive Reforge.</p>
+        <div class="list">${achievementRows}</div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
         <p class="muted" style="margin-top:12px">Collection banner slot reserved — shown only when this panel stays open.</p>
       </div>

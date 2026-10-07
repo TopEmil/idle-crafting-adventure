@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { getAchievement } from '../data/achievements';
 import { getRecipe } from '../data/recipes';
 import { getStation } from '../data/stations';
 import { getTalent } from '../data/talents';
 import {
+  formatAchievementRewards,
   formatRecipeEffects,
   formatStationIO,
   formatStationSpeedHint,
@@ -35,5 +37,11 @@ describe('effects text', () => {
     const talent = getTalent('vein_attunement');
     expect(formatTalentPerLevel(talent)).toContain('+10% tap');
     expect(formatTalentEffects(talent, 3)).toContain('Tap power ×1.30');
+  });
+
+  it('explains achievement rewards', () => {
+    expect(formatAchievementRewards(getAchievement('first_strike').rewards)).toContain('Ore');
+    expect(formatAchievementRewards(getAchievement('vein_warmup').rewards)).toContain('+5% tap');
+    expect(formatAchievementRewards(getAchievement('copper_bound').rewards)).toContain('Dwarf mine');
   });
 });

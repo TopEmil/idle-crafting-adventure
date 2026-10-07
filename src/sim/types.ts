@@ -1,3 +1,4 @@
+import type { AchievementId } from '../data/achievements';
 import type { ExpeditionId } from '../data/expeditions';
 import type { RecipeId } from '../data/recipes';
 import type { ResourceId } from '../data/resources';
@@ -28,6 +29,10 @@ export interface GameState {
   ownedRecipes: RecipeId[];
   /** Permanent talent levels — persist across Reforge. */
   talents: Record<TalentId, number>;
+  /** Unlocked achievement ids — persist across Reforge; rewards granted once. */
+  unlockedAchievements: AchievementId[];
+  /** Lifetime vein taps — persist across Reforge (achievement progress). */
+  lifetimeClicks: number;
   activeExpedition: ActiveExpedition | null;
   pendingLoot: Partial<Record<ResourceId, number>> | null;
   totalOreProduced: number;
@@ -66,4 +71,5 @@ export type GameEvent =
   | { type: 'buy_talent'; talentId: TalentId }
   | { type: 'offline_summary'; seconds: number; gains: Partial<Record<ResourceId, number>> }
   | { type: 'milestone'; id: string }
-  | { type: 'time_warp'; seconds: number };
+  | { type: 'time_warp'; seconds: number }
+  | { type: 'achievement'; id: AchievementId };

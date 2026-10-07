@@ -45,11 +45,27 @@ describe('save migration', () => {
     expect(migrated.lastPrestigeAt).toBe(0);
   });
 
+  it('defaults missing achievements and lifetimeClicks', () => {
+    const state = createInitialState();
+    const legacy = structuredClone(state) as unknown as {
+      unlockedAchievements?: typeof state.unlockedAchievements;
+      lifetimeClicks?: number;
+    };
+    delete legacy.unlockedAchievements;
+    delete legacy.lifetimeClicks;
+
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.unlockedAchievements).toEqual([]);
+    expect(migrated.lifetimeClicks).toBe(0);
+  });
+
   it('round-trips enabled and runLevel through serialize/deserialize', () => {
     const state = createInitialState();
     state.stations.smelter = { unlocked: true, level: 5, runLevel: 2, enabled: false };
     state.talents.scout_instinct = 3;
     state.lastPrestigeAt = 42;
+    state.unlockedAchievements = ['first_strike', 'vein_warmup'];
+    state.lifetimeClicks = 120;
     const raw = serializeState(state);
     const parsed = deserializeState(raw);
     expect(parsed).not.toBeNull();
@@ -58,5 +74,7 @@ describe('save migration', () => {
     expect(parsed?.stations.smelter.runLevel).toBe(2);
     expect(parsed?.talents.scout_instinct).toBe(3);
     expect(parsed?.lastPrestigeAt).toBe(42);
+    expect(parsed?.unlockedAchievements).toEqual(['first_strike', 'vein_warmup']);
+    expect(parsed?.lifetimeClicks).toBe(120);
   });
 });

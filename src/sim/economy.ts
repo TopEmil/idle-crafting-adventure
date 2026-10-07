@@ -13,6 +13,7 @@ import {
   talentUpgradeCost,
   type TalentId,
 } from '../data/talents';
+import { syncAchievements } from './achievements';
 import { aggregateEffects } from './effects';
 import { createInitialState } from './createState';
 import type { GameEvent, GameState, StationProgress } from './types';
@@ -21,6 +22,14 @@ import type { GameEvent, GameState, StationProgress } from './types';
 export function stationRunMult(st: Pick<StationProgress, 'level' | 'runLevel'>): number {
   if (st.level <= 0) return 0;
   return Math.max(1, Math.min(Math.floor(st.runLevel), st.level));
+}
+
+function effectsFor(state: GameState) {
+  return aggregateEffects(
+    state.ownedRecipes,
+    state.talents,
+    state.unlockedAchievements ?? [],
+  );
 }
 
 function canAfford(
@@ -68,13 +77,13 @@ function scaleLoot(
 }
 
 export function getClickPower(state: GameState): number {
-  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  const effects = effectsFor(state);
   return BALANCE.baseClickOre * effects.clickPower;
 }
 
 /** Ore/sec from the dwarf miner when autoMine recipes are owned. */
 export function getAutoMineRate(state: GameState): number {
-  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  const effects = effectsFor(state);
   if (effects.autoMine <= 0) return 0;
   return getClickPower(state) * effects.autoMine;
 }
@@ -85,6 +94,7 @@ export function clickVein(state: GameState): { state: GameState; event: GameEven
   next.resources.ore += amount;
   next.totalOreProduced += amount;
   next.lifetimeOre += amount;
+  next.lifetimeClicks = (next.lifetimeClicks ?? 0) + 1;
   return { state: next, event: { type: 'click_vein', amount } };
 }
 
@@ -241,7 +251,7 @@ export function rollExpeditionLoot(
   rng: () => number = Math.random,
 ): Partial<Record<ResourceId, number>> {
   const def = getExpedition(expeditionId);
-  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  const effects = effectsFor(state);
   const loot = scaleLoot(def.baseLoot, effects.expeditionLoot);
   if (rng() < def.bonusChance) {
     const bonus = scaleLoot(def.bonusLoot, effects.expeditionLoot);
@@ -301,7 +311,7 @@ export function claimExpedition(
 export function tickProduction(state: GameState, dt: number): GameState {
   if (dt <= 0) return state;
   const next = structuredClone(state);
-  const effects = aggregateEffects(next.ownedRecipes, next.talents);
+  const effects = effectsFor(next);
   const pMult = effects.stationOutput;
 
   const autoOre = getAutoMineRate(next) * dt;
@@ -385,7 +395,7 @@ export function applyOfflineProgress(
   }
 
   const before = structuredClone(state.resources);
-  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  const effects = effectsFor(state);
   const capped = Math.min(elapsedSec, BALANCE.offlineCapSeconds);
   const adjusted = capped * effects.offlineRate;
   const { state: after } = simulateSeconds(state, adjusted, now);
@@ -440,6 +450,8 @@ export function prestige(
   next.prestigeCount = state.prestigeCount + 1;
   next.lastPrestigeAt = now;
   next.talents = structuredClone(state.talents);
+  next.unlockedAchievements = [...(state.unlockedAchievements ?? [])];
+  next.lifetimeClicks = state.lifetimeClicks ?? 0;
   next.unlockedCosmetics = [...new Set([...state.unlockedCosmetics, cosmeticForPrestige(state.prestigeCount + 1)])];
   next.activeCosmetic = cosmeticForPrestige(state.prestigeCount + 1);
   next.onboardingDone = true;
@@ -449,9 +461,12 @@ export function prestige(
   next.ads = state.ads;
   next.playTimeSec = state.playTimeSec;
 
+  // First Reforge (and similar) can unlock on the post-prestige snapshot.
+  const synced = syncAchievements(next);
+
   return {
     ok: true,
-    state: next,
+    state: synced.state,
     event: { type: 'prestige' },
     relics,
   };
