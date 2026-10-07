@@ -24,6 +24,14 @@ function getSdk(): CrazyGamesSDK | null {
   return window.CrazyGames?.SDK ?? null;
 }
 
+function safeCall(label: string, fn: () => void) {
+  try {
+    fn();
+  } catch (err) {
+    console.warn(`[embervein] SDK ${label} skipped`, err);
+  }
+}
+
 export function createPlatformBridge(): PlatformBridge {
   let ready = false;
   let adsEnabled = true;
@@ -49,10 +57,25 @@ export function createPlatformBridge(): PlatformBridge {
         return;
       }
       try {
-        await sdk.init();
+        // Outside the CrazyGames iframe init can hang — race a short timeout.
+        await Promise.race([
+          sdk.init(),
+          new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 2500);
+          }),
+        ]);
         ready = true;
         if (sdk.ad.hasAdblock) {
-          adblock = await sdk.ad.hasAdblock();
+          try {
+            adblock = await Promise.race([
+              sdk.ad.hasAdblock(),
+              new Promise<boolean>((resolve) => {
+                window.setTimeout(() => resolve(false), 1500);
+              }),
+            ]);
+          } catch {
+            adblock = false;
+          }
         }
       } catch {
         ready = true;
@@ -61,27 +84,28 @@ export function createPlatformBridge(): PlatformBridge {
     },
 
     loadingStart() {
-      getSdk()?.game.sdkGameLoadingStart();
+      // CrazyGames SDK v3: game.loadingStart() (posts sdkGameLoadingStart internally)
+      safeCall('loadingStart', () => getSdk()?.game.loadingStart());
     },
 
     loadingStop() {
-      getSdk()?.game.sdkGameLoadingStop();
+      safeCall('loadingStop', () => getSdk()?.game.loadingStop());
     },
 
     gameplayStart() {
       if (gameplayActive) return;
       gameplayActive = true;
-      getSdk()?.game.gameplayStart();
+      safeCall('gameplayStart', () => getSdk()?.game.gameplayStart());
     },
 
     gameplayStop() {
       if (!gameplayActive) return;
       gameplayActive = false;
-      getSdk()?.game.gameplayStop();
+      safeCall('gameplayStop', () => getSdk()?.game.gameplayStop());
     },
 
     happytime() {
-      getSdk()?.game.happytime?.();
+      safeCall('happytime', () => getSdk()?.game.happytime?.());
     },
 
     requestAd(kind: AdKind): Promise<AdRequestResult> {
@@ -104,13 +128,12 @@ export function createPlatformBridge(): PlatformBridge {
         try {
           sdk.ad.requestAd(kind, {
             adStarted: () => {
-              // Caller mutes/pauses on start via promise race — we only signal lifecycle here
+              // Caller mutes/pauses around the await
             },
             adFinished: () => finish({ status: 'finished' }),
             adError: (error) => {
               const reason =
                 typeof error === 'string' ? error : (error?.reason ?? 'adError');
-              // unfilled / disabled inventory
               if (reason === 'unfilled' || reason.includes('disabled')) {
                 adsEnabled = false;
               }
@@ -132,7 +155,7 @@ export function createPlatformBridge(): PlatformBridge {
         try {
           await sdk.data.setItem(key, value);
         } catch {
-          // fall through to local only
+          // local fallback only
         }
       }
     },

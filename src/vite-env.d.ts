@@ -9,8 +9,8 @@ interface CrazyGamesAdCallbacks {
 interface CrazyGamesSDK {
   init: () => Promise<void>;
   game: {
-    sdkGameLoadingStart: () => void;
-    sdkGameLoadingStop: () => void;
+    loadingStart: () => void;
+    loadingStop: () => void;
     gameplayStart: () => void;
     gameplayStop: () => void;
     happytime?: () => void;
