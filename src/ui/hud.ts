@@ -142,7 +142,8 @@ export class Hud {
     });
   }
 
-  render(state: GameState, opts?: { notice?: string }) {
+  /** Top-bar / dock chrome only — safe to call every frame with a sheet open. */
+  renderChrome(state: GameState) {
     this.renderResources(state);
     this.renderGoal(state);
     this.renderCraftQuick(state);
@@ -158,12 +159,29 @@ export class Hud {
       craftBtn.classList.toggle('btn-primary', this.view === 'forge');
       craftBtn.classList.toggle('btn-secondary', this.view === 'mine');
     }
+  }
+
+  render(state: GameState, opts?: { notice?: string }) {
+    this.renderChrome(state);
 
     if (this.panel) {
       this.renderPanel(state, opts?.notice);
     } else if (!this.overlay.querySelector('.modal') && !this.overlay.querySelector('.onboarding')) {
       // keep overlay empty unless modal/onboarding managed elsewhere
     }
+  }
+
+  /**
+   * Update expedition timers / claim affordances without replacing the sheet DOM.
+   * Full rebuilds every frame made Send/Claim taps miss their targets.
+   */
+  syncExpeditionProgress(state: GameState) {
+    if (this.panel !== 'expeditions') return;
+    if (!this.overlay.querySelector('[data-expedition-sheet]')) {
+      this.renderExpeditions(state);
+      return;
+    }
+    this.patchExpeditionRows(state);
   }
 
   /** Short HUD toast — e.g. craft / unlock feedback */
@@ -447,60 +465,166 @@ export class Hud {
     const pending = state.pendingLoot;
     const now = Date.now();
     const busy = Boolean(active) || Boolean(pending);
+    const orphanClaim = Boolean(pending) && !active;
 
     const rows = EXPEDITIONS.map((e) => {
-      const isUnlocked = unlocked.has(e.id);
-      let status = formatCost(e.cost) + ` · ${formatDuration(e.durationSec)}`;
-      let action = `<button class="btn btn-secondary" data-exp="${e.id}" type="button" ${!isUnlocked || busy ? 'disabled' : ''}>Send</button>`;
-      if (!isUnlocked) {
-        status = `Unlock at ${formatNumber(e.unlockAtOreProduced)} lifetime ore`;
-        action = `<button class="btn btn-secondary" type="button" disabled>Locked</button>`;
-      }
-      if (active?.id === e.id) {
-        const left = Math.max(0, (active.endsAt - now) / 1000);
-        const pct = Math.min(100, ((e.durationSec - left) / e.durationSec) * 100);
-        if (pending || left <= 0) {
-          status = 'Loot ready — claim it';
-          action = `<button class="btn btn-primary" id="exp-claim" type="button">Claim</button>`;
-        } else {
-          status = `Returning in ${formatDuration(left)}`;
-          action = `<div class="progress-bar" style="width:88px"><span style="width:${pct}%"></span></div>`;
-        }
-      }
+      const view = this.expeditionRowView(e.id, state, unlocked, active, pending, now, busy);
       const lootHint = Object.entries(e.baseLoot)
         .map(([k, v]) => `+${v} ${k}`)
         .join(' · ');
       return `
-        <div class="row-item">
+        <div class="row-item" data-exp-row="${e.id}">
           <div>
             <h3>${e.name}</h3>
-            <div class="cost">${status}</div>
+            <div class="cost" data-exp-status>${view.status}</div>
             <div class="effect-line">Loot: ${lootHint}</div>
           </div>
-          ${action}
+          <div data-exp-action data-exp-mode="${view.mode}">${view.actionHtml}</div>
           <p>${e.description}</p>
         </div>
       `;
     }).join('');
 
+    const orphan = orphanClaim
+      ? `<div class="row-item" data-exp-orphan-claim>
+          <div>
+            <h3>Loot waiting</h3>
+            <div class="cost">Scouts already returned — claim your haul.</div>
+          </div>
+          <div data-exp-action data-exp-mode="claim">
+            <button class="btn btn-primary" id="exp-claim" type="button">Claim</button>
+          </div>
+        </div>`
+      : '';
+
     this.overlay.innerHTML = `
-      <div class="sheet">
+      <div class="sheet" data-expedition-sheet>
         <div class="sheet-header">
           <h2>Expeditions</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <div class="list">${rows}</div>
+        <div class="list">${orphan}${rows}</div>
       </div>
     `;
     this.bindSheet();
+    this.bindExpeditionActions();
+  }
+
+  private expeditionRowView(
+    id: string,
+    state: GameState,
+    unlocked: Set<string>,
+    active: GameState['activeExpedition'],
+    pending: GameState['pendingLoot'],
+    now: number,
+    busy: boolean,
+  ): { status: string; actionHtml: string; mode: 'locked' | 'send' | 'progress' | 'claim' } {
+    const def = EXPEDITIONS.find((e) => e.id === id)!;
+    const isUnlocked = unlocked.has(id);
+    if (!isUnlocked) {
+      return {
+        status: `Unlock at ${formatNumber(def.unlockAtOreProduced)} lifetime ore`,
+        actionHtml: `<button class="btn btn-secondary" type="button" disabled>Locked</button>`,
+        mode: 'locked',
+      };
+    }
+    if (active?.id === id) {
+      const left = Math.max(0, (active.endsAt - now) / 1000);
+      const pct = Math.min(100, ((def.durationSec - left) / def.durationSec) * 100);
+      if (pending || left <= 0 || active.claimed) {
+        return {
+          status: 'Loot ready — claim it',
+          actionHtml: `<button class="btn btn-primary" id="exp-claim" type="button">Claim</button>`,
+          mode: 'claim',
+        };
+      }
+      return {
+        status: `Returning in ${formatDuration(left)}`,
+        actionHtml: `<div class="progress-bar" style="width:88px"><span data-exp-bar style="width:${pct}%"></span></div>`,
+        mode: 'progress',
+      };
+    }
+    const canSend = !busy && canAfford(state.resources, def.cost);
+    return {
+      status: formatCost(def.cost) + ` · ${formatDuration(def.durationSec)}`,
+      actionHtml: `<button class="btn btn-secondary" data-exp="${id}" type="button" ${canSend ? '' : 'disabled'}>Send</button>`,
+      mode: 'send',
+    };
+  }
+
+  private patchExpeditionRows(state: GameState) {
+    const unlocked = new Set(availableExpeditions(state).map((e) => e.id));
+    const active = state.activeExpedition;
+    const pending = state.pendingLoot;
+    const now = Date.now();
+    const busy = Boolean(active) || Boolean(pending);
+    const orphanClaim = Boolean(pending) && !active;
+
+    const list = this.overlay.querySelector('[data-expedition-sheet] .list');
+    if (list) {
+      let orphan = list.querySelector('[data-exp-orphan-claim]');
+      if (orphanClaim && !orphan) {
+        orphan = document.createElement('div');
+        orphan.className = 'row-item';
+        orphan.setAttribute('data-exp-orphan-claim', '');
+        orphan.innerHTML = `
+          <div>
+            <h3>Loot waiting</h3>
+            <div class="cost">Scouts already returned — claim your haul.</div>
+          </div>
+          <div data-exp-action data-exp-mode="claim">
+            <button class="btn btn-primary" id="exp-claim" type="button">Claim</button>
+          </div>
+        `;
+        list.prepend(orphan);
+        this.bindExpeditionActions();
+      } else if (!orphanClaim && orphan) {
+        orphan.remove();
+      }
+    }
+
+    for (const e of EXPEDITIONS) {
+      const row = this.overlay.querySelector(`[data-exp-row="${e.id}"]`);
+      if (!row) continue;
+      const statusEl = row.querySelector('[data-exp-status]');
+      const actionEl = row.querySelector('[data-exp-action]') as HTMLElement | null;
+      if (!statusEl || !actionEl) continue;
+
+      const view = this.expeditionRowView(e.id, state, unlocked, active, pending, now, busy);
+      statusEl.textContent = view.status;
+      const prevMode = actionEl.dataset.expMode;
+      if (prevMode !== view.mode) {
+        actionEl.dataset.expMode = view.mode;
+        actionEl.innerHTML = view.actionHtml;
+        this.bindExpeditionActions();
+      } else if (view.mode === 'progress') {
+        const left = Math.max(0, ((active?.endsAt ?? now) - now) / 1000);
+        const pct = Math.min(100, ((e.durationSec - left) / e.durationSec) * 100);
+        const bar = actionEl.querySelector('[data-exp-bar]') as HTMLElement | null;
+        if (bar) bar.style.width = `${pct}%`;
+      } else if (view.mode === 'send') {
+        const btn = actionEl.querySelector('[data-exp]') as HTMLButtonElement | null;
+        if (btn) btn.disabled = !canAfford(state.resources, e.cost) || busy;
+      }
+    }
+  }
+
+  private bindExpeditionActions() {
     this.overlay.querySelectorAll('[data-exp]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        this.actions.onStartExpedition((btn as HTMLElement).dataset.exp!);
+      const el = btn as HTMLElement;
+      if (el.dataset.bound === '1') return;
+      el.dataset.bound = '1';
+      el.addEventListener('click', () => {
+        this.actions.onStartExpedition(el.dataset.exp!);
       });
     });
-    this.overlay.querySelector('#exp-claim')?.addEventListener('click', () => {
-      this.actions.onRevealExpeditionLoot();
-    });
+    const claim = this.overlay.querySelector('#exp-claim') as HTMLElement | null;
+    if (claim && claim.dataset.bound !== '1') {
+      claim.dataset.bound = '1';
+      claim.addEventListener('click', () => {
+        this.actions.onRevealExpeditionLoot();
+      });
+    }
   }
 
   private renderForge(state: GameState, notice?: string) {
