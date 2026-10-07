@@ -4,7 +4,6 @@ import { RECIPES } from '../data/recipes';
 import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import {
-  availableExpeditions,
   canAfford,
   canPrestige,
   getClickPower,
@@ -13,6 +12,7 @@ import {
 import { prestigeMult } from '../data/balance';
 import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
+import { getExpeditionRowState } from './expeditionState';
 import { formatCost, formatDuration, formatMissingCost, formatNumber } from './format';
 import { nextGoal } from './goals';
 import {
@@ -384,7 +384,7 @@ export class Hud {
 
   private renderPanel(state: GameState, notice?: string) {
     if (this.panel === 'recipes') this.renderRecipes(state);
-    else if (this.panel === 'expeditions') this.renderExpeditions(state);
+    else if (this.panel === 'expeditions') this.renderExpeditions(state, notice);
     else if (this.panel === 'forge') this.renderForge(state, notice);
     else if (this.panel === 'ledger') this.renderLedger(state, notice);
   }
@@ -439,33 +439,31 @@ export class Hud {
     });
   }
 
-  private renderExpeditions(state: GameState) {
-    const unlocked = new Set(availableExpeditions(state).map((e) => e.id));
-    const active = state.activeExpedition;
+  private renderExpeditions(state: GameState, notice?: string) {
     const now = Date.now();
 
     const rows = EXPEDITIONS.map((e) => {
-      const isUnlocked = unlocked.has(e.id);
-      let status = formatCost(e.cost) + ` · ${formatDuration(e.durationSec)}`;
-      let action = `<button class="btn btn-secondary" data-exp="${e.id}" type="button" ${!isUnlocked || active ? 'disabled' : ''}>Send</button>`;
-      if (!isUnlocked) {
-        status = `Unlock at ${formatNumber(e.unlockAtOreProduced)} lifetime ore`;
-        action = `<button class="btn btn-secondary" type="button" disabled>Locked</button>`;
-      }
-      if (active?.id === e.id) {
-        const left = Math.max(0, (active.endsAt - now) / 1000);
-        const pct = Math.min(100, ((e.durationSec - left) / e.durationSec) * 100);
-        status = left > 0 ? `Returning in ${formatDuration(left)}` : 'Ready to claim';
-        action = `<div class="progress-bar" style="width:88px"><span style="width:${pct}%"></span></div>`;
+      const row = getExpeditionRowState(state, e, now);
+      let action: string;
+      if (row.activePct != null) {
+        action = `<div class="progress-bar" style="width:88px" title="${row.status}"><span style="width:${row.activePct}%"></span></div>`;
+      } else {
+        action = `<button class="btn btn-secondary" data-exp="${e.id}" type="button" ${row.canSend ? '' : 'disabled'} title="${row.requirements}">${row.actionLabel}</button>`;
       }
       const lootHint = Object.entries(e.baseLoot)
         .map(([k, v]) => `+${v} ${k}`)
         .join(' · ');
+      const unlockMeter =
+        row.kind === 'locked' || row.kind === 'need_cost'
+          ? `<div class="req-meter" aria-hidden="true"><span style="width:${Math.round(row.progress * 100)}%"></span></div>`
+          : '';
       return `
-        <div class="row-item">
+        <div class="row-item${row.blocked ? ' row-item-blocked' : ''}">
           <div>
             <h3>${e.name}</h3>
-            <div class="cost">${status}</div>
+            <div class="cost">${row.status}</div>
+            ${unlockMeter}
+            <div class="req-line">${row.requirements}</div>
             <div class="effect-line">Loot: ${lootHint}</div>
           </div>
           ${action}
@@ -480,6 +478,8 @@ export class Hud {
           <h2>Expeditions</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
+        <p class="sheet-intro">Unlock destinations with lifetime ore, spend the listed cost, then wait for scouts to return. Only one party at a time.</p>
+        ${notice ? `<p class="notice">${notice}</p>` : ''}
         <div class="list">${rows}</div>
       </div>
     `;

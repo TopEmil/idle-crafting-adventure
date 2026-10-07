@@ -155,17 +155,20 @@ export function startExpedition(
   now = Date.now(),
 ): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
   if (state.activeExpedition && !state.activeExpedition.claimed) {
-    return { ok: false, reason: 'Expedition already active' };
+    return { ok: false, reason: 'Only one scout party at a time' };
   }
   if (state.pendingLoot) {
-    return { ok: false, reason: 'Claim pending loot first' };
+    return { ok: false, reason: 'Claim pending loot before sending again' };
   }
   const def = getExpedition(expeditionId);
   if (state.totalOreProduced < def.unlockAtOreProduced) {
-    return { ok: false, reason: 'Not unlocked yet' };
+    return {
+      ok: false,
+      reason: `Need ${def.unlockAtOreProduced} lifetime ore (have ${Math.floor(state.totalOreProduced)})`,
+    };
   }
   if (!canAfford(state.resources, def.cost)) {
-    return { ok: false, reason: 'Not enough resources' };
+    return { ok: false, reason: 'Not enough resources for this expedition' };
   }
   const next = structuredClone(state);
   pay(next.resources, def.cost);
