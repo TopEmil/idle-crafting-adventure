@@ -19,6 +19,7 @@ import {
   prestige,
   startExpedition,
   tickProduction,
+  toggleStation,
   unlockStation,
   upgradeStation,
 } from '../sim/economy';
@@ -61,6 +62,7 @@ export class GameApp {
       onCraftRecipe: (id) => this.handleCraft(id as RecipeId),
       onUnlockStation: (id) => this.handleUnlock(id),
       onUpgradeStation: (id) => this.handleUpgrade(id),
+      onToggleStation: (id) => this.handleToggleStation(id),
       onStartExpedition: (id) => this.handleStartExpedition(id as ExpeditionId),
       onClaimExpedition: (mode) => void this.handleClaim(mode),
       onPrestige: () => void this.handlePrestige(),
@@ -313,6 +315,23 @@ export class GameApp {
     this.scene.sync(this.state);
     this.hud.toast(`${id} → Lv ${result.state.stations[id].level}`, 'gain');
     this.refreshHud();
+  }
+
+  private handleToggleStation(id: StationId) {
+    const result = toggleStation(this.state, id);
+    if (!result.ok) {
+      this.notice = result.reason;
+      this.refreshHud();
+      return;
+    }
+    this.state = result.state;
+    this.audio.click();
+    this.scene.sync(this.state);
+    const on = this.state.stations[id].enabled;
+    const pretty = id.charAt(0).toUpperCase() + id.slice(1);
+    this.hud.toast(on ? `${pretty} On` : `${pretty} Off`, on ? 'gain' : 'info');
+    this.refreshHud();
+    void this.persist();
   }
 
   private handleStartExpedition(id: ExpeditionId) {

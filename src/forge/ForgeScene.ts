@@ -32,6 +32,8 @@ const STATION_ART: Record<StationId, string> = {
   anvil: `${import.meta.env.BASE_URL}art/stations/anvil.png`,
   enchanter: `${import.meta.env.BASE_URL}art/stations/enchanter.png`,
 };
+const DWARF_ART = `${import.meta.env.BASE_URL}art/mine/dwarf.png`;
+const ORE_ROCK_ART = `${import.meta.env.BASE_URL}art/mine/ore-rock.png`;
 
 const COLORS = {
   void: 0x0b1c22,
@@ -77,6 +79,10 @@ export class ForgeScene {
   private hearth = new Graphics();
   private vein = new Graphics();
   private dwarfGfx = new Graphics();
+  private dwarfSprite: Sprite | null = null;
+  private oreSpritesRoot = new Container();
+  private rockSprites: Sprite[] = [];
+  private rockTexture: Texture | null = null;
   private stationsGfx = new Graphics();
   private stationSpritesRoot = new Container();
   private stationLabels = new Container();
@@ -151,6 +157,7 @@ export class ForgeScene {
 
     this.mineLayer.addChild(this.hearth);
     this.mineLayer.addChild(this.vein);
+    this.mineLayer.addChild(this.oreSpritesRoot);
     this.mineLayer.addChild(this.dwarfGfx);
 
     this.forgeLayer.addChild(this.stationsGfx);
@@ -165,7 +172,7 @@ export class ForgeScene {
     this.root.addChild(this.fx);
     this.root.addChild(this.floatLayer);
 
-    await this.loadStationArt();
+    await Promise.all([this.loadStationArt(), this.loadMineArt()]);
 
     for (const def of STATIONS) {
       const label = new Text({
@@ -559,6 +566,7 @@ export class ForgeScene {
       }
     } else if (this.view !== 'mine') {
       this.dwarfGfx.clear();
+      if (this.dwarfSprite) this.dwarfSprite.visible = false;
       this.dwarfLabel.visible = false;
     } else {
       this.dwarfTimer = 0;
@@ -616,6 +624,8 @@ export class ForgeScene {
       this.hearth.clear();
       this.vein.clear();
       this.dwarfGfx.clear();
+      if (this.dwarfSprite) this.dwarfSprite.visible = false;
+      for (const sprite of this.rockSprites) sprite.visible = false;
       this.dwarfLabel.visible = false;
     }
     this.redrawStations();
@@ -709,6 +719,7 @@ export class ForgeScene {
     const g = this.vein;
     g.clear();
     const { x: cx, y: cy } = this.veinPoint();
+    const useArt = Boolean(this.rockTexture && this.rockSprites.length);
 
     g.ellipse(cx, cy + 18, 78, 36);
     g.fill({ color: COLORS.void, alpha: 0.42 });
@@ -717,7 +728,9 @@ export class ForgeScene {
     g.fill({ color: COLORS.cyan, alpha: shimmer });
 
     for (const rock of this.rocks) {
+      const sprite = this.rockSprites[rock.id];
       if (rock.respawn > 0) {
+        if (sprite) sprite.visible = false;
         const reform = 1 - rock.respawn / 1.8;
         if (reform > 0.35) {
           const { x, y } = rockWorldPos(rock, cx, cy);
@@ -726,7 +739,12 @@ export class ForgeScene {
         }
         continue;
       }
-      this.drawRock(g, rock, cx, cy);
+      if (useArt && sprite) {
+        this.placeRockSprite(sprite, rock, cx, cy);
+      } else {
+        if (sprite) sprite.visible = false;
+        this.drawRock(g, rock, cx, cy);
+      }
     }
 
     if (this.combo === 0 && this.autoMineRate <= 0) {
@@ -735,6 +753,27 @@ export class ForgeScene {
       g.circle(cx, cy, ring);
       g.stroke({ width: 2, color: COLORS.cyan, alpha: a });
     }
+  }
+
+  private placeRockSprite(sprite: Sprite, rock: OreRock, cx: number, cy: number) {
+    const { x, y } = rockWorldPos(rock, cx, cy);
+    const dmg = 1 - rock.hp / rock.maxHp;
+    const wobble = this.hitFlash > 0 && dmg > 0 ? Math.sin(this.pulse * 40) * 1.2 : 0;
+    const base = Math.max(rock.w, rock.h) / 72;
+    const scale = Math.min(0.55, Math.max(0.28, base)) * (1 - dmg * 0.08);
+
+    sprite.visible = true;
+    sprite.x = x + wobble;
+    sprite.y = y + rock.h * 0.12;
+    sprite.rotation = rock.rot * 0.35;
+    sprite.scale.set(scale);
+    sprite.alpha = 0.92 + this.hitFlash * 0.08;
+    sprite.tint = dmg > 0.45 ? 0xc8d8e0 : 0xffffff;
+
+    // Soft plinth so painted rocks sit like forge machines.
+    const g = this.vein;
+    g.ellipse(x + wobble, y + rock.h * 0.32, rock.w * 0.42, rock.h * 0.14);
+    g.fill({ color: COLORS.void, alpha: 0.38 });
   }
 
   private drawRock(g: Graphics, rock: OreRock, cx: number, cy: number) {
@@ -778,18 +817,41 @@ export class ForgeScene {
     const g = this.dwarfGfx;
     g.clear();
     if (this.autoMineRate <= 0) {
+      if (this.dwarfSprite) this.dwarfSprite.visible = false;
       this.dwarfLabel.visible = false;
       return;
     }
 
     const { x, y } = this.dwarfPoint();
     const swing = Math.sin(this.dwarfSwingT * Math.PI * 2);
-    const pickAng = -0.95 + swing * 1.25;
     const bob = Math.abs(swing) * 3;
-    const s = 1.35;
+    const short = Math.min(this.width, this.height);
+    const scale = Math.min(0.42, Math.max(0.22, short / 1600));
 
-    g.ellipse(x, y + 22 * s, 18 * s, 6 * s);
+    // Contact shadow (shared by sprite + procedural)
+    g.ellipse(x, y + 10, 22 * (scale / 0.3), 7 * (scale / 0.3));
     g.fill({ color: COLORS.void, alpha: 0.4 });
+
+    if (this.dwarfSprite) {
+      this.dwarfSprite.visible = true;
+      this.dwarfSprite.x = x;
+      this.dwarfSprite.y = y - bob;
+      this.dwarfSprite.scale.set(scale);
+      this.dwarfSprite.rotation = swing * 0.08;
+      this.dwarfSprite.alpha = 1;
+    } else {
+      this.drawDwarfProcedural(g, x, y, swing, bob);
+    }
+
+    this.dwarfLabel.visible = true;
+    this.dwarfLabel.text = 'Mining…';
+    this.dwarfLabel.x = x;
+    this.dwarfLabel.y = y + 14;
+  }
+
+  private drawDwarfProcedural(g: Graphics, x: number, y: number, swing: number, bob: number) {
+    const pickAng = -0.95 + swing * 1.25;
+    const s = 1.35;
 
     g.roundRect(x - 10 * s, y + 5 * s - bob, 7 * s, 14 * s, 2);
     g.fill(COLORS.dwarfCoat);
@@ -826,17 +888,12 @@ export class ForgeScene {
     g.moveTo(px + Math.cos(pickAng - 1.2) * 12 * s, py + Math.sin(pickAng - 1.2) * 12 * s);
     g.lineTo(px + Math.cos(pickAng + 1.2) * 12 * s, py + Math.sin(pickAng + 1.2) * 12 * s);
     g.stroke({ width: 5, color: COLORS.amber, alpha: 0.95 });
-
-    this.dwarfLabel.visible = true;
-    this.dwarfLabel.text = 'Mining…';
-    this.dwarfLabel.x = x;
-    this.dwarfLabel.y = y + 28 * s;
   }
 
   private isStationRunning(id: StationId): boolean {
     if (!this.state) return false;
     const st = this.state.stations[id];
-    if (!st.unlocked || st.level <= 0) return false;
+    if (!st.unlocked || st.level <= 0 || !st.enabled) return false;
     const def = getStation(id);
     if (!def.inputs) return true;
     for (const [key, rate] of Object.entries(def.inputs) as [ResourceId, number][]) {
@@ -858,6 +915,33 @@ export class ForgeScene {
       } catch {
         // Procedural fallback in redrawStations keeps the scene playable.
       }
+    }
+  }
+
+  private async loadMineArt() {
+    try {
+      const dwarfTex = await Assets.load(DWARF_ART);
+      const sprite = new Sprite(dwarfTex);
+      sprite.anchor.set(0.5, 0.98);
+      sprite.visible = false;
+      this.dwarfSprite = sprite;
+      this.mineLayer.addChild(sprite);
+    } catch {
+      // Procedural redrawDwarf fallback.
+    }
+
+    try {
+      const rockTex = (await Assets.load(ORE_ROCK_ART)) as Texture;
+      this.rockTexture = rockTex;
+      for (const rock of this.rocks) {
+        const sprite = new Sprite(rockTex);
+        sprite.anchor.set(0.5, 0.85);
+        sprite.visible = false;
+        this.rockSprites[rock.id] = sprite;
+        this.oreSpritesRoot.addChild(sprite);
+      }
+    } catch {
+      // Procedural drawRock fallback.
     }
   }
 
@@ -913,31 +997,32 @@ export class ForgeScene {
 
       const spawn = this.spawnAnim[slot.id];
       const spawnScale = spawn != null ? 0.6 + (1 - spawn / 0.7) * 0.55 : 1;
+      const powered = st.enabled;
       const running = this.isStationRunning(slot.id);
       const workPulse = running ? 1 + Math.sin(this.pulse * 5 + st.level) * 0.04 : 1;
       const scale = baseScale * spawnScale * workPulse;
 
       const poolColor = slot.id === 'enchanter' ? COLORS.cyan : COLORS.ember;
       g.circle(slot.x, slot.y - 10, 26 * scale);
-      g.fill({ color: poolColor, alpha: running ? 0.14 : 0.06 });
+      g.fill({ color: poolColor, alpha: running ? 0.14 : powered ? 0.06 : 0.03 });
 
       if (sprite) {
         sprite.visible = true;
         sprite.x = slot.x;
         sprite.y = slot.y;
         sprite.scale.set(scale);
-        sprite.alpha = running ? 1 : 0.92;
-        sprite.tint = running ? 0xffffff : 0xdfeaf0;
+        sprite.alpha = running ? 1 : powered ? 0.92 : 0.55;
+        sprite.tint = running ? 0xffffff : powered ? 0xdfeaf0 : 0x8fa8b0;
       } else {
-        this.drawStationBody(g, slot.id, slot.x, slot.y, 1, running, spawnScale * workPulse);
+        this.drawStationBody(g, slot.id, slot.x, slot.y, powered ? 1 : 0.55, running, spawnScale * workPulse);
       }
 
       if (label) {
         label.visible = true;
-        label.text = running
-          ? `${getStation(slot.id).name} · Lv${st.level}`
-          : `${getStation(slot.id).name} (idle)`;
-        label.alpha = 0.95;
+        if (!powered) label.text = `${getStation(slot.id).name} (off)`;
+        else if (running) label.text = `${getStation(slot.id).name} · Lv${st.level}`;
+        else label.text = `${getStation(slot.id).name} (idle)`;
+        label.alpha = powered ? 0.95 : 0.7;
         label.x = slot.x;
         label.y = slot.y + (hasArt ? 16 : 28);
       }

@@ -120,6 +120,7 @@ export function unlockStation(
   pay(next.resources, station.unlockCost);
   next.stations[stationId].unlocked = true;
   next.stations[stationId].level = 1;
+  next.stations[stationId].enabled = true;
   const events: GameEvent = { type: 'unlock_station', stationId };
   if (!next.milestones.firstStation) {
     next.milestones.firstStation = true;
@@ -147,6 +148,19 @@ export function upgradeStation(
   pay(next.resources, cost);
   next.stations[stationId].level += 1;
   return { ok: true, state: next, event: { type: 'upgrade_station', stationId } };
+}
+
+export function toggleStation(
+  state: GameState,
+  stationId: StationId,
+): { ok: true; state: GameState } | { ok: false; reason: string } {
+  const current = state.stations[stationId];
+  if (!current.unlocked || current.level <= 0) {
+    return { ok: false, reason: 'Locked' };
+  }
+  const next = structuredClone(state);
+  next.stations[stationId].enabled = !current.enabled;
+  return { ok: true, state: next };
 }
 
 export function startExpedition(
@@ -254,7 +268,7 @@ export function tickProduction(state: GameState, dt: number): GameState {
 
   for (const def of STATIONS) {
     const st = next.stations[def.id];
-    if (!st.unlocked || st.level <= 0) continue;
+    if (!st.unlocked || st.level <= 0 || !st.enabled) continue;
 
     const levelMult = st.level;
     if (def.inputs) {
