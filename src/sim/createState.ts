@@ -6,9 +6,9 @@ export function createInitialState(now = Date.now()): GameState {
     version: 1,
     resources: emptyWallet(),
     stations: {
-      smelter: { unlocked: false, level: 0 },
-      anvil: { unlocked: false, level: 0 },
-      enchanter: { unlocked: false, level: 0 },
+      smelter: { unlocked: false, level: 0, enabled: true },
+      anvil: { unlocked: false, level: 0, enabled: true },
+      enchanter: { unlocked: false, level: 0, enabled: true },
     },
     ownedRecipes: [],
     activeExpedition: null,

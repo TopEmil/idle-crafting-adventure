@@ -1,3 +1,4 @@
+import { STATIONS } from '../data/stations';
 import { createInitialState } from './createState';
 import type { GameState } from './types';
 
@@ -7,11 +8,22 @@ export function serializeState(state: GameState): string {
   return JSON.stringify(state);
 }
 
+/** Fill missing station fields from older saves (pre-toggle). */
+export function migrateState(state: GameState): GameState {
+  const next = structuredClone(state);
+  for (const def of STATIONS) {
+    const st = next.stations[def.id];
+    if (!st) continue;
+    if (typeof st.enabled !== 'boolean') st.enabled = true;
+  }
+  return next;
+}
+
 export function deserializeState(raw: string): GameState | null {
   try {
     const parsed = JSON.parse(raw) as GameState;
     if (!parsed || parsed.version !== 1 || !parsed.resources) return null;
-    return parsed;
+    return migrateState(parsed);
   } catch {
     return null;
   }

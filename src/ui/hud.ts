@@ -33,6 +33,7 @@ export interface HudActions {
   onCraftRecipe: (id: string) => void;
   onUnlockStation: (id: StationId) => void;
   onUpgradeStation: (id: StationId) => void;
+  onToggleStation: (id: StationId) => void;
   onStartExpedition: (id: string) => void;
   onClaimExpedition: (mode: 'normal' | 'ad' | 'coin') => void;
   onPrestige: () => void;
@@ -530,16 +531,24 @@ export class Hud {
       const costHint = !atCap && !affordable
         ? formatMissingCost(cost, state.resources)
         : `Upgrade ${formatCost(cost)}`;
+      const powerLabel = st.enabled ? 'On' : 'Off';
+      const powerClass = st.enabled ? 'btn-power is-on' : 'btn-power is-off';
+      const statusHint = st.enabled
+        ? 'Running when inputs are available'
+        : 'Paused — turn On to resume';
       return `
-        <div class="row-item${!atCap && !affordable ? ' row-item-blocked' : ''}">
+        <div class="row-item${!atCap && !affordable ? ' row-item-blocked' : ''}${!st.enabled ? ' row-item-paused' : ''}">
           <div>
-            <h3>${s.name} · Lv ${st.level}</h3>
+            <h3>${s.name} · Lv ${st.level}${st.enabled ? '' : ' · Off'}</h3>
             <div class="cost">${costHint}</div>
             <div class="effect-line">${formatStationIO(s, st.level)}</div>
             <div class="effect-line muted">${formatStationUpgradeHint(st.level)}</div>
           </div>
-          <button class="btn btn-secondary" data-upgrade="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
-          <p>${s.description} <span class="muted">(runs automatically when inputs are available)</span></p>
+          <div class="row-actions">
+            <button class="btn ${powerClass}" data-toggle="${s.id}" type="button" aria-pressed="${st.enabled ? 'true' : 'false'}">${powerLabel}</button>
+            <button class="btn btn-secondary" data-upgrade="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
+          </div>
+          <p>${s.description} <span class="muted">(${statusHint})</span></p>
         </div>
       `;
     }).join('');
@@ -578,6 +587,9 @@ export class Hud {
     this.bindSheet();
     this.overlay.querySelectorAll('[data-unlock]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUnlockStation((btn as HTMLElement).dataset.unlock as StationId));
+    });
+    this.overlay.querySelectorAll('[data-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => this.actions.onToggleStation((btn as HTMLElement).dataset.toggle as StationId));
     });
     this.overlay.querySelectorAll('[data-upgrade]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUpgradeStation((btn as HTMLElement).dataset.upgrade as StationId));
