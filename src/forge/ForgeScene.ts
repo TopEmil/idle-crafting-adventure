@@ -4,8 +4,8 @@ import { getStation, STATIONS, type StationId } from '../data/stations';
 import type { ResourceId } from '../data/resources';
 import { FORGE_STATION_SLOTS, type SceneView } from './sceneView';
 
-/** Mine cavern + forge workshop hall */
-const MINE_BG_URL = `${import.meta.env.BASE_URL}art/forge-bg.jpg`;
+/** Mine grotto + forge workshop hall */
+const MINE_BG_URL = `${import.meta.env.BASE_URL}art/mine-cavern-bg.jpg`;
 const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-hall-bg.jpg`;
 const STATION_ART: Record<StationId, string> = {
   smelter: `${import.meta.env.BASE_URL}art/stations/smelter.png`,
@@ -278,7 +278,7 @@ export class ForgeScene {
     const { x, y } =
       this.view === 'forge'
         ? { x: this.width * 0.5, y: this.height * 0.48 }
-        : { x: this.width * 0.5, y: this.height * 0.58 };
+        : this.veinPoint();
     for (let i = 0; i < 22; i++) {
       const ang = (i / 22) * Math.PI * 2;
       this.bursts.push({
@@ -379,7 +379,8 @@ export class ForgeScene {
   }
 
   private veinPoint() {
-    return { x: this.width * 0.28, y: this.height * 0.55 };
+    // Anchored on the hero cyan crystal cluster in mine-cavern-bg.
+    return { x: this.width * 0.34, y: this.height * 0.54 };
   }
 
   private stationLayout(): { id: StationId; x: number; y: number }[] {
@@ -495,7 +496,7 @@ export class ForgeScene {
     }
 
     if (this.view === 'mine') {
-      this.redrawHearth();
+      this.redrawVeinAmbient();
       this.redrawVeinHighlight();
     } else {
       this.hearth.clear();
@@ -513,24 +514,24 @@ export class ForgeScene {
     }
   }
 
-  private redrawHearth() {
+  /** Soft cyan bloom around the ore vein — mine grotto, not forge fire. */
+  private redrawVeinAmbient() {
     const g = this.hearth;
     g.clear();
-    const cx = this.width * 0.5;
-    const cy = this.height * 0.58;
+    const { x, y } = this.veinPoint();
     const breath = 1 + Math.sin(this.pulse * 2.2) * 0.1;
-    const boost = this.craftBurstT > 0 ? 1.15 : 1;
+    const boost = this.craftBurstT > 0 ? 1.12 : 1;
 
-    g.circle(cx, cy, 70 * breath * boost);
-    g.fill({ color: COLORS.ember, alpha: 0.14 });
-    g.circle(cx, cy, 38 * breath * boost);
-    g.fill({ color: COLORS.amber, alpha: 0.22 });
+    g.circle(x, y, 78 * breath * boost);
+    g.fill({ color: COLORS.cyan, alpha: 0.1 });
+    g.circle(x, y, 42 * breath * boost);
+    g.fill({ color: COLORS.tealLight, alpha: 0.14 });
 
     const cosmetic = this.state?.activeCosmetic ?? 'default';
     if (cosmetic !== 'default') {
-      const tint = cosmetic === 'cyan_hearth' ? COLORS.cyan : COLORS.ember;
-      g.star(cx, cy - 62, 5, 12, 5, this.pulse);
-      g.fill({ color: tint, alpha: 0.9 });
+      const tint = cosmetic === 'cyan_hearth' ? COLORS.cyan : COLORS.amber;
+      g.star(x, y - 54, 5, 11, 5, this.pulse);
+      g.fill({ color: tint, alpha: 0.85 });
     }
   }
 
@@ -724,15 +725,18 @@ export class ForgeScene {
   private redrawParticles() {
     const g = this.particles;
     g.clear();
-    const cx = this.width * 0.5;
-    const cy = this.view === 'forge' ? this.height * 0.42 : this.height * 0.58;
+    const forge = this.view === 'forge';
+    const cx = forge ? this.width * 0.5 : this.veinPoint().x;
+    const cy = forge ? this.height * 0.42 : this.veinPoint().y;
+    const a = forge ? COLORS.amber : COLORS.cyan;
+    const b = forge ? COLORS.ember : COLORS.mist;
 
     for (let i = 0; i < 14; i++) {
       const t = this.sparkTimer * 0.75 + i * 0.35;
       const px = cx + Math.sin(t * 1.7 + i) * (18 + i * 2);
       const py = cy - ((t * 34 + i * 15) % 100);
       g.circle(px, py, 1.5 + (i % 3) * 0.4);
-      g.fill({ color: i % 2 ? COLORS.amber : COLORS.ember, alpha: 0.55 });
+      g.fill({ color: i % 2 ? a : b, alpha: forge ? 0.55 : 0.4 });
     }
 
     if (this.craftBurstT > 0) {
@@ -741,7 +745,7 @@ export class ForgeScene {
         const ang = (i / 16) * Math.PI * 2;
         const r = 24 + p * 90;
         g.circle(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.65, 3.2 * (1 - p));
-        g.fill({ color: COLORS.amber, alpha: 1 - p });
+        g.fill({ color: forge ? COLORS.amber : COLORS.cyan, alpha: 1 - p });
       }
     }
   }
