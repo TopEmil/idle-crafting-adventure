@@ -5,14 +5,15 @@ import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import {
   availableExpeditions,
-  availableRecipes,
+  canAfford,
   canPrestige,
   getClickPower,
   stationUpgradeCostMap,
 } from '../sim/economy';
 import { prestigeMult } from '../data/balance';
 import type { GameState } from '../sim/types';
-import { formatCost, formatDuration, formatNumber } from './format';
+import { getCraftQuickState } from './craftState';
+import { formatCost, formatDuration, formatMissingCost, formatNumber } from './format';
 import { nextGoal } from './goals';
 import {
   formatRecipeEffects,
@@ -70,7 +71,13 @@ export class Hud {
       <div class="bottom-dock">
         <div class="cta-row">
           <button class="btn btn-primary" id="btn-vein" type="button">Tap Vein</button>
-          <button class="btn btn-secondary" id="btn-craft" type="button">Craft</button>
+          <div class="craft-cta">
+            <button class="btn btn-secondary" id="btn-craft" type="button">Craft</button>
+            <div class="craft-need" id="craft-need" hidden>
+              <div class="craft-need-label" id="craft-need-label"></div>
+              <div class="craft-need-meter" aria-hidden="true"><span id="craft-need-meter"></span></div>
+            </div>
+          </div>
         </div>
         <div class="nav-row">
           <button class="nav-btn" data-panel="recipes" type="button">Recipes</button>
@@ -111,14 +118,7 @@ export class Hud {
   render(state: GameState, opts?: { notice?: string }) {
     this.renderResources(state);
     this.renderGoal(state);
-    const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
-    const next = availableRecipes(state)[0];
-    if (craftBtn) {
-      const goal = nextGoal(state);
-      craftBtn.textContent = next ? `Craft ${next.name}` : 'Crafted out';
-      craftBtn.disabled = !next;
-      craftBtn.classList.toggle('btn-ready', Boolean(next && goal.ready && goal.id.startsWith('recipe:')));
-    }
+    this.renderCraftQuick(state);
     const veinBtn = this.root.querySelector('#btn-vein') as HTMLButtonElement | null;
     if (veinBtn) {
       veinBtn.textContent = `Tap Vein (+${formatNumber(getClickPower(state))})`;
@@ -301,6 +301,41 @@ export class Hud {
     this.overlay.onclick = null;
   }
 
+  private renderCraftQuick(state: GameState) {
+    const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
+    const need = this.root.querySelector('#craft-need') as HTMLElement | null;
+    const needLabel = this.root.querySelector('#craft-need-label');
+    const needMeter = this.root.querySelector('#craft-need-meter') as HTMLElement | null;
+    if (!craftBtn) return;
+
+    const craft = getCraftQuickState(state);
+    craftBtn.textContent = craft.label;
+    craftBtn.disabled = !craft.recipe || !craft.affordable;
+    craftBtn.classList.toggle('btn-ready', Boolean(craft.recipe && craft.affordable));
+    craftBtn.setAttribute(
+      'aria-disabled',
+      craftBtn.disabled ? 'true' : 'false',
+    );
+    if (!craft.recipe) {
+      craftBtn.title = 'Every recipe is already crafted';
+    } else if (!craft.affordable) {
+      craftBtn.title = formatMissingCost(craft.recipe.cost, state.resources);
+    } else {
+      craftBtn.title = `Craft ${craft.recipe.name}`;
+    }
+
+    if (need && needLabel && needMeter) {
+      if (!craft.needDetail) {
+        need.hidden = true;
+      } else {
+        need.hidden = false;
+        need.classList.toggle('craft-need-ready', craft.affordable);
+        needLabel.textContent = craft.needDetail;
+        needMeter.style.width = `${Math.round(craft.progress * 100)}%`;
+      }
+    }
+  }
+
   private renderResources(state: GameState) {
     const el = this.root.querySelector('#resources');
     if (!el) return;
@@ -326,19 +361,28 @@ export class Hud {
     const rows = RECIPES.map((r) => {
       const have = owned.has(r.id);
       const unlocked = !r.requires || r.requires.every((req) => owned.has(req));
-      const disabled = have || !unlocked;
+      const affordable = canAfford(state.resources, r.cost);
+      const disabled = have || !unlocked || !affordable;
       const effects = formatRecipeEffects(r);
       const req = r.requires?.length
         ? `Needs ${r.requires.map((id) => RECIPES.find((x) => x.id === id)?.name ?? id).join(', ')}`
         : 'Starter recipe';
+      let actionLabel = 'Craft';
+      if (have) actionLabel = 'Owned';
+      else if (!unlocked) actionLabel = 'Locked';
+      else if (!affordable) actionLabel = 'Need more';
+      const costHint =
+        !have && unlocked && !affordable
+          ? formatMissingCost(r.cost, state.resources)
+          : formatCost(r.cost);
       return `
-        <div class="row-item">
+        <div class="row-item${!have && unlocked && !affordable ? ' row-item-blocked' : ''}">
           <div>
             <h3>${r.name}${have ? ' ✓' : ''}</h3>
-            <div class="cost">${formatCost(r.cost)} · ${r.category}</div>
+            <div class="cost">${costHint} · ${r.category}</div>
             <div class="effect-line">${effects}</div>
           </div>
-          <button class="btn btn-secondary" data-craft="${r.id}" type="button" ${disabled ? 'disabled' : ''}>${have ? 'Owned' : 'Craft'}</button>
+          <button class="btn btn-secondary" data-craft="${r.id}" type="button" ${disabled ? 'disabled' : ''} title="${have || unlocked ? '' : req}">${actionLabel}</button>
           <p>${r.description} <span class="muted">(${req})</span></p>
         </div>
       `;
@@ -418,31 +462,50 @@ export class Hud {
     const stationRows = STATIONS.map((s) => {
       const st = state.stations[s.id as StationId];
       if (!st.unlocked) {
+        const prereqOk = !s.unlockRequires || state.stations[s.unlockRequires].unlocked;
+        const affordable = canAfford(state.resources, s.unlockCost);
         const gate = s.unlockRequires
           ? `Requires ${STATIONS.find((x) => x.id === s.unlockRequires)?.name ?? s.unlockRequires} first`
           : 'Appears in the forge when unlocked';
+        const disabled = !prereqOk || !affordable;
+        let actionLabel = 'Unlock';
+        if (!prereqOk) actionLabel = 'Locked';
+        else if (!affordable) actionLabel = 'Need more';
+        const costHint =
+          prereqOk && !affordable
+            ? formatMissingCost(s.unlockCost, state.resources)
+            : formatCost(s.unlockCost);
         return `
-          <div class="row-item">
+          <div class="row-item${!prereqOk || !affordable ? ' row-item-blocked' : ''}">
             <div>
               <h3>${s.name}</h3>
-              <div class="cost">${formatCost(s.unlockCost)}</div>
+              <div class="cost">${costHint}</div>
               <div class="effect-line">${formatStationIO(s, 1)}</div>
             </div>
-            <button class="btn btn-secondary" data-unlock="${s.id}" type="button">Unlock</button>
+            <button class="btn btn-secondary" data-unlock="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
             <p>${s.description} <span class="muted">(${gate})</span></p>
           </div>
         `;
       }
       const cost = stationUpgradeCostMap(s.id, st.level);
+      const affordable = canAfford(state.resources, cost);
+      const atCap = st.level >= BALANCE.stationLevelCap;
+      const disabled = atCap || !affordable;
+      let actionLabel = 'Upgrade';
+      if (atCap) actionLabel = 'Max';
+      else if (!affordable) actionLabel = 'Need more';
+      const costHint = !atCap && !affordable
+        ? formatMissingCost(cost, state.resources)
+        : `Upgrade ${formatCost(cost)}`;
       return `
-        <div class="row-item">
+        <div class="row-item${!atCap && !affordable ? ' row-item-blocked' : ''}">
           <div>
             <h3>${s.name} · Lv ${st.level}</h3>
-            <div class="cost">Upgrade ${formatCost(cost)}</div>
+            <div class="cost">${costHint}</div>
             <div class="effect-line">${formatStationIO(s, st.level)}</div>
             <div class="effect-line muted">${formatStationUpgradeHint(st.level)}</div>
           </div>
-          <button class="btn btn-secondary" data-upgrade="${s.id}" type="button">Upgrade</button>
+          <button class="btn btn-secondary" data-upgrade="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
           <p>${s.description} <span class="muted">(runs automatically when inputs are available)</span></p>
         </div>
       `;

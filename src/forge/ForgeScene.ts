@@ -3,8 +3,13 @@ import type { GameState } from '../sim/types';
 import { getStation, STATIONS, type StationId } from '../data/stations';
 import type { ResourceId } from '../data/resources';
 
-/** Served from `public/art/` — painted cavern backdrop */
+/** Served from `public/art/` — painted cavern backdrop + station props */
 const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-bg.jpg`;
+const STATION_ART: Record<StationId, string> = {
+  smelter: `${import.meta.env.BASE_URL}art/stations/smelter.png`,
+  anvil: `${import.meta.env.BASE_URL}art/stations/anvil.png`,
+  enchanter: `${import.meta.env.BASE_URL}art/stations/enchanter.png`,
+};
 
 const COLORS = {
   void: 0x0b1c22,
@@ -44,6 +49,7 @@ export class ForgeScene {
   private hearth = new Graphics();
   private vein = new Graphics();
   private stationsGfx = new Graphics();
+  private stationSpritesRoot = new Container();
   private stationLabels = new Container();
   private fx = new Graphics();
   private particles = new Graphics();
@@ -52,6 +58,7 @@ export class ForgeScene {
   private brand!: Text;
   private comboLabel!: Text;
   private labelByStation = new Map<StationId, Text>();
+  private spriteByStation = new Map<StationId, Sprite>();
   private sparkTimer = 0;
   private pulse = 0;
   private craftBurstT = 0;
@@ -103,6 +110,7 @@ export class ForgeScene {
 
     this.root.addChild(this.vignette);
     this.root.addChild(this.stationsGfx);
+    this.root.addChild(this.stationSpritesRoot);
     this.root.addChild(this.stationLabels);
     this.root.addChild(this.hearth);
     this.root.addChild(this.vein);
@@ -110,6 +118,8 @@ export class ForgeScene {
     this.root.addChild(this.particles);
     this.root.addChild(this.fx);
     this.root.addChild(this.floatLayer);
+
+    await this.loadStationArt();
 
     for (const def of STATIONS) {
       const label = new Text({
@@ -321,10 +331,11 @@ export class ForgeScene {
   }
 
   private stationLayout(): { id: StationId; x: number; y: number }[] {
+    // Sit on the cavern shelves / floor planes of the painted backdrop.
     return [
-      { id: 'smelter', x: this.width * 0.7, y: this.height * 0.48 },
-      { id: 'anvil', x: this.width * 0.8, y: this.height * 0.56 },
-      { id: 'enchanter', x: this.width * 0.62, y: this.height * 0.42 },
+      { id: 'smelter', x: this.width * 0.72, y: this.height * 0.5 },
+      { id: 'anvil', x: this.width * 0.84, y: this.height * 0.58 },
+      { id: 'enchanter', x: this.width * 0.58, y: this.height * 0.4 },
     ];
   }
 
@@ -482,26 +493,66 @@ export class ForgeScene {
     return true;
   }
 
+  private async loadStationArt() {
+    for (const def of STATIONS) {
+      try {
+        const texture = await Assets.load(STATION_ART[def.id]);
+        const sprite = new Sprite(texture);
+        sprite.anchor.set(0.5, 0.92);
+        sprite.visible = false;
+        // Soft multiply-ish blend into the cavern painting
+        sprite.tint = 0xe8f1f2;
+        this.spriteByStation.set(def.id, sprite);
+        this.stationSpritesRoot.addChild(sprite);
+      } catch {
+        // Procedural fallback in redrawStations keeps the scene playable.
+      }
+    }
+  }
+
+  private stationDisplayScale(): number {
+    // Keep machines readable but subordinate to the painted hearth.
+    return Math.min(0.52, Math.max(0.28, this.width / 1400));
+  }
+
   private redrawStations() {
     const g = this.stationsGfx;
     g.clear();
     if (!this.state) {
       for (const label of this.labelByStation.values()) label.visible = false;
+      for (const sprite of this.spriteByStation.values()) sprite.visible = false;
       return;
     }
+
+    const baseScale = this.stationDisplayScale();
 
     for (const slot of this.stationLayout()) {
       const st = this.state.stations[slot.id];
       const label = this.labelByStation.get(slot.id);
+      const sprite = this.spriteByStation.get(slot.id);
+      const hasArt = Boolean(sprite);
+
       if (!st.unlocked) {
-        // Ghost silhouette — shows where the station will appear
-        this.drawStationBody(g, slot.id, slot.x, slot.y, 0.22, false, 1);
+        // Ghost silhouette — painted prop or procedural placeholder
+        if (sprite) {
+          sprite.visible = true;
+          sprite.x = slot.x;
+          sprite.y = slot.y + 8;
+          sprite.scale.set(baseScale * 0.92);
+          sprite.alpha = 0.22;
+          sprite.tint = 0x8fa8b0;
+        } else {
+          this.drawStationBody(g, slot.id, slot.x, slot.y, 0.22, false, 1);
+        }
+        // Soft ground shadow so the cutout sits in the cavern
+        g.ellipse(slot.x, slot.y + 10, 34 * baseScale * 2.2, 10 * baseScale * 2);
+        g.fill({ color: COLORS.void, alpha: 0.28 });
         if (label) {
           label.visible = true;
           label.text = `${getStation(slot.id).name}?`;
           label.alpha = 0.35;
           label.x = slot.x;
-          label.y = slot.y + 28;
+          label.y = slot.y + (hasArt ? 22 : 28);
         }
         continue;
       }
@@ -509,23 +560,42 @@ export class ForgeScene {
       const spawn = this.spawnAnim[slot.id];
       const spawnScale = spawn != null ? 0.6 + (1 - spawn / 0.7) * 0.55 : 1;
       const running = this.isStationRunning(slot.id);
-      const workPulse = running ? 1 + Math.sin(this.pulse * 5 + st.level) * 0.08 : 1;
-      this.drawStationBody(g, slot.id, slot.x, slot.y, 1, running, spawnScale * workPulse);
+      const workPulse = running ? 1 + Math.sin(this.pulse * 5 + st.level) * 0.045 : 1;
+      const scale = baseScale * spawnScale * workPulse;
+
+      // Contact shadow under the machine
+      g.ellipse(slot.x, slot.y + 12, 38 * scale * 1.8, 11 * scale * 1.6);
+      g.fill({ color: COLORS.void, alpha: running ? 0.45 : 0.34 });
+
+      // Warm/cyan pool so the sprite reads as lit by the cavern
+      const poolColor = slot.id === 'enchanter' ? COLORS.cyan : COLORS.ember;
+      g.circle(slot.x, slot.y - 8, 28 * scale * 1.4);
+      g.fill({ color: poolColor, alpha: running ? 0.16 : 0.07 });
+
+      if (sprite) {
+        sprite.visible = true;
+        sprite.x = slot.x;
+        sprite.y = slot.y + 10;
+        sprite.scale.set(scale);
+        sprite.alpha = running ? 1 : 0.88;
+        sprite.tint = running ? 0xffffff : 0xd5e4e8;
+      } else {
+        this.drawStationBody(g, slot.id, slot.x, slot.y, 1, running, spawnScale * workPulse);
+      }
 
       if (label) {
         label.visible = true;
         label.text = running ? `${getStation(slot.id).name} · Lv${st.level}` : `${getStation(slot.id).name} (idle)`;
         label.alpha = 0.95;
         label.x = slot.x;
-        label.y = slot.y + 30;
+        label.y = slot.y + (hasArt ? 24 : 30);
       }
 
       if (running) {
-        // Rising product motes
         for (let i = 0; i < 3; i++) {
           const t = this.sparkTimer * 0.9 + i * 0.4 + st.level;
-          const px = slot.x + Math.sin(t * 2) * 10;
-          const py = slot.y - 18 - ((t * 28 + i * 10) % 36);
+          const px = slot.x + Math.sin(t * 2) * 12;
+          const py = slot.y - 28 * scale - ((t * 28 + i * 10) % 40);
           g.circle(px, py, 2);
           g.fill({
             color: slot.id === 'enchanter' ? COLORS.cyan : COLORS.amber,

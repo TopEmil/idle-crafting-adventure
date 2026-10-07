@@ -10,6 +10,7 @@ import {
   applyOfflineProgress,
   applyTimeWarp,
   availableRecipes,
+  canAfford,
   claimExpedition,
   clickVein,
   completeExpeditionIfReady,
@@ -221,6 +222,11 @@ export class GameApp {
   private handleCraftQuick() {
     const next = availableRecipes(this.state)[0];
     if (!next) return;
+    if (!canAfford(this.state.resources, next.cost)) {
+      this.hud.toast('Not enough resources', 'info');
+      this.refreshHudLight();
+      return;
+    }
     this.handleCraft(next.id);
   }
 
