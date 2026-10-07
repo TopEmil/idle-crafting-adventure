@@ -5,26 +5,29 @@ import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import {
   availableExpeditions,
-  availableRecipes,
+  canAfford,
   canPrestige,
   getClickPower,
   stationUpgradeCostMap,
 } from '../sim/economy';
 import { prestigeMult } from '../data/balance';
 import type { GameState } from '../sim/types';
-import { formatCost, formatDuration, formatNumber } from './format';
+import { getCraftQuickState } from './craftState';
+import { formatCost, formatDuration, formatMissingCost, formatNumber } from './format';
 import { nextGoal } from './goals';
 import {
   formatRecipeEffects,
   formatStationIO,
   formatStationUpgradeHint,
 } from './effectsText';
+import type { SceneView } from '../forge/sceneView';
 
 export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'ledger' | null;
 
 export interface HudActions {
   onClickVein: () => void;
   onCraftQuick: () => void;
+  onSetView: (view: SceneView) => void;
   onOpenPanel: (panel: PanelId) => void;
   onCloseOverlay: () => void;
   onCraftRecipe: (id: string) => void;
@@ -43,6 +46,7 @@ export class Hud {
   private root: HTMLElement;
   private overlay: HTMLElement;
   private panel: PanelId = null;
+  private view: SceneView = 'mine';
   private actions: HudActions;
   private lastResources: Partial<Record<ResourceId, number>> = {};
   private floatRoot: HTMLElement | null = null;
@@ -68,14 +72,24 @@ export class Hud {
         <div class="float-layer" id="float-layer" aria-hidden="true"></div>
       </div>
       <div class="bottom-dock">
+        <div class="view-row" role="tablist" aria-label="Scene">
+          <button class="view-btn active" data-view="mine" type="button" role="tab" aria-selected="true">Mine</button>
+          <button class="view-btn" data-view="forge" type="button" role="tab" aria-selected="false">Forge</button>
+        </div>
         <div class="cta-row">
           <button class="btn btn-primary" id="btn-vein" type="button">Tap Vein</button>
-          <button class="btn btn-secondary" id="btn-craft" type="button">Craft</button>
+          <div class="craft-cta">
+            <button class="btn btn-secondary" id="btn-craft" type="button">Craft</button>
+            <div class="craft-need" id="craft-need" hidden>
+              <div class="craft-need-label" id="craft-need-label"></div>
+              <div class="craft-need-meter" aria-hidden="true"><span id="craft-need-meter"></span></div>
+            </div>
+          </div>
         </div>
         <div class="nav-row">
           <button class="nav-btn" data-panel="recipes" type="button">Recipes</button>
           <button class="nav-btn" data-panel="expeditions" type="button">Expeditions</button>
-          <button class="nav-btn" data-panel="forge" type="button">Forge</button>
+          <button class="nav-btn" data-panel="forge" type="button">Stations</button>
           <button class="nav-btn" data-panel="ledger" type="button">Ledger</button>
         </div>
       </div>
@@ -86,6 +100,12 @@ export class Hud {
     this.root.querySelector('#btn-craft')?.addEventListener('click', () => this.actions.onCraftQuick());
     this.root.querySelector('#btn-mute')?.addEventListener('click', () => {
       this.actions.onToggleMute();
+    });
+    this.root.querySelectorAll('.view-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const view = (btn as HTMLElement).dataset.view as SceneView;
+        this.actions.onSetView(view);
+      });
     });
     this.root.querySelectorAll('.nav-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -100,6 +120,18 @@ export class Hud {
     if (btn) btn.textContent = muted ? '🔇' : '♪';
   }
 
+  setView(view: SceneView) {
+    this.view = view;
+    this.root.querySelectorAll('.view-btn').forEach((btn) => {
+      const id = (btn as HTMLElement).dataset.view;
+      const active = id === view;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    this.root.classList.toggle('view-mine', view === 'mine');
+    this.root.classList.toggle('view-forge', view === 'forge');
+  }
+
   setPanel(panel: PanelId) {
     this.panel = panel;
     this.root.querySelectorAll('.nav-btn').forEach((btn) => {
@@ -111,17 +143,21 @@ export class Hud {
   render(state: GameState, opts?: { notice?: string }) {
     this.renderResources(state);
     this.renderGoal(state);
-    const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
-    const next = availableRecipes(state)[0];
-    if (craftBtn) {
-      const goal = nextGoal(state);
-      craftBtn.textContent = next ? `Craft ${next.name}` : 'Crafted out';
-      craftBtn.disabled = !next;
-      craftBtn.classList.toggle('btn-ready', Boolean(next && goal.ready && goal.id.startsWith('recipe:')));
-    }
+    this.renderCraftQuick(state);
+    this.setView(this.view);
     const veinBtn = this.root.querySelector('#btn-vein') as HTMLButtonElement | null;
     if (veinBtn) {
-      veinBtn.textContent = `Tap Vein (+${formatNumber(getClickPower(state))})`;
+      veinBtn.textContent =
+        this.view === 'mine'
+          ? `Tap Vein (+${formatNumber(getClickPower(state))})`
+          : `Mine Vein (+${formatNumber(getClickPower(state))})`;
+      veinBtn.classList.toggle('btn-primary', this.view === 'mine');
+      veinBtn.classList.toggle('btn-secondary', this.view === 'forge');
+    }
+    const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
+    if (craftBtn) {
+      craftBtn.classList.toggle('btn-primary', this.view === 'forge');
+      craftBtn.classList.toggle('btn-secondary', this.view === 'mine');
     }
 
     if (this.panel) {
@@ -179,7 +215,7 @@ export class Hud {
       },
       {
         title: 'Light the stations',
-        body: 'Unlock the Smelter when you can — auto production keeps the cavern alive.',
+        body: 'Switch to the Forge view and unlock the Smelter — machines sit on the hall pedestals and keep producing.',
       },
     ];
     const item = copy[Math.min(step, copy.length - 1)];
@@ -301,6 +337,41 @@ export class Hud {
     this.overlay.onclick = null;
   }
 
+  private renderCraftQuick(state: GameState) {
+    const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
+    const need = this.root.querySelector('#craft-need') as HTMLElement | null;
+    const needLabel = this.root.querySelector('#craft-need-label');
+    const needMeter = this.root.querySelector('#craft-need-meter') as HTMLElement | null;
+    if (!craftBtn) return;
+
+    const craft = getCraftQuickState(state);
+    craftBtn.textContent = craft.label;
+    craftBtn.disabled = !craft.recipe || !craft.affordable;
+    craftBtn.classList.toggle('btn-ready', Boolean(craft.recipe && craft.affordable));
+    craftBtn.setAttribute(
+      'aria-disabled',
+      craftBtn.disabled ? 'true' : 'false',
+    );
+    if (!craft.recipe) {
+      craftBtn.title = 'Every recipe is already crafted';
+    } else if (!craft.affordable) {
+      craftBtn.title = formatMissingCost(craft.recipe.cost, state.resources);
+    } else {
+      craftBtn.title = `Craft ${craft.recipe.name}`;
+    }
+
+    if (need && needLabel && needMeter) {
+      if (!craft.needDetail) {
+        need.hidden = true;
+      } else {
+        need.hidden = false;
+        need.classList.toggle('craft-need-ready', craft.affordable);
+        needLabel.textContent = craft.needDetail;
+        needMeter.style.width = `${Math.round(craft.progress * 100)}%`;
+      }
+    }
+  }
+
   private renderResources(state: GameState) {
     const el = this.root.querySelector('#resources');
     if (!el) return;
@@ -326,19 +397,28 @@ export class Hud {
     const rows = RECIPES.map((r) => {
       const have = owned.has(r.id);
       const unlocked = !r.requires || r.requires.every((req) => owned.has(req));
-      const disabled = have || !unlocked;
+      const affordable = canAfford(state.resources, r.cost);
+      const disabled = have || !unlocked || !affordable;
       const effects = formatRecipeEffects(r);
       const req = r.requires?.length
         ? `Needs ${r.requires.map((id) => RECIPES.find((x) => x.id === id)?.name ?? id).join(', ')}`
         : 'Starter recipe';
+      let actionLabel = 'Craft';
+      if (have) actionLabel = 'Owned';
+      else if (!unlocked) actionLabel = 'Locked';
+      else if (!affordable) actionLabel = 'Need more';
+      const costHint =
+        !have && unlocked && !affordable
+          ? formatMissingCost(r.cost, state.resources)
+          : formatCost(r.cost);
       return `
-        <div class="row-item">
+        <div class="row-item${!have && unlocked && !affordable ? ' row-item-blocked' : ''}">
           <div>
             <h3>${r.name}${have ? ' ✓' : ''}</h3>
-            <div class="cost">${formatCost(r.cost)} · ${r.category}</div>
+            <div class="cost">${costHint} · ${r.category}</div>
             <div class="effect-line">${effects}</div>
           </div>
-          <button class="btn btn-secondary" data-craft="${r.id}" type="button" ${disabled ? 'disabled' : ''}>${have ? 'Owned' : 'Craft'}</button>
+          <button class="btn btn-secondary" data-craft="${r.id}" type="button" ${disabled ? 'disabled' : ''} title="${have || unlocked ? '' : req}">${actionLabel}</button>
           <p>${r.description} <span class="muted">(${req})</span></p>
         </div>
       `;
@@ -418,31 +498,50 @@ export class Hud {
     const stationRows = STATIONS.map((s) => {
       const st = state.stations[s.id as StationId];
       if (!st.unlocked) {
+        const prereqOk = !s.unlockRequires || state.stations[s.unlockRequires].unlocked;
+        const affordable = canAfford(state.resources, s.unlockCost);
         const gate = s.unlockRequires
           ? `Requires ${STATIONS.find((x) => x.id === s.unlockRequires)?.name ?? s.unlockRequires} first`
           : 'Appears in the forge when unlocked';
+        const disabled = !prereqOk || !affordable;
+        let actionLabel = 'Unlock';
+        if (!prereqOk) actionLabel = 'Locked';
+        else if (!affordable) actionLabel = 'Need more';
+        const costHint =
+          prereqOk && !affordable
+            ? formatMissingCost(s.unlockCost, state.resources)
+            : formatCost(s.unlockCost);
         return `
-          <div class="row-item">
+          <div class="row-item${!prereqOk || !affordable ? ' row-item-blocked' : ''}">
             <div>
               <h3>${s.name}</h3>
-              <div class="cost">${formatCost(s.unlockCost)}</div>
+              <div class="cost">${costHint}</div>
               <div class="effect-line">${formatStationIO(s, 1)}</div>
             </div>
-            <button class="btn btn-secondary" data-unlock="${s.id}" type="button">Unlock</button>
+            <button class="btn btn-secondary" data-unlock="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
             <p>${s.description} <span class="muted">(${gate})</span></p>
           </div>
         `;
       }
       const cost = stationUpgradeCostMap(s.id, st.level);
+      const affordable = canAfford(state.resources, cost);
+      const atCap = st.level >= BALANCE.stationLevelCap;
+      const disabled = atCap || !affordable;
+      let actionLabel = 'Upgrade';
+      if (atCap) actionLabel = 'Max';
+      else if (!affordable) actionLabel = 'Need more';
+      const costHint = !atCap && !affordable
+        ? formatMissingCost(cost, state.resources)
+        : `Upgrade ${formatCost(cost)}`;
       return `
-        <div class="row-item">
+        <div class="row-item${!atCap && !affordable ? ' row-item-blocked' : ''}">
           <div>
             <h3>${s.name} · Lv ${st.level}</h3>
-            <div class="cost">Upgrade ${formatCost(cost)}</div>
+            <div class="cost">${costHint}</div>
             <div class="effect-line">${formatStationIO(s, st.level)}</div>
             <div class="effect-line muted">${formatStationUpgradeHint(st.level)}</div>
           </div>
-          <button class="btn btn-secondary" data-upgrade="${s.id}" type="button">Upgrade</button>
+          <button class="btn btn-secondary" data-upgrade="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
           <p>${s.description} <span class="muted">(runs automatically when inputs are available)</span></p>
         </div>
       `;
@@ -454,10 +553,10 @@ export class Hud {
     this.overlay.innerHTML = `
       <div class="sheet">
         <div class="sheet-header">
-          <h2>Forge</h2>
+          <h2>Stations</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Prestige mult ×${prestigeMult(state.totalRelicsEarned).toFixed(2)} · Cosmetic: ${state.activeCosmetic}</p>
+        <p class="muted">Machines sit on the Forge hall pedestals · Prestige ×${prestigeMult(state.totalRelicsEarned).toFixed(2)} · Cosmetic: ${state.activeCosmetic}</p>
         <div class="list">${stationRows}</div>
         <div class="row-item">
           <div>

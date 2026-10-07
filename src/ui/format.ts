@@ -18,6 +18,23 @@ export function formatCost(cost: Partial<Record<ResourceId, number>>): string {
     .join(' · ');
 }
 
+/** Human-readable missing pieces when a cost is not yet affordable. */
+export function formatMissingCost(
+  cost: Partial<Record<ResourceId, number>>,
+  wallet: Record<ResourceId, number>,
+): string {
+  const missing = (Object.entries(cost) as [ResourceId, number][])
+    .map(([id, amount]) => {
+      const have = wallet[id] ?? 0;
+      const shortfall = amount - have;
+      if (shortfall <= 0) return null;
+      const def = RESOURCES.find((r) => r.id === id);
+      return `${formatNumber(shortfall)} ${def?.short ?? id}`;
+    })
+    .filter(Boolean);
+  return missing.length ? `Need ${missing.join(' · ')}` : '';
+}
+
 export function formatDuration(sec: number): string {
   const s = Math.max(0, Math.ceil(sec));
   const m = Math.floor(s / 60);
