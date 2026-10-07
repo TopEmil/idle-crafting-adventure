@@ -30,9 +30,11 @@ describe('art anchors', () => {
     expect(xs[1]).toBeLessThan(xs[2]);
   });
 
-  it('places the mine vein on the left-center crystal', () => {
-    expect(MINE_VEIN_UV.x).toBeGreaterThan(0.2);
-    expect(MINE_VEIN_UV.x).toBeLessThan(0.45);
+  it('places the dig face in the timber-framed shaft opening', () => {
+    expect(MINE_VEIN_UV.x).toBeGreaterThan(0.4);
+    expect(MINE_VEIN_UV.x).toBeLessThan(0.6);
+    expect(MINE_VEIN_UV.y).toBeGreaterThan(0.4);
+    expect(MINE_VEIN_UV.y).toBeLessThan(0.6);
   });
 });
 

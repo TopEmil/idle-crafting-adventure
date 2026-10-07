@@ -27,7 +27,7 @@ import {
   type ShaftCell,
 } from '../sim/mineShaft';
 
-/** Mine grotto + forge workshop hall */
+/** Timber-framed dig shaft + forge workshop hall */
 const MINE_BG_URL = `${import.meta.env.BASE_URL}art/mine-cavern-bg.jpg`;
 const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-hall-bg.jpg`;
 const STATION_ART: Record<StationId, string> = {
@@ -54,6 +54,9 @@ const COLORS = {
   cyan: 0x2ec4b6,
   mist: 0xe8f1f2,
   slate: 0x8fa8b0,
+  timber: 0x5c3a22,
+  timberDark: 0x3a2414,
+  timberLight: 0x7a5234,
   dwarfSkin: 0xc4a574,
   dwarfCoat: 0x3d5a4c,
   dwarfHelm: 0xb87333,
@@ -528,7 +531,9 @@ export class ForgeScene {
 
   private dwarfPoint() {
     const { x, y } = this.veinPoint();
-    return { x: x - 90, y: y + 8 };
+    const short = Math.min(this.width, this.height);
+    const offset = Math.min(110, Math.max(72, short * 0.14));
+    return { x: x - offset, y: y + 10 };
   }
 
   private handlePointer(px: number, py: number) {
@@ -600,8 +605,8 @@ export class ForgeScene {
         { x: 0.5, y: playY },
         mineZoom,
       );
-      // Dim painted cavern so the tile shaft reads as the main play surface
-      this.mineBg.alpha = 0.55;
+      // Keep timber/ore backdrop readable; tiles sit in the dark shaft void
+      this.mineBg.alpha = 0.78;
     }
     if (this.forgeBg) {
       if (portrait) {
@@ -753,23 +758,27 @@ export class ForgeScene {
     }
   }
 
-  /** Soft cyan bloom around the ore vein — mine grotto, not forge fire. */
+  /** Soft mineral bloom around the dig face — shaft tunnel, not forge fire. */
   private redrawVeinAmbient() {
     const g = this.hearth;
     g.clear();
     const { x, y } = this.veinPoint();
     const breath = 1 + Math.sin(this.pulse * 2.2) * 0.1;
     const boost = this.craftBurstT > 0 ? 1.12 : 1;
+    const { w: cellW, h: cellH } = this.cellSize;
+    const shaftW = cellW * SHAFT_COLS + 18;
+    const shaftH = cellH * (SHAFT_LOOKAHEAD + SHAFT_LOOKBEHIND + 1.4);
 
-    g.circle(x, y, 78 * breath * boost);
-    g.fill({ color: COLORS.cyan, alpha: 0.1 });
-    g.circle(x, y, 42 * breath * boost);
-    g.fill({ color: COLORS.tealLight, alpha: 0.14 });
+    // Cool ore wash inside the open shaft (kept subtle so timber bg stays dominant)
+    g.rect(x - shaftW * 0.5, y - shaftH * 0.5, shaftW, shaftH);
+    g.fill({ color: COLORS.cyan, alpha: 0.045 * breath * boost });
+    g.circle(x, y + cellH * 0.2, 56 * breath * boost);
+    g.fill({ color: COLORS.tealLight, alpha: 0.08 });
 
     const cosmetic = this.state?.activeCosmetic ?? 'default';
     if (cosmetic !== 'default') {
       const tint = cosmetic === 'cyan_hearth' ? COLORS.cyan : COLORS.amber;
-      g.star(x, y - 54, 5, 11, 5, this.pulse);
+      g.star(x, y - shaftH * 0.42, 5, 11, 5, this.pulse);
       g.fill({ color: tint, alpha: 0.85 });
     }
   }
@@ -864,23 +873,32 @@ export class ForgeScene {
     const shaftW = cellW * SHAFT_COLS + 18;
     const shaftH = cellH * (SHAFT_LOOKAHEAD + SHAFT_LOOKBEHIND + 1.4);
 
-    // Side walls + open tunnel — Terraria shaft silhouette
-    const wallAlpha = 0.82 + this.stratumFlash * 0.12;
-    g.rect(cx - shaftW * 0.5 - 22, cy - shaftH * 0.55, 22, shaftH * 1.15);
+    // Side rock + open tunnel void — reads against the timber-framed backdrop
+    const wallAlpha = 0.72 + this.stratumFlash * 0.12;
+    const wallPad = 26;
+    g.rect(cx - shaftW * 0.5 - wallPad, cy - shaftH * 0.55, wallPad, shaftH * 1.15);
     g.fill({ color: stratum.wall, alpha: wallAlpha });
-    g.rect(cx + shaftW * 0.5, cy - shaftH * 0.55, 22, shaftH * 1.15);
+    g.rect(cx + shaftW * 0.5, cy - shaftH * 0.55, wallPad, shaftH * 1.15);
     g.fill({ color: stratum.wall, alpha: wallAlpha });
     g.rect(cx - shaftW * 0.5, cy - shaftH * 0.55, shaftW, shaftH * 1.15);
-    g.fill({ color: COLORS.void, alpha: 0.5 + this.stratumFlash * 0.15 });
+    g.fill({ color: COLORS.void, alpha: 0.58 + this.stratumFlash * 0.12 });
 
-    // Torch glow in cleared tunnel
-    for (let i = 0; i < SHAFT_LOOKBEHIND; i++) {
-      const ty = cy - cellH * (i + 0.8);
-      const flicker = 0.25 + Math.sin(this.pulse * 5 + i) * 0.06;
-      g.circle(cx - shaftW * 0.42, ty, 10);
-      g.fill({ color: COLORS.amber, alpha: flicker * 0.55 });
-      g.circle(cx + shaftW * 0.42, ty, 10);
-      g.fill({ color: COLORS.ember, alpha: flicker * 0.4 });
+    this.drawShaftTimbers(g, cx, cy, shaftW, shaftH);
+
+    // Torch glow along timber posts (matches painted sconces)
+    for (let i = 0; i < SHAFT_LOOKBEHIND + 1; i++) {
+      const ty = cy - cellH * (i + 0.55);
+      const flicker = 0.28 + Math.sin(this.pulse * 5 + i) * 0.07;
+      const lx = cx - shaftW * 0.5 - 10;
+      const rx = cx + shaftW * 0.5 + 10;
+      g.circle(lx, ty, 11);
+      g.fill({ color: COLORS.amber, alpha: flicker * 0.5 });
+      g.circle(rx, ty, 11);
+      g.fill({ color: COLORS.ember, alpha: flicker * 0.38 });
+      g.circle(lx, ty - 6, 2.2);
+      g.fill({ color: COLORS.mist, alpha: flicker * 0.55 });
+      g.circle(rx, ty - 6, 2.2);
+      g.fill({ color: COLORS.mist, alpha: flicker * 0.45 });
     }
 
     const ordered = [...this.shaftCells].sort((a, b) => {
@@ -916,6 +934,48 @@ export class ForgeScene {
       g.rect(cx - shaftW * 0.5, cy - shaftH * 0.55, shaftW, shaftH * 1.15);
       g.fill({ color: stratum.fleck, alpha: this.stratumFlash * 0.12 });
     }
+  }
+
+  /** Timber props that echo the painted shaft frame around the dig tiles. */
+  private drawShaftTimbers(
+    g: Graphics,
+    cx: number,
+    cy: number,
+    shaftW: number,
+    shaftH: number,
+  ) {
+    const top = cy - shaftH * 0.55;
+    const bot = top + shaftH * 1.15;
+    const left = cx - shaftW * 0.5;
+    const right = cx + shaftW * 0.5;
+    const postW = 10;
+    const beamH = 12;
+
+    // Vertical posts
+    g.rect(left - postW - 2, top - 4, postW, bot - top + 8);
+    g.fill({ color: COLORS.timber, alpha: 0.92 });
+    g.rect(left - postW, top, 3, bot - top);
+    g.fill({ color: COLORS.timberLight, alpha: 0.35 });
+    g.rect(right + 2, top - 4, postW, bot - top + 8);
+    g.fill({ color: COLORS.timber, alpha: 0.92 });
+    g.rect(right + postW - 1, top, 3, bot - top);
+    g.fill({ color: COLORS.timberDark, alpha: 0.55 });
+
+    // Header + footer beams
+    g.rect(left - postW - 4, top - beamH, shaftW + postW * 2 + 8, beamH);
+    g.fill({ color: COLORS.timberDark, alpha: 0.95 });
+    g.rect(left - postW - 4, top - 3, shaftW + postW * 2 + 8, 3);
+    g.fill({ color: COLORS.timberLight, alpha: 0.4 });
+    g.rect(left - postW - 4, bot, shaftW + postW * 2 + 8, beamH * 0.75);
+    g.fill({ color: COLORS.timberDark, alpha: 0.85 });
+
+    // Corner braces only — keep the dig face clear for tiles
+    g.moveTo(left - postW - 2, top + 8);
+    g.lineTo(left + 16, top + 34);
+    g.stroke({ width: 4, color: COLORS.timberDark, alpha: 0.7 });
+    g.moveTo(right + postW + 2, top + 8);
+    g.lineTo(right - 16, top + 34);
+    g.stroke({ width: 4, color: COLORS.timberDark, alpha: 0.7 });
   }
 
   private drawBlockTile(
