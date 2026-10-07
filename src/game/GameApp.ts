@@ -62,6 +62,7 @@ export class GameApp {
       onUnlockStation: (id) => this.handleUnlock(id),
       onUpgradeStation: (id) => this.handleUpgrade(id),
       onStartExpedition: (id) => this.handleStartExpedition(id as ExpeditionId),
+      onRevealExpeditionLoot: () => this.revealExpeditionLoot(),
       onClaimExpedition: (mode) => void this.handleClaim(mode),
       onPrestige: () => void this.handlePrestige(),
       onTimeWarp: (viaAd) => void this.handleTimeWarp(viaAd),
@@ -134,6 +135,11 @@ export class GameApp {
           break;
         }
         this.accum -= SIM_DT;
+      }
+      // Offline / reload can leave pendingLoot without firing expedition_ready.
+      // Always surface the claim modal once the player is free to interact.
+      if (this.state.pendingLoot && this.overlayMode === 'none') {
+        this.showLootModal();
       }
       this.scene.setAutoMineRate(getAutoMineRate(this.state));
       this.scene.sync(this.state);
@@ -327,6 +333,17 @@ export class GameApp {
     this.hud.toast('Scouts dispatched', 'info');
     this.refreshHud();
     void this.persist();
+  }
+
+  /** Ensure pending loot is rolled, then open the claim modal. */
+  private revealExpeditionLoot() {
+    const ready = completeExpeditionIfReady(this.state);
+    this.state = ready.state;
+    if (ready.event) {
+      this.scene.triggerExpeditionReturn();
+      this.audio.claim();
+    }
+    this.showLootModal();
   }
 
   private showLootModal() {
