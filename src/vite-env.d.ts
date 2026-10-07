@@ -1,5 +1,13 @@
 /// <reference types="vite/client" />
 
+interface ImportMetaEnv {
+  readonly VITE_CG_LEADERBOARD_KEY?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
 interface CrazyGamesAdCallbacks {
   adFinished?: () => void;
   adError?: (error: { reason?: string } | string) => void;
@@ -28,6 +36,10 @@ interface CrazyGamesSDK {
     systemInfo?: {
       countryCode?: string;
     };
+    submitScore?: (payload: {
+      encryptedScore: string;
+      score: number;
+    }) => Promise<unknown> | unknown;
   };
 }
 

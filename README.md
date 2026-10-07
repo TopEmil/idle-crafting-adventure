@@ -40,6 +40,7 @@ After `npm run build`:
 | Portrait trailer ~18s | `release/trailers/embervein-portrait-18s.mp4` |
 | Metadata draft | `docs/store-metadata.md` |
 | QA checklist | `docs/crazygames-checklist.md` |
+| Leaderboard setup | `docs/leaderboard.md` |
 | Design bible | `docs/design.md` |
 
 Build budget: zip is well under the 15–18MB initial target (see `release/build-report.json`).

@@ -34,6 +34,7 @@ import {
   formatTalentPerLevel,
 } from './effectsText';
 import type { SceneView } from '../forge/sceneView';
+import { leaderboardScore, msUntilSeasonEnd } from '../sim/oreScore';
 
 export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'talents' | 'ledger' | null;
 
@@ -903,6 +904,8 @@ export class Hud {
     const talentLevels = TALENTS.reduce((sum, t) => sum + (state.talents[t.id] ?? 0), 0);
     const unlockedSet = new Set(state.unlockedAchievements ?? []);
     const unlockedCount = unlockedSet.size;
+    const weekScore = leaderboardScore(state);
+    const seasonLeft = formatDuration(msUntilSeasonEnd() / 1000);
     const achievementRows = ACHIEVEMENTS.map((def) => {
       const done = unlockedSet.has(def.id);
       const progress = achievementProgress(state, def.condition);
@@ -929,8 +932,15 @@ export class Hud {
           <h2>Ledger</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
+        <h3 class="sheet-section">Miners' ranks</h3>
+        <p class="sheet-intro">Weekly CrazyGames board — most ore mined. Global ranks show on the CrazyGames game page.</p>
         <div class="list">
-          <div class="row-item"><div><h3>Lifetime ore</h3></div><div>${formatNumber(state.lifetimeOre)}</div></div>
+          <div class="row-item"><div><h3>This week</h3></div><div>${formatNumber(weekScore)}</div></div>
+          <div class="row-item"><div><h3>All-time ore</h3></div><div>${formatNumber(state.allTimeOre ?? 0)}</div></div>
+          <div class="row-item"><div><h3>Season ends in</h3></div><div>${seasonLeft}</div></div>
+        </div>
+        <div class="list">
+          <div class="row-item"><div><h3>Run ore</h3></div><div>${formatNumber(state.lifetimeOre)}</div></div>
           <div class="row-item"><div><h3>Vein taps</h3></div><div>${formatNumber(state.lifetimeClicks ?? 0)}</div></div>
           <div class="row-item"><div><h3>Play time</h3></div><div>${formatDuration(state.playTimeSec)}</div></div>
           <div class="row-item"><div><h3>Reforges</h3></div><div>${state.prestigeCount}</div></div>

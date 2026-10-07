@@ -29,6 +29,7 @@ import {
   unlockStation,
   upgradeStation,
 } from '../sim/economy';
+import { maybeSubmitLeaderboardScore } from '../sim/leaderboardSync';
 import { deserializeState, loadLocalState, SAVE_KEY, saveLocalState, serializeState } from '../sim/save';
 import type { GameState } from '../sim/types';
 import { Hud, type PanelId } from '../ui/hud';
@@ -207,6 +208,17 @@ export class GameApp {
   private async persist() {
     saveLocalState(this.state);
     await this.platform.saveCloud(SAVE_KEY, serializeState(this.state));
+    await this.syncLeaderboard();
+  }
+
+  private async syncLeaderboard() {
+    const result = await maybeSubmitLeaderboardScore(this.state, (score) =>
+      this.platform.submitLeaderboardScore(score),
+    );
+    this.state = result.state;
+    if (result.submitted) {
+      saveLocalState(this.state);
+    }
   }
 
   private openPanel(panel: PanelId) {

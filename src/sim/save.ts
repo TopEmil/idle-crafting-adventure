@@ -9,6 +9,7 @@ import { STATIONS } from '../data/stations';
 import { emptyTalents, TALENTS } from '../data/talents';
 import { createInitialState } from './createState';
 import { emptyFaceDamage, faceHitsToDamage, SHAFT_COLS } from './mineShaft';
+import { currentSeasonStartMs, ensureSeasonWindow } from './oreScore';
 import type { ActiveExpedition, GameState } from './types';
 
 export const SAVE_KEY = 'embervein.save.v1';
@@ -110,6 +111,33 @@ export function migrateState(state: GameState): GameState {
   if (next.pendingLootExpeditionId === undefined) {
     next.pendingLootExpeditionId = null;
   }
+
+  if (typeof next.allTimeOre !== 'number' || !Number.isFinite(next.allTimeOre)) {
+    // Older saves only tracked run ore — seed all-time from the best known total.
+    next.allTimeOre = Math.max(0, next.lifetimeOre ?? 0, next.totalOreProduced ?? 0);
+  } else {
+    next.allTimeOre = Math.max(0, next.allTimeOre);
+  }
+
+  if (typeof next.seasonStartedAt !== 'number' || !Number.isFinite(next.seasonStartedAt)) {
+    next.seasonStartedAt = currentSeasonStartMs();
+  }
+  if (typeof next.seasonOre !== 'number' || !Number.isFinite(next.seasonOre)) {
+    // Weekly board starts clean; only ore mined after this update counts for the season.
+    next.seasonOre = 0;
+  } else {
+    next.seasonOre = Math.max(0, next.seasonOre);
+  }
+  if (typeof next.lastLeaderboardScore !== 'number' || !Number.isFinite(next.lastLeaderboardScore)) {
+    next.lastLeaderboardScore = 0;
+  }
+  if (
+    typeof next.lastLeaderboardSubmitAt !== 'number' ||
+    !Number.isFinite(next.lastLeaderboardSubmitAt)
+  ) {
+    next.lastLeaderboardSubmitAt = 0;
+  }
+  ensureSeasonWindow(next);
 
   return next;
 }

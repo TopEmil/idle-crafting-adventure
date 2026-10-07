@@ -44,7 +44,18 @@ export interface GameState {
   /** Which expedition the pending loot belongs to (optional for legacy saves). */
   pendingLootExpeditionId: ExpeditionId | null;
   totalOreProduced: number;
+  /** Ore mined this run (resets on Reforge). */
   lifetimeOre: number;
+  /** Ore mined across all runs — persists across Reforge. */
+  allTimeOre: number;
+  /** Ore mined in the current CrazyGames weekly season (Mon 09:00 UTC). */
+  seasonOre: number;
+  /** UTC ms of the current season start; used to roll seasonOre. */
+  seasonStartedAt: number;
+  /** Last successful leaderboard submit score (season ore). */
+  lastLeaderboardScore: number;
+  /** Timestamp of last leaderboard submit attempt (ms). */
+  lastLeaderboardSubmitAt: number;
   /** Fully cleared mine-shaft rows this run (resets on Reforge). */
   mineDepth: number;
   /** Per-column damage on the current dig face. */

@@ -1,6 +1,7 @@
 import { emptyUnlockedAchievements } from '../data/achievements';
 import { emptyWallet } from '../data/resources';
 import { emptyTalents } from '../data/talents';
+import { currentSeasonStartMs } from './oreScore';
 import type { GameState } from './types';
 
 export function createInitialState(now = Date.now()): GameState {
@@ -22,6 +23,11 @@ export function createInitialState(now = Date.now()): GameState {
     pendingLootExpeditionId: null,
     totalOreProduced: 0,
     lifetimeOre: 0,
+    allTimeOre: 0,
+    seasonOre: 0,
+    seasonStartedAt: currentSeasonStartMs(now),
+    lastLeaderboardScore: 0,
+    lastLeaderboardSubmitAt: 0,
     mineDepth: 0,
     mineFaceDamage: [0, 0, 0, 0, 0, 0, 0, 0],
     mineDigAcc: 0,
