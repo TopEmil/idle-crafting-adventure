@@ -1,0 +1,11 @@
+node_modules
+dist
+*.local
+.DS_Store
+coverage
+*.log
+.vite
+*.tsbuildinfo
+
+# Keep submission package tracked; ignore only rebuild noise if added later
+release/build-report.json

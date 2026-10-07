@@ -1,0 +1,23 @@
+{
+  "name": "embervein",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Embervein — idle crafting adventure for CrazyGames",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build && node scripts/pack-release.mjs",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "pixi.js": "^8.6.6"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}
