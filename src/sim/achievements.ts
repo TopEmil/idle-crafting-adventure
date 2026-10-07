@@ -7,6 +7,7 @@ import {
   type AchievementRewards,
 } from '../data/achievements';
 import type { ResourceId } from '../data/resources';
+import { recordOreMined } from './oreScore';
 import type { GameState } from './types';
 
 export function isAchievementUnlocked(state: GameState, id: AchievementId): boolean {
@@ -133,8 +134,7 @@ export function syncAchievements(state: GameState): {
       grantResources(next.resources, def.rewards.resources);
       const oreGain = def.rewards.resources.ore ?? 0;
       if (oreGain > 0) {
-        next.totalOreProduced += oreGain;
-        next.lifetimeOre += oreGain;
+        recordOreMined(next, oreGain);
       }
     }
     newly.push(def);

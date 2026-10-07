@@ -60,6 +60,7 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 4. **Expeditions:** Timed scout runs; return modal is primary midgame-ad hook.
 5. **Offline:** Simulated ticks up to cap; summary lists gains.
 6. **Reforge:** Reset production progress for Relics (10 min cooldown). Spend Relics on Talents for permanent bonuses.
+7. **Leaderboard:** Weekly CrazyGames board for most ore mined (`seasonOre`). See `docs/leaderboard.md`.
 
 ## HUD wireframes (notes)
 

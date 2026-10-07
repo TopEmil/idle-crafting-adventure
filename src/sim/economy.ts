@@ -23,6 +23,7 @@ import {
 } from './mineShaft';
 import { aggregateEffects } from './effects';
 import { createInitialState } from './createState';
+import { recordOreMined } from './oreScore';
 import type { GameEvent, GameState, StationProgress } from './types';
 
 /** Clamped production multiplier from the player's chosen run speed. */
@@ -123,8 +124,7 @@ export function clickVein(
   applyShaftProgress(next, dig.progress.depth, dig.progress.faceDamage);
   const amount = getClickPower(next);
   next.resources.ore += amount;
-  next.totalOreProduced += amount;
-  next.lifetimeOre += amount;
+  recordOreMined(next, amount);
   next.lifetimeClicks = (next.lifetimeClicks ?? 0) + 1;
   if (dig.loot) {
     next.resources[dig.loot.resource] =
@@ -410,8 +410,7 @@ export function claimExpedition(
   const mult = doubled ? 2 : 1;
   grant(next.resources, loot, mult);
   if (loot.ore) {
-    next.totalOreProduced += loot.ore * mult;
-    next.lifetimeOre += loot.ore * mult;
+    recordOreMined(next, loot.ore * mult);
   }
   next.pendingLoot = null;
   next.pendingLootExpeditionId = null;
@@ -445,8 +444,7 @@ export function tickProduction(state: GameState, dt: number): GameState {
     }
     const ore = getAutoMineRate(next) * dt;
     next.resources.ore += ore;
-    next.totalOreProduced += ore;
-    next.lifetimeOre += ore;
+    recordOreMined(next, ore);
   }
 
   for (const def of STATIONS) {
@@ -473,8 +471,7 @@ export function tickProduction(state: GameState, dt: number): GameState {
       const gained = rate * levelMult * pMult * dt;
       next.resources[key] += gained;
       if (key === 'ore') {
-        next.totalOreProduced += gained;
-        next.lifetimeOre += gained;
+        recordOreMined(next, gained);
       }
     }
   }
@@ -581,6 +578,11 @@ export function prestige(
   next.extraSquadSlots = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
   next.unlockedAchievements = [...(state.unlockedAchievements ?? [])];
   next.lifetimeClicks = state.lifetimeClicks ?? 0;
+  next.allTimeOre = state.allTimeOre ?? 0;
+  next.seasonOre = state.seasonOre ?? 0;
+  next.seasonStartedAt = state.seasonStartedAt ?? 0;
+  next.lastLeaderboardScore = state.lastLeaderboardScore ?? 0;
+  next.lastLeaderboardSubmitAt = state.lastLeaderboardSubmitAt ?? 0;
   next.unlockedCosmetics = [...new Set([...state.unlockedCosmetics, cosmeticForPrestige(state.prestigeCount + 1)])];
   next.activeCosmetic = cosmeticForPrestige(state.prestigeCount + 1);
   next.onboardingDone = true;

@@ -60,6 +60,8 @@ describe('click & craft', () => {
     expect(event.type === 'click_vein' && event.amount).toBe(getClickPower(next));
     expect(next.resources.ore).toBe(getClickPower(next));
     expect(next.totalOreProduced).toBe(next.resources.ore);
+    expect(next.allTimeOre).toBe(next.resources.ore);
+    expect(next.seasonOre).toBe(next.resources.ore);
     expect(next.mineFaceDamage.some((d) => d > 0)).toBe(true);
   });
 
@@ -348,9 +350,12 @@ describe('offline & prestige', () => {
     }
   });
 
-  it('prestige resets production but keeps talents and relics', () => {
+  it('prestige resets production but keeps talents, relics, and ore ranks', () => {
     const state = createInitialState(1_000_000);
     state.lifetimeOre = 2000;
+    state.allTimeOre = 5000;
+    state.seasonOre = 800;
+    state.seasonStartedAt = 42;
     state.resources.ore = 500;
     state.resources.relics = 3;
     state.talents.vein_attunement = 2;
@@ -359,6 +364,10 @@ describe('offline & prestige', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.resources.ore).toBe(0);
+    expect(result.state.lifetimeOre).toBe(0);
+    expect(result.state.allTimeOre).toBe(5000);
+    expect(result.state.seasonOre).toBe(800);
+    expect(result.state.seasonStartedAt).toBe(42);
     expect(result.state.stations.smelter.unlocked).toBe(false);
     expect(result.state.totalRelicsEarned).toBeGreaterThan(0);
     expect(result.state.resources.relics).toBeGreaterThan(3);

@@ -80,6 +80,30 @@ describe('save migration', () => {
     expect(migrated.lifetimeClicks).toBe(0);
   });
 
+  it('seeds allTimeOre from legacy run totals and starts a clean season', () => {
+    const state = createInitialState();
+    state.lifetimeOre = 250;
+    state.totalOreProduced = 300;
+    const legacy = structuredClone(state) as unknown as {
+      allTimeOre?: number;
+      seasonOre?: number;
+      seasonStartedAt?: number;
+      lastLeaderboardScore?: number;
+      lastLeaderboardSubmitAt?: number;
+    };
+    delete legacy.allTimeOre;
+    delete legacy.seasonOre;
+    delete legacy.seasonStartedAt;
+    delete legacy.lastLeaderboardScore;
+    delete legacy.lastLeaderboardSubmitAt;
+
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.allTimeOre).toBe(300);
+    expect(migrated.seasonOre).toBe(0);
+    expect(migrated.seasonStartedAt).toBeGreaterThan(0);
+    expect(migrated.lastLeaderboardScore).toBe(0);
+  });
+
   it('round-trips enabled and runLevel through serialize/deserialize', () => {
     const state = createInitialState();
     state.stations.smelter = { unlocked: true, level: 5, runLevel: 2, enabled: false };

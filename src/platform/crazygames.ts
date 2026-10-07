@@ -1,3 +1,8 @@
+import {
+  submitEncryptedScore,
+  type SubmitScoreResult,
+} from './leaderboard';
+
 export type AdKind = 'midgame' | 'rewarded';
 
 export interface AdRequestResult {
@@ -18,6 +23,8 @@ export interface PlatformBridge {
   requestAd(kind: AdKind): Promise<AdRequestResult>;
   saveCloud(key: string, value: string): Promise<void>;
   loadCloud(key: string): Promise<string | null>;
+  /** Submit weekly ore score to CrazyGames leaderboard (no-op outside iframe). */
+  submitLeaderboardScore(score: number): Promise<SubmitScoreResult>;
 }
 
 function getSdk(): CrazyGamesSDK | null {
@@ -170,6 +177,11 @@ export function createPlatformBridge(): PlatformBridge {
         }
       }
       return null;
+    },
+
+    async submitLeaderboardScore(score: number) {
+      const sdk = getSdk();
+      return submitEncryptedScore(sdk?.user ?? null, score);
     },
   };
 }

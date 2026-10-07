@@ -37,8 +37,12 @@ export function formatMissingCost(
 
 export function formatDuration(sec: number): string {
   const s = Math.max(0, Math.ceil(sec));
-  const m = Math.floor(s / 60);
+  const days = Math.floor(s / 86_400);
+  const hours = Math.floor((s % 86_400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const r = s % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${m.toString().padStart(2, '0')}m`;
   if (m <= 0) return `${r}s`;
   return `${m}m ${r.toString().padStart(2, '0')}s`;
 }

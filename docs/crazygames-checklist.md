@@ -35,6 +35,14 @@ Use with the [CrazyGames Developer Portal](https://developer.crazygames.com/) QA
 - [ ] SDK Data module cloud save with local fallback
 - [ ] Offline progress cap + summary modal
 
+## Leaderboard (invite-only)
+
+- [ ] CrazyGames enables leaderboard for the game (contact / portal)
+- [ ] Portal encryption key matches `docs/leaderboard.md` / `VITE_CG_LEADERBOARD_KEY`
+- [ ] Guide: “Mine the most ore this week”; DESC; incremental; cooldown ≥60s
+- [ ] Preview logs show `submitScore` after mining + save
+- [ ] Ledger shows Miners' ranks (week / all-time / season timer)
+
 ## UX / iframe
 
 - [ ] Lands in gameplay (≤1 click)
