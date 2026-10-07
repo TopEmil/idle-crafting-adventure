@@ -1,7 +1,8 @@
-import { SIM_DT, BALANCE, prestigeMult } from '../data/balance';
+import { SIM_DT, BALANCE } from '../data/balance';
 import type { ExpeditionId } from '../data/expeditions';
 import type { RecipeId } from '../data/recipes';
 import type { StationId } from '../data/stations';
+import type { TalentId } from '../data/talents';
 import { AudioBus } from '../audio/audio';
 import { ForgeScene } from '../forge/ForgeScene';
 import { createAdGate } from '../platform/ads';
@@ -10,6 +11,7 @@ import {
   applyOfflineProgress,
   applyTimeWarp,
   availableRecipes,
+  buyTalent,
   canAfford,
   claimExpedition,
   clickVein,
@@ -67,6 +69,7 @@ export class GameApp {
       onRevealExpeditionLoot: () => this.revealExpeditionLoot(),
       onClaimExpedition: (mode) => void this.handleClaim(mode),
       onPrestige: () => void this.handlePrestige(),
+      onBuyTalent: (id) => this.handleBuyTalent(id),
       onTimeWarp: (viaAd) => void this.handleTimeWarp(viaAd),
       onSkipOnboarding: () => this.finishOnboarding(),
       onAdvanceOnboarding: () => this.advanceOnboarding(),
@@ -452,9 +455,24 @@ export class GameApp {
     this.overlayMode = 'prestige';
     this.hud.showMilestone(
       'Forge Reforged',
-      `You gained ${result.relics} Relics. Permanent mult ×${prestigeMult(this.state.totalRelicsEarned).toFixed(2)}.`,
+      `You gained ${result.relics} Relics. Spend them on Talents in Stations — next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
     );
     void this.persist();
+  }
+
+  private handleBuyTalent(id: TalentId) {
+    const result = buyTalent(this.state, id);
+    if (!result.ok) {
+      this.notice = result.reason;
+      this.refreshHud();
+      return;
+    }
+    this.state = result.state;
+    this.audio.craft();
+    this.scene.triggerCraftBurst();
+    this.notice = '';
+    void this.persist();
+    this.refreshHud();
   }
 
   private async handleTimeWarp(viaAd: boolean) {

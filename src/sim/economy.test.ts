@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { BALANCE, prestigeMult, relicsFromReforge, stationUpgradeCost } from '../data/balance';
+import { BALANCE, relicsFromReforge, stationUpgradeCost } from '../data/balance';
+import { getTalent, talentUpgradeCost } from '../data/talents';
 import { createInitialState } from './createState';
 import {
   applyOfflineProgress,
+  buyTalent,
+  canPrestige,
   claimExpedition,
   clickVein,
   craftRecipe,
   getAutoMineRate,
   getClickPower,
   prestige,
+  prestigeCooldownRemaining,
   simulateSeconds,
   startExpedition,
   tickProduction,
@@ -27,9 +31,14 @@ describe('balance helpers', () => {
     expect(c).toBeGreaterThan(b);
   });
 
-  it('scales prestige mult with relics', () => {
-    expect(prestigeMult(0)).toBe(1);
-    expect(prestigeMult(10)).toBeCloseTo(1 + 10 * BALANCE.prestigeMultPerRelic);
+  it('grows talent costs monotonically', () => {
+    const def = getTalent('vein_attunement');
+    const a = talentUpgradeCost(def, 0);
+    const b = talentUpgradeCost(def, 3);
+    const c = talentUpgradeCost(def, 8);
+    expect(a).toBe(1);
+    expect(b).toBeGreaterThan(a);
+    expect(c).toBeGreaterThan(b);
   });
 
   it('grants at least one relic on reforge', () => {
@@ -206,19 +215,72 @@ describe('offline & prestige', () => {
     }
   });
 
-  it('prestige resets production but keeps relics mult', () => {
-    let state = createInitialState();
+  it('prestige resets production but keeps talents and relics', () => {
+    const state = createInitialState(1_000_000);
     state.lifetimeOre = 2000;
     state.resources.ore = 500;
+    state.resources.relics = 3;
+    state.talents.vein_attunement = 2;
     state.stations.smelter = { unlocked: true, level: 4, enabled: true };
-    const result = prestige(state);
+    const result = prestige(state, 1_000_000);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.resources.ore).toBe(0);
     expect(result.state.stations.smelter.unlocked).toBe(false);
     expect(result.state.totalRelicsEarned).toBeGreaterThan(0);
-    expect(result.state.resources.relics).toBeGreaterThan(0);
-    expect(getClickPower(result.state)).toBeGreaterThan(BALANCE.baseClickOre);
+    expect(result.state.resources.relics).toBeGreaterThan(3);
+    expect(result.state.talents.vein_attunement).toBe(2);
+    expect(result.state.lastPrestigeAt).toBe(1_000_000);
+    expect(getClickPower(result.state)).toBeCloseTo(BALANCE.baseClickOre * (1 + 0.1 * 2));
+  });
+
+  it('blocks prestige during 10-minute cooldown', () => {
+    const now = 5_000_000;
+    const state = createInitialState(now);
+    state.lifetimeOre = 2000;
+    state.lastPrestigeAt = now - 60_000;
+    expect(canPrestige(state, now)).toBe(false);
+    expect(prestigeCooldownRemaining(state, now)).toBeGreaterThan(500);
+    expect(prestige(state, now).ok).toBe(false);
+
+    const readyAt = now + BALANCE.prestigeCooldownSec * 1000;
+    expect(canPrestige(state, readyAt)).toBe(true);
+    expect(prestige(state, readyAt).ok).toBe(true);
+  });
+});
+
+describe('talents', () => {
+  it('spends relics to raise talent levels and boost click power', () => {
+    let state = createInitialState();
+    state.resources.relics = 5;
+    const base = getClickPower(state);
+    const bought = buyTalent(state, 'vein_attunement');
+    expect(bought.ok).toBe(true);
+    if (!bought.ok) return;
+    state = bought.state;
+    expect(state.talents.vein_attunement).toBe(1);
+    expect(state.resources.relics).toBe(4);
+    expect(getClickPower(state)).toBeGreaterThan(base);
+  });
+
+  it('rejects buy when out of relics or maxed', () => {
+    const poor = createInitialState();
+    expect(buyTalent(poor, 'hearth_kindling').ok).toBe(false);
+
+    const maxed = createInitialState();
+    maxed.resources.relics = 9999;
+    maxed.talents.deep_slumber = getTalent('deep_slumber').maxLevel;
+    expect(buyTalent(maxed, 'deep_slumber').ok).toBe(false);
+  });
+
+  it('boosts station output via hearth kindling', () => {
+    const state = createInitialState();
+    state.stations.smelter = { unlocked: true, level: 1, enabled: true };
+    state.resources.ore = 100;
+    const plain = tickProduction(structuredClone(state), 1);
+    state.talents.hearth_kindling = 5;
+    const buffed = tickProduction(structuredClone(state), 1);
+    expect(buffed.resources.emberglass).toBeGreaterThan(plain.resources.emberglass);
   });
 });
 
@@ -229,7 +291,6 @@ describe('fixed timestep independence', () => {
     base.resources.ore = 1_000;
 
     const a = simulateSeconds(structuredClone(base), 10, 10_000).state;
-    // simulateSeconds always uses SIM_DT internally — compare against manual coarse ticks
     let coarse = structuredClone(base);
     for (let i = 0; i < 10; i++) {
       coarse = tickProduction(coarse, 1);

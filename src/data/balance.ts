@@ -8,8 +8,10 @@ export const BALANCE = {
   clickGrowthPerLevel: 0,
   offlineCapHours: 8,
   offlineCapSeconds: 8 * 3600,
-  /** Soft production mult per prestige relic spent historically */
-  prestigeMultPerRelic: 0.08,
+  /** Minimum real time between Reforges (seconds) */
+  prestigeCooldownSec: 600,
+  /** Lifetime ore needed to unlock Reforge (or unlock Smelter) */
+  prestigeMinLifetimeOre: 500,
   /** Base relics from reforge before scaling */
   prestigeBaseRelics: 1,
   prestigeRelicScale: 0.015,
@@ -28,10 +30,6 @@ export function stationUpgradeCost(
   level: number,
 ): number {
   return Math.ceil(base * Math.pow(growth, level));
-}
-
-export function prestigeMult(totalRelicsEarned: number): number {
-  return 1 + totalRelicsEarned * BALANCE.prestigeMultPerRelic;
 }
 
 export function relicsFromReforge(lifetimeOre: number, prestigeCount: number): number {

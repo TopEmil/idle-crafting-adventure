@@ -651,6 +651,14 @@ body {
   line-height: 1.45;
 }
 
+.sheet-section {
+  margin: 18px 0 6px;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--mist);
+}
+
 .req-line {
   margin-top: 4px;
   font-size: 0.78rem;

@@ -18,13 +18,32 @@ describe('save migration', () => {
     expect(migrated.stations.enchanter.enabled).toBe(true);
   });
 
+  it('defaults missing talents and lastPrestigeAt', () => {
+    const state = createInitialState();
+    const legacy = structuredClone(state) as unknown as {
+      talents?: typeof state.talents;
+      lastPrestigeAt?: number;
+    };
+    delete legacy.talents;
+    delete legacy.lastPrestigeAt;
+
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.talents.vein_attunement).toBe(0);
+    expect(migrated.talents.hearth_kindling).toBe(0);
+    expect(migrated.lastPrestigeAt).toBe(0);
+  });
+
   it('round-trips enabled through serialize/deserialize', () => {
     const state = createInitialState();
     state.stations.smelter = { unlocked: true, level: 2, enabled: false };
+    state.talents.scout_instinct = 3;
+    state.lastPrestigeAt = 42;
     const raw = serializeState(state);
     const parsed = deserializeState(raw);
     expect(parsed).not.toBeNull();
     expect(parsed?.stations.smelter.enabled).toBe(false);
     expect(parsed?.stations.smelter.level).toBe(2);
+    expect(parsed?.talents.scout_instinct).toBe(3);
+    expect(parsed?.lastPrestigeAt).toBe(42);
   });
 });

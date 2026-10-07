@@ -1,4 +1,5 @@
 import { STATIONS } from '../data/stations';
+import { emptyTalents, TALENTS } from '../data/talents';
 import { createInitialState } from './createState';
 import type { GameState } from './types';
 
@@ -8,13 +9,25 @@ export function serializeState(state: GameState): string {
   return JSON.stringify(state);
 }
 
-/** Fill missing station fields from older saves (pre-toggle). */
+/** Fill missing fields from older saves (toggle, talents, prestige cooldown). */
 export function migrateState(state: GameState): GameState {
   const next = structuredClone(state);
   for (const def of STATIONS) {
     const st = next.stations[def.id];
     if (!st) continue;
     if (typeof st.enabled !== 'boolean') st.enabled = true;
+  }
+  if (!next.talents) {
+    next.talents = emptyTalents();
+  } else {
+    const filled = emptyTalents();
+    for (const def of TALENTS) {
+      filled[def.id] = Math.max(0, Math.floor(next.talents[def.id] ?? 0));
+    }
+    next.talents = filled;
+  }
+  if (typeof next.lastPrestigeAt !== 'number') {
+    next.lastPrestigeAt = 0;
   }
   return next;
 }

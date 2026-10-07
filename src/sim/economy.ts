@@ -1,6 +1,5 @@
 import {
   BALANCE,
-  prestigeMult,
   relicsFromReforge,
   stationUpgradeCost,
   SIM_DT,
@@ -9,6 +8,11 @@ import { EXPEDITIONS, getExpedition, type ExpeditionId } from '../data/expeditio
 import { getRecipe, RECIPES, type RecipeId } from '../data/recipes';
 import type { ResourceId } from '../data/resources';
 import { getStation, STATIONS, type StationId } from '../data/stations';
+import {
+  getTalent,
+  talentUpgradeCost,
+  type TalentId,
+} from '../data/talents';
 import { aggregateEffects } from './effects';
 import { createInitialState } from './createState';
 import type { GameEvent, GameState } from './types';
@@ -58,13 +62,13 @@ function scaleLoot(
 }
 
 export function getClickPower(state: GameState): number {
-  const effects = aggregateEffects(state.ownedRecipes);
-  return BALANCE.baseClickOre * effects.clickPower * prestigeMult(state.totalRelicsEarned);
+  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  return BALANCE.baseClickOre * effects.clickPower;
 }
 
 /** Ore/sec from the dwarf miner when autoMine recipes are owned. */
 export function getAutoMineRate(state: GameState): number {
-  const effects = aggregateEffects(state.ownedRecipes);
+  const effects = aggregateEffects(state.ownedRecipes, state.talents);
   if (effects.autoMine <= 0) return 0;
   return getClickPower(state) * effects.autoMine;
 }
@@ -202,7 +206,7 @@ export function rollExpeditionLoot(
   rng: () => number = Math.random,
 ): Partial<Record<ResourceId, number>> {
   const def = getExpedition(expeditionId);
-  const effects = aggregateEffects(state.ownedRecipes);
+  const effects = aggregateEffects(state.ownedRecipes, state.talents);
   const loot = scaleLoot(def.baseLoot, effects.expeditionLoot);
   if (rng() < def.bonusChance) {
     const bonus = scaleLoot(def.bonusLoot, effects.expeditionLoot);
@@ -262,8 +266,8 @@ export function claimExpedition(
 export function tickProduction(state: GameState, dt: number): GameState {
   if (dt <= 0) return state;
   const next = structuredClone(state);
-  const effects = aggregateEffects(next.ownedRecipes);
-  const pMult = prestigeMult(next.totalRelicsEarned) * effects.stationOutput;
+  const effects = aggregateEffects(next.ownedRecipes, next.talents);
+  const pMult = effects.stationOutput;
 
   const autoOre = getAutoMineRate(next) * dt;
   if (autoOre > 0) {
@@ -346,7 +350,7 @@ export function applyOfflineProgress(
   }
 
   const before = structuredClone(state.resources);
-  const effects = aggregateEffects(state.ownedRecipes);
+  const effects = aggregateEffects(state.ownedRecipes, state.talents);
   const capped = Math.min(elapsedSec, BALANCE.offlineCapSeconds);
   const adjusted = capped * effects.offlineRate;
   const { state: after } = simulateSeconds(state, adjusted, now);
@@ -363,21 +367,44 @@ export function applyOfflineProgress(
   };
 }
 
-export function canPrestige(state: GameState): boolean {
-  return state.lifetimeOre >= 500 || state.stations.smelter.unlocked;
+/** Seconds remaining before Reforge is allowed again. */
+export function prestigeCooldownRemaining(state: GameState, now = Date.now()): number {
+  if (state.lastPrestigeAt <= 0) return 0;
+  const elapsed = (now - state.lastPrestigeAt) / 1000;
+  return Math.max(0, BALANCE.prestigeCooldownSec - elapsed);
+}
+
+export function canPrestige(state: GameState, now = Date.now()): boolean {
+  const unlocked =
+    state.lifetimeOre >= BALANCE.prestigeMinLifetimeOre || state.stations.smelter.unlocked;
+  if (!unlocked) return false;
+  return prestigeCooldownRemaining(state, now) <= 0;
 }
 
 export function prestige(
   state: GameState,
+  now = Date.now(),
 ): { ok: true; state: GameState; event: GameEvent; relics: number } | { ok: false; reason: string } {
-  if (!canPrestige(state)) {
+  const unlocked =
+    state.lifetimeOre >= BALANCE.prestigeMinLifetimeOre || state.stations.smelter.unlocked;
+  if (!unlocked) {
     return { ok: false, reason: 'Keep forging a little longer' };
   }
+  const coolLeft = prestigeCooldownRemaining(state, now);
+  if (coolLeft > 0) {
+    const mins = Math.ceil(coolLeft / 60);
+    return {
+      ok: false,
+      reason: `Reforge cools for ${mins} more minute${mins === 1 ? '' : 's'}`,
+    };
+  }
   const relics = relicsFromReforge(state.lifetimeOre, state.prestigeCount);
-  const next = createInitialState(Date.now());
+  const next = createInitialState(now);
   next.resources.relics = state.resources.relics + relics;
   next.totalRelicsEarned = state.totalRelicsEarned + relics;
   next.prestigeCount = state.prestigeCount + 1;
+  next.lastPrestigeAt = now;
+  next.talents = structuredClone(state.talents);
   next.unlockedCosmetics = [...new Set([...state.unlockedCosmetics, cosmeticForPrestige(state.prestigeCount + 1)])];
   next.activeCosmetic = cosmeticForPrestige(state.prestigeCount + 1);
   next.onboardingDone = true;
@@ -393,6 +420,25 @@ export function prestige(
     event: { type: 'prestige' },
     relics,
   };
+}
+
+export function buyTalent(
+  state: GameState,
+  talentId: TalentId,
+): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
+  const def = getTalent(talentId);
+  const level = state.talents[talentId] ?? 0;
+  if (level >= def.maxLevel) {
+    return { ok: false, reason: 'Talent maxed' };
+  }
+  const cost = talentUpgradeCost(def, level);
+  if ((state.resources.relics ?? 0) < cost) {
+    return { ok: false, reason: 'Not enough Relics' };
+  }
+  const next = structuredClone(state);
+  next.resources.relics -= cost;
+  next.talents[talentId] = level + 1;
+  return { ok: true, state: next, event: { type: 'buy_talent', talentId } };
 }
 
 function cosmeticForPrestige(count: number): string {
