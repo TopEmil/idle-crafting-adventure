@@ -37,6 +37,12 @@ export interface GameState {
   pendingLoot: Partial<Record<ResourceId, number>> | null;
   totalOreProduced: number;
   lifetimeOre: number;
+  /** Fully cleared mine-shaft rows this run (resets on Reforge). */
+  mineDepth: number;
+  /** Per-column damage on the current dig face. */
+  mineFaceDamage: number[];
+  /** Fractional auto-mine dig accumulator (hits/sec). */
+  mineDigAcc: number;
   playTimeSec: number;
   prestigeCount: number;
   totalRelicsEarned: number;
@@ -60,7 +66,11 @@ export interface GameState {
 }
 
 export type GameEvent =
-  | { type: 'click_vein'; amount: number }
+  | {
+      type: 'click_vein';
+      amount: number;
+      find?: { resource: ResourceId; amount: number; label: string };
+    }
   | { type: 'craft'; recipeId: RecipeId }
   | { type: 'unlock_station'; stationId: StationId }
   | { type: 'upgrade_station'; stationId: StationId }

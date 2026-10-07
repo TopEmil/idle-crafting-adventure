@@ -6,6 +6,7 @@ import {
 import { STATIONS } from '../data/stations';
 import { emptyTalents, TALENTS } from '../data/talents';
 import { createInitialState } from './createState';
+import { emptyFaceDamage, faceHitsToDamage, SHAFT_COLS } from './mineShaft';
 import type { GameState } from './types';
 
 export const SAVE_KEY = 'embervein.save.v1';
@@ -41,6 +42,25 @@ export function migrateState(state: GameState): GameState {
   }
   if (typeof next.lastPrestigeAt !== 'number') {
     next.lastPrestigeAt = 0;
+  }
+  if (typeof next.mineDepth !== 'number' || next.mineDepth < 0) {
+    next.mineDepth = 0;
+  } else {
+    next.mineDepth = Math.floor(next.mineDepth);
+  }
+  if (!Array.isArray(next.mineFaceDamage) || next.mineFaceDamage.length !== SHAFT_COLS) {
+    const legacy = next as GameState & { mineFaceHits?: number };
+    if (typeof legacy.mineFaceHits === 'number' && legacy.mineFaceHits > 0) {
+      next.mineFaceDamage = faceHitsToDamage(next.mineDepth, legacy.mineFaceHits);
+    } else {
+      next.mineFaceDamage = emptyFaceDamage();
+    }
+  } else {
+    next.mineFaceDamage = next.mineFaceDamage.map((n) => Math.max(0, Math.floor(n ?? 0)));
+  }
+  delete (next as GameState & { mineFaceHits?: number }).mineFaceHits;
+  if (typeof next.mineDigAcc !== 'number' || next.mineDigAcc < 0) {
+    next.mineDigAcc = 0;
   }
   if (typeof next.lifetimeClicks !== 'number' || !Number.isFinite(next.lifetimeClicks)) {
     next.lifetimeClicks = 0;

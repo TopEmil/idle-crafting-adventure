@@ -5,6 +5,7 @@ import { RECIPES } from '../data/recipes';
 import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import { TALENTS, talentUpgradeCost, type TalentId } from '../data/talents';
+import { STRATA, stratumAtDepth } from '../data/strata';
 import { achievementProgress } from '../sim/achievements';
 import {
   canAfford,
@@ -14,6 +15,7 @@ import {
   stationRunMult,
   stationUpgradeCostMap,
 } from '../sim/economy';
+import { faceDamageSum, faceTotalHp } from '../sim/mineShaft';
 import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
 import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
@@ -74,6 +76,13 @@ export class Hud {
         <button class="icon-btn" id="btn-mute" type="button" aria-label="Mute">♪</button>
       </div>
       <div class="mid-space">
+        <div class="depth-strip" id="depth-strip" hidden>
+          <div class="depth-copy">
+            <div class="depth-title" id="depth-title">Glow Shallows</div>
+            <div class="depth-detail" id="depth-detail">Depth 0</div>
+          </div>
+          <div class="depth-meter"><span id="depth-meter"></span></div>
+        </div>
         <div class="goal-strip" id="goal-strip" hidden>
           <div class="goal-copy">
             <div class="goal-title" id="goal-title">Next goal</div>
@@ -156,6 +165,7 @@ export class Hud {
   /** Top-bar / dock chrome only — safe to call every frame with a sheet open. */
   renderChrome(state: GameState) {
     this.renderResources(state);
+    this.renderDepth(state);
     this.renderGoal(state);
     this.renderCraftQuick(state);
     this.setView(this.view);
@@ -217,6 +227,30 @@ export class Hud {
     veinBtn?.classList.add('btn-pulse');
   }
 
+  private renderDepth(state: GameState) {
+    const strip = this.root.querySelector('#depth-strip') as HTMLElement | null;
+    if (!strip) return;
+    const depth = state.mineDepth ?? 0;
+    const faceDmg = faceDamageSum(state.mineFaceDamage ?? []);
+    const stratum = stratumAtDepth(depth);
+    const need = faceTotalHp(depth);
+    const faceProgress = need > 0 ? Math.min(1, faceDmg / need) : 0;
+    const nextStratum = STRATA.find((s) => s.startDepth > depth);
+    const toNext = nextStratum ? nextStratum.startDepth - depth : 0;
+
+    strip.hidden = this.view !== 'mine';
+    const title = this.root.querySelector('#depth-title');
+    const detail = this.root.querySelector('#depth-detail');
+    const meter = this.root.querySelector('#depth-meter') as HTMLElement | null;
+    if (title) title.textContent = stratum.name;
+    if (detail) {
+      detail.textContent = nextStratum
+        ? `Depth ${depth} · ${toNext} to ${nextStratum.name}`
+        : `Depth ${depth} · Deep Dark`;
+    }
+    if (meter) meter.style.width = `${Math.round(faceProgress * 100)}%`;
+  }
+
   private renderGoal(state: GameState) {
     const strip = this.root.querySelector('#goal-strip') as HTMLElement | null;
     if (!strip) return;
@@ -234,8 +268,8 @@ export class Hud {
   showOnboarding(step: number) {
     const copy = [
       {
-        title: 'Crack the ore',
-        body: 'Tap the stone cluster to chip rocks and pull Vein Ore. Each strike cracks the face.',
+        title: 'Dig the shaft',
+        body: 'Tap blocks on the dig face to descend. Glow pockets and rare seams only burst for you — keep digging actively.',
       },
       {
         title: 'Craft your first tool',
