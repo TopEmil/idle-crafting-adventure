@@ -3,6 +3,7 @@ import { BALANCE, relicsFromReforge, stationUpgradeCost } from '../data/balance'
 import { getTalent, talentUpgradeCost } from '../data/talents';
 import { createInitialState } from './createState';
 import {
+  adjustStationRunLevel,
   applyOfflineProgress,
   buyTalent,
   canPrestige,
@@ -136,11 +137,49 @@ describe('stations', () => {
 
   it('upgrades increase level', () => {
     const state = createInitialState();
-    state.stations.smelter = { unlocked: true, level: 1, enabled: true };
+    state.stations.smelter = { unlocked: true, level: 1, runLevel: 1, enabled: true };
     state.resources.ore = 10_000;
     const up = upgradeStation(state, 'smelter');
     expect(up.ok).toBe(true);
-    if (up.ok) expect(up.state.stations.smelter.level).toBe(2);
+    if (up.ok) {
+      expect(up.state.stations.smelter.level).toBe(2);
+      expect(up.state.stations.smelter.runLevel).toBe(2);
+    }
+  });
+
+  it('keeps throttled runLevel when upgrading', () => {
+    const state = createInitialState();
+    state.stations.smelter = { unlocked: true, level: 3, runLevel: 1, enabled: true };
+    state.resources.ore = 10_000;
+    const up = upgradeStation(state, 'smelter');
+    expect(up.ok).toBe(true);
+    if (up.ok) {
+      expect(up.state.stations.smelter.level).toBe(4);
+      expect(up.state.stations.smelter.runLevel).toBe(1);
+    }
+  });
+
+  it('can throttle station speed below owned level', () => {
+    const base = createInitialState();
+    base.stations.smelter = { unlocked: true, level: 4, runLevel: 4, enabled: true };
+    base.resources.ore = 100;
+
+    const slow = adjustStationRunLevel(base, 'smelter', -3);
+    expect(slow.ok).toBe(true);
+    if (!slow.ok) return;
+    expect(slow.state.stations.smelter.runLevel).toBe(1);
+    expect(slow.state.stations.smelter.level).toBe(4);
+
+    const fullState = structuredClone(base);
+    fullState.resources.ore = 100;
+    const throttledState = structuredClone(slow.state);
+    throttledState.resources.ore = 100;
+
+    const full = tickProduction(fullState, 2);
+    const throttled = tickProduction(throttledState, 2);
+    expect(throttled.resources.emberglass).toBeGreaterThan(0);
+    expect(throttled.resources.emberglass).toBeLessThan(full.resources.emberglass);
+    expect(100 - throttled.resources.ore).toBeLessThan(100 - full.resources.ore);
   });
 
   it('can turn stations off and on', () => {
@@ -233,7 +272,7 @@ describe('expeditions', () => {
 describe('offline & prestige', () => {
   it('caps offline progress', () => {
     const state = createInitialState(0);
-    state.stations.smelter = { unlocked: true, level: 3, enabled: true };
+    state.stations.smelter = { unlocked: true, level: 3, runLevel: 3, enabled: true };
     state.resources.ore = 10_000;
     state.lastTickAt = 0;
     const farFuture = BALANCE.offlineCapSeconds * 1000 * 3;
@@ -250,7 +289,7 @@ describe('offline & prestige', () => {
     state.resources.ore = 500;
     state.resources.relics = 3;
     state.talents.vein_attunement = 2;
-    state.stations.smelter = { unlocked: true, level: 4, enabled: true };
+    state.stations.smelter = { unlocked: true, level: 4, runLevel: 4, enabled: true };
     const result = prestige(state, 1_000_000);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -260,7 +299,9 @@ describe('offline & prestige', () => {
     expect(result.state.resources.relics).toBeGreaterThan(3);
     expect(result.state.talents.vein_attunement).toBe(2);
     expect(result.state.lastPrestigeAt).toBe(1_000_000);
-    expect(getClickPower(result.state)).toBeCloseTo(BALANCE.baseClickOre * (1 + 0.1 * 2));
+    expect(result.state.unlockedAchievements).toContain('first_reforge');
+    // Talent ×2 (+20%) and First Reforge achievement (+10%).
+    expect(getClickPower(result.state)).toBeCloseTo(BALANCE.baseClickOre * (1 + 0.1 * 2) * 1.1);
   });
 
   it('blocks prestige during 10-minute cooldown', () => {
@@ -304,7 +345,7 @@ describe('talents', () => {
 
   it('boosts station output via hearth kindling', () => {
     const state = createInitialState();
-    state.stations.smelter = { unlocked: true, level: 1, enabled: true };
+    state.stations.smelter = { unlocked: true, level: 1, runLevel: 1, enabled: true };
     state.resources.ore = 100;
     const plain = tickProduction(structuredClone(state), 1);
     state.talents.hearth_kindling = 5;
@@ -316,7 +357,7 @@ describe('talents', () => {
 describe('fixed timestep independence', () => {
   it('produces similar totals across step sizes for equal duration', () => {
     const base = createInitialState();
-    base.stations.smelter = { unlocked: true, level: 2, enabled: true };
+    base.stations.smelter = { unlocked: true, level: 2, runLevel: 2, enabled: true };
     base.resources.ore = 1_000;
 
     const a = simulateSeconds(structuredClone(base), 10, 10_000).state;

@@ -569,6 +569,51 @@ body {
   color: color-mix(in srgb, var(--mist) 70%, var(--slate));
 }
 
+.speed-switch {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 28%, transparent);
+  background: color-mix(in srgb, var(--teal) 35%, transparent);
+}
+
+.speed-switch .btn-speed {
+  min-height: 30px;
+  padding: 4px 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  background: color-mix(in srgb, var(--void) 28%, transparent);
+  color: var(--mist);
+  border: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent);
+}
+
+.speed-switch .btn-speed:disabled {
+  opacity: 0.35;
+}
+
+.speed-value {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--cyan);
+  text-align: center;
+  white-space: nowrap;
+  min-width: 2.4rem;
+}
+
+.row-item-done {
+  opacity: 0.88;
+}
+
+.row-item-done h3 {
+  color: color-mix(in srgb, var(--cyan) 55%, var(--mist));
+}
+
 .row-item-paused h3 {
   color: color-mix(in srgb, var(--mist) 72%, var(--slate));
 }

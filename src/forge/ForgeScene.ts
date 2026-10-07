@@ -1,5 +1,6 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { GameState } from '../sim/types';
+import { stationRunMult } from '../sim/economy';
 import { getStation, STATIONS, type StationId } from '../data/stations';
 import type { ResourceId } from '../data/resources';
 import type { SceneView } from './sceneView';
@@ -1063,9 +1064,10 @@ export class ForgeScene {
     const st = this.state.stations[id];
     if (!st.unlocked || st.level <= 0 || !st.enabled) return false;
     const def = getStation(id);
+    const runMult = stationRunMult(st);
     if (!def.inputs) return true;
     for (const [key, rate] of Object.entries(def.inputs) as [ResourceId, number][]) {
-      if ((this.state.resources[key] ?? 0) < rate * st.level * 0.05) return false;
+      if ((this.state.resources[key] ?? 0) < rate * runMult * 0.05) return false;
     }
     return true;
   }
@@ -1200,8 +1202,11 @@ export class ForgeScene {
 
       if (label) {
         label.visible = true;
+        const runMult = stationRunMult(st);
         if (!powered) label.text = `${getStation(slot.id).name} (off)`;
-        else if (running) label.text = `${getStation(slot.id).name} · Lv${st.level}`;
+        else if (running && runMult < st.level) {
+          label.text = `${getStation(slot.id).name} · ${runMult}/${st.level}`;
+        } else if (running) label.text = `${getStation(slot.id).name} · Lv${st.level}`;
         else label.text = `${getStation(slot.id).name} (idle)`;
         label.alpha = powered ? 0.95 : 0.7;
         label.x = slot.x;

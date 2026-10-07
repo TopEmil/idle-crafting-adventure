@@ -1,3 +1,4 @@
+import type { AchievementDef, AchievementRewards } from '../data/achievements';
 import type { RecipeDef } from '../data/recipes';
 import { RESOURCES, type ResourceId } from '../data/resources';
 import type { StationDef } from '../data/stations';
@@ -6,6 +7,29 @@ import { formatNumber } from './format';
 
 function resourceName(id: ResourceId): string {
   return RESOURCES.find((r) => r.id === id)?.short ?? id;
+}
+
+export function formatAchievementRewards(rewards: AchievementRewards): string {
+  const parts: string[] = [];
+  if (rewards.resources) {
+    for (const [id, amount] of Object.entries(rewards.resources) as [ResourceId, number][]) {
+      parts.push(`+${formatNumber(amount)} ${resourceName(id)}`);
+    }
+  }
+  if (rewards.clickPower) {
+    parts.push(`+${Math.round((rewards.clickPower - 1) * 100)}% tap`);
+  }
+  if (rewards.stationOutput) {
+    parts.push(`+${Math.round((rewards.stationOutput - 1) * 100)}% stations`);
+  }
+  if (rewards.autoMine) {
+    parts.push(`Dwarf mine +${Math.round(rewards.autoMine * 100)}% tap/s`);
+  }
+  return parts.join(' · ') || '—';
+}
+
+export function formatAchievementRewardLine(def: AchievementDef): string {
+  return formatAchievementRewards(def.rewards);
 }
 
 export function formatRecipeEffects(recipe: RecipeDef): string {
@@ -70,4 +94,11 @@ export function formatStationIO(station: StationDef, level = 1): string {
 
 export function formatStationUpgradeHint(level: number): string {
   return `Lv ${level} → Lv ${level + 1}: +100% this station’s rates`;
+}
+
+export function formatStationSpeedHint(runLevel: number, ownedLevel: number): string {
+  if (runLevel >= ownedLevel) {
+    return `Speed ${runLevel}/${ownedLevel} — full rate`;
+  }
+  return `Speed ${runLevel}/${ownedLevel} — throttled to save inputs`;
 }

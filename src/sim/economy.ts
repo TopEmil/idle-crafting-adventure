@@ -14,6 +14,7 @@ import {
   type TalentId,
 } from '../data/talents';
 import { depthOreMult } from '../data/strata';
+import { syncAchievements } from './achievements';
 import {
   digShaft,
   emptyFaceDamage,
@@ -22,7 +23,21 @@ import {
 } from './mineShaft';
 import { aggregateEffects } from './effects';
 import { createInitialState } from './createState';
-import type { GameEvent, GameState } from './types';
+import type { GameEvent, GameState, StationProgress } from './types';
+
+/** Clamped production multiplier from the player's chosen run speed. */
+export function stationRunMult(st: Pick<StationProgress, 'level' | 'runLevel'>): number {
+  if (st.level <= 0) return 0;
+  return Math.max(1, Math.min(Math.floor(st.runLevel), st.level));
+}
+
+function effectsFor(state: GameState) {
+  return aggregateEffects(
+    state.ownedRecipes,
+    state.talents,
+    state.unlockedAchievements ?? [],
+  );
+}
 
 function shaftProgress(state: GameState) {
   return normalizeProgress({
@@ -86,14 +101,14 @@ function scaleLoot(
 }
 
 export function getClickPower(state: GameState): number {
-  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  const effects = effectsFor(state);
   const depthMult = depthOreMult(shaftProgress(state).depth);
   return BALANCE.baseClickOre * effects.clickPower * depthMult;
 }
 
 /** Ore/sec from the dwarf miner when autoMine recipes are owned. */
 export function getAutoMineRate(state: GameState): number {
-  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  const effects = effectsFor(state);
   if (effects.autoMine <= 0) return 0;
   return getClickPower(state) * effects.autoMine;
 }
@@ -110,6 +125,7 @@ export function clickVein(
   next.resources.ore += amount;
   next.totalOreProduced += amount;
   next.lifetimeOre += amount;
+  next.lifetimeClicks = (next.lifetimeClicks ?? 0) + 1;
   if (dig.loot) {
     next.resources[dig.loot.resource] =
       (next.resources[dig.loot.resource] ?? 0) + dig.loot.amount;
@@ -171,6 +187,7 @@ export function unlockStation(
   pay(next.resources, station.unlockCost);
   next.stations[stationId].unlocked = true;
   next.stations[stationId].level = 1;
+  next.stations[stationId].runLevel = 1;
   next.stations[stationId].enabled = true;
   const events: GameEvent = { type: 'unlock_station', stationId };
   if (!next.milestones.firstStation) {
@@ -197,7 +214,13 @@ export function upgradeStation(
   }
   const next = structuredClone(state);
   pay(next.resources, cost);
+  const wasAtMaxSpeed = stationRunMult(current) >= current.level;
   next.stations[stationId].level += 1;
+  if (wasAtMaxSpeed) {
+    next.stations[stationId].runLevel = next.stations[stationId].level;
+  } else {
+    next.stations[stationId].runLevel = stationRunMult(current);
+  }
   return { ok: true, state: next, event: { type: 'upgrade_station', stationId } };
 }
 
@@ -211,6 +234,28 @@ export function toggleStation(
   }
   const next = structuredClone(state);
   next.stations[stationId].enabled = !current.enabled;
+  return { ok: true, state: next };
+}
+
+/** Raise or lower how fast a station runs (1…owned level), without changing upgrades. */
+export function adjustStationRunLevel(
+  state: GameState,
+  stationId: StationId,
+  delta: number,
+): { ok: true; state: GameState } | { ok: false; reason: string } {
+  const current = state.stations[stationId];
+  if (!current.unlocked || current.level <= 0) {
+    return { ok: false, reason: 'Locked' };
+  }
+  const step = Math.trunc(delta);
+  if (step === 0) return { ok: false, reason: 'No change' };
+  const from = stationRunMult(current);
+  const nextLevel = Math.max(1, Math.min(current.level, from + step));
+  if (nextLevel === from) {
+    return { ok: false, reason: step > 0 ? 'Already at max speed' : 'Already at min speed' };
+  }
+  const next = structuredClone(state);
+  next.stations[stationId].runLevel = nextLevel;
   return { ok: true, state: next };
 }
 
@@ -253,7 +298,7 @@ export function rollExpeditionLoot(
   rng: () => number = Math.random,
 ): Partial<Record<ResourceId, number>> {
   const def = getExpedition(expeditionId);
-  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  const effects = effectsFor(state);
   const loot = scaleLoot(def.baseLoot, effects.expeditionLoot);
   if (rng() < def.bonusChance) {
     const bonus = scaleLoot(def.bonusLoot, effects.expeditionLoot);
@@ -313,7 +358,7 @@ export function claimExpedition(
 export function tickProduction(state: GameState, dt: number): GameState {
   if (dt <= 0) return state;
   const next = structuredClone(state);
-  const effects = aggregateEffects(next.ownedRecipes, next.talents);
+  const effects = effectsFor(next);
   const pMult = effects.stationOutput;
 
   const autoRate = getAutoMineRate(next);
@@ -336,7 +381,7 @@ export function tickProduction(state: GameState, dt: number): GameState {
     const st = next.stations[def.id];
     if (!st.unlocked || st.level <= 0 || !st.enabled) continue;
 
-    const levelMult = st.level;
+    const levelMult = stationRunMult(st);
     if (def.inputs) {
       let canRun = true;
       for (const [key, rate] of Object.entries(def.inputs) as [ResourceId, number][]) {
@@ -406,7 +451,7 @@ export function applyOfflineProgress(
   }
 
   const before = structuredClone(state.resources);
-  const effects = aggregateEffects(state.ownedRecipes, state.talents);
+  const effects = effectsFor(state);
   const capped = Math.min(elapsedSec, BALANCE.offlineCapSeconds);
   const adjusted = capped * effects.offlineRate;
   const { state: after } = simulateSeconds(state, adjusted, now);
@@ -461,6 +506,8 @@ export function prestige(
   next.prestigeCount = state.prestigeCount + 1;
   next.lastPrestigeAt = now;
   next.talents = structuredClone(state.talents);
+  next.unlockedAchievements = [...(state.unlockedAchievements ?? [])];
+  next.lifetimeClicks = state.lifetimeClicks ?? 0;
   next.unlockedCosmetics = [...new Set([...state.unlockedCosmetics, cosmeticForPrestige(state.prestigeCount + 1)])];
   next.activeCosmetic = cosmeticForPrestige(state.prestigeCount + 1);
   next.onboardingDone = true;
@@ -470,9 +517,12 @@ export function prestige(
   next.ads = state.ads;
   next.playTimeSec = state.playTimeSec;
 
+  // First Reforge (and similar) can unlock on the post-prestige snapshot.
+  const synced = syncAchievements(next);
+
   return {
     ok: true,
-    state: next,
+    state: synced.state,
     event: { type: 'prestige' },
     relics,
   };

@@ -1,3 +1,4 @@
+import { emptyUnlockedAchievements } from '../data/achievements';
 import { emptyWallet } from '../data/resources';
 import { emptyTalents } from '../data/talents';
 import type { GameState } from './types';
@@ -7,12 +8,14 @@ export function createInitialState(now = Date.now()): GameState {
     version: 1,
     resources: emptyWallet(),
     stations: {
-      smelter: { unlocked: false, level: 0, enabled: true },
-      anvil: { unlocked: false, level: 0, enabled: true },
-      enchanter: { unlocked: false, level: 0, enabled: true },
+      smelter: { unlocked: false, level: 0, runLevel: 0, enabled: true },
+      anvil: { unlocked: false, level: 0, runLevel: 0, enabled: true },
+      enchanter: { unlocked: false, level: 0, runLevel: 0, enabled: true },
     },
     ownedRecipes: [],
     talents: emptyTalents(),
+    unlockedAchievements: emptyUnlockedAchievements(),
+    lifetimeClicks: 0,
     activeExpedition: null,
     pendingLoot: null,
     totalOreProduced: 0,

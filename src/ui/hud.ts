@@ -1,3 +1,4 @@
+import { ACHIEVEMENTS } from '../data/achievements';
 import { BALANCE, relicsFromReforge } from '../data/balance';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
@@ -5,11 +6,13 @@ import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import { TALENTS, talentUpgradeCost, type TalentId } from '../data/talents';
 import { STRATA, stratumAtDepth } from '../data/strata';
+import { achievementProgress } from '../sim/achievements';
 import {
   canAfford,
   canPrestige,
   getClickPower,
   prestigeCooldownRemaining,
+  stationRunMult,
   stationUpgradeCostMap,
 } from '../sim/economy';
 import { faceDamageSum, faceTotalHp } from '../sim/mineShaft';
@@ -19,8 +22,10 @@ import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
 import { formatCost, formatDuration, formatMissingCost, formatNumber } from './format';
 import { nextGoal } from './goals';
 import {
+  formatAchievementRewardLine,
   formatRecipeEffects,
   formatStationIO,
+  formatStationSpeedHint,
   formatStationUpgradeHint,
   formatTalentEffects,
   formatTalentPerLevel,
@@ -39,6 +44,7 @@ export interface HudActions {
   onUnlockStation: (id: StationId) => void;
   onUpgradeStation: (id: StationId) => void;
   onToggleStation: (id: StationId) => void;
+  onAdjustStationSpeed: (id: StationId, delta: number) => void;
   onStartExpedition: (id: string) => void;
   onRevealExpeditionLoot: () => void;
   onClaimExpedition: (mode: 'normal' | 'ad' | 'coin') => void;
@@ -704,21 +710,32 @@ export class Hud {
       const costHint = !atCap && !affordable
         ? formatMissingCost(cost, state.resources)
         : `Upgrade ${formatCost(cost)}`;
+      const runLevel = stationRunMult(st);
       const powerLabel = st.enabled ? 'On' : 'Off';
       const powerClass = st.enabled ? 'btn-power is-on' : 'btn-power is-off';
-      const statusHint = st.enabled
-        ? 'Running when inputs are available'
-        : 'Paused — turn On to resume';
+      const throttled = runLevel < st.level;
+      const statusHint = !st.enabled
+        ? 'Paused — turn On to resume'
+        : throttled
+          ? 'Throttled below owned level — raise Speed anytime'
+          : 'Running when inputs are available';
+      const titleSpeed = throttled ? ` · Speed ${runLevel}` : '';
       return `
         <div class="row-item${!atCap && !affordable ? ' row-item-blocked' : ''}${!st.enabled ? ' row-item-paused' : ''}">
           <div>
-            <h3>${s.name} · Lv ${st.level}${st.enabled ? '' : ' · Off'}</h3>
+            <h3>${s.name} · Lv ${st.level}${titleSpeed}${st.enabled ? '' : ' · Off'}</h3>
             <div class="cost">${costHint}</div>
-            <div class="effect-line">${formatStationIO(s, st.level)}</div>
+            <div class="effect-line">${formatStationIO(s, runLevel)}</div>
+            <div class="effect-line muted">${formatStationSpeedHint(runLevel, st.level)}</div>
             <div class="effect-line muted">${formatStationUpgradeHint(st.level)}</div>
           </div>
           <div class="row-actions">
             <button class="btn ${powerClass}" data-toggle="${s.id}" type="button" aria-pressed="${st.enabled ? 'true' : 'false'}">${powerLabel}</button>
+            <div class="speed-switch" role="group" aria-label="${s.name} speed">
+              <button class="btn btn-speed" data-speed="${s.id}" data-delta="-1" type="button" ${runLevel <= 1 ? 'disabled' : ''} aria-label="Slower">−</button>
+              <span class="speed-value">${runLevel}/${st.level}</span>
+              <button class="btn btn-speed" data-speed="${s.id}" data-delta="1" type="button" ${runLevel >= st.level ? 'disabled' : ''} aria-label="Faster">+</button>
+            </div>
             <button class="btn btn-secondary" data-upgrade="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
           </div>
           <p>${s.description} <span class="muted">(${statusHint})</span></p>
@@ -747,7 +764,7 @@ export class Hud {
           <h2>Stations</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Machines sit on the Forge hall pedestals · Relics ${formatNumber(state.resources.relics)} · Cosmetic: ${state.activeCosmetic}</p>
+        <p class="muted">Machines sit on the Forge hall pedestals · Use −/+ Speed to run slower than owned level · Relics ${formatNumber(state.resources.relics)} · Cosmetic: ${state.activeCosmetic}</p>
         <div class="list">${stationRows}</div>
         <div class="row-item">
           <div>
@@ -775,6 +792,14 @@ export class Hud {
     });
     this.overlay.querySelectorAll('[data-toggle]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onToggleStation((btn as HTMLElement).dataset.toggle as StationId));
+    });
+    this.overlay.querySelectorAll('[data-speed]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const el = btn as HTMLElement;
+        const delta = Number(el.dataset.delta);
+        if (!Number.isFinite(delta) || delta === 0) return;
+        this.actions.onAdjustStationSpeed(el.dataset.speed as StationId, delta);
+      });
     });
     this.overlay.querySelectorAll('[data-upgrade]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUpgradeStation((btn as HTMLElement).dataset.upgrade as StationId));
@@ -833,6 +858,28 @@ export class Hud {
 
   private renderLedger(state: GameState, notice?: string) {
     const talentLevels = TALENTS.reduce((sum, t) => sum + (state.talents[t.id] ?? 0), 0);
+    const unlockedSet = new Set(state.unlockedAchievements ?? []);
+    const unlockedCount = unlockedSet.size;
+    const achievementRows = ACHIEVEMENTS.map((def) => {
+      const done = unlockedSet.has(def.id);
+      const progress = achievementProgress(state, def.condition);
+      const ratio = progress.target > 0 ? Math.min(1, progress.current / progress.target) : 0;
+      const progressLabel = done
+        ? 'Complete'
+        : `${formatNumber(Math.min(progress.current, progress.target))} / ${formatNumber(progress.target)}`;
+      return `
+        <div class="row-item${done ? ' row-item-done' : ''}">
+          <div>
+            <h3>${def.name}${done ? ' ✓' : ''}</h3>
+            <div class="cost">${progressLabel}</div>
+            <div class="req-meter" aria-hidden="true"><span style="width:${Math.round(ratio * 100)}%"></span></div>
+            <div class="effect-line">${formatAchievementRewardLine(def)}</div>
+          </div>
+          <p>${def.description}</p>
+        </div>
+      `;
+    }).join('');
+
     this.overlay.innerHTML = `
       <div class="sheet">
         <div class="sheet-header">
@@ -841,12 +888,17 @@ export class Hud {
         </div>
         <div class="list">
           <div class="row-item"><div><h3>Lifetime ore</h3></div><div>${formatNumber(state.lifetimeOre)}</div></div>
+          <div class="row-item"><div><h3>Vein taps</h3></div><div>${formatNumber(state.lifetimeClicks ?? 0)}</div></div>
           <div class="row-item"><div><h3>Play time</h3></div><div>${formatDuration(state.playTimeSec)}</div></div>
           <div class="row-item"><div><h3>Reforges</h3></div><div>${state.prestigeCount}</div></div>
           <div class="row-item"><div><h3>Relics earned</h3></div><div>${formatNumber(state.totalRelicsEarned)}</div></div>
           <div class="row-item"><div><h3>Talent levels</h3></div><div>${talentLevels}</div></div>
           <div class="row-item"><div><h3>Recipes owned</h3></div><div>${state.ownedRecipes.length}/${RECIPES.length}</div></div>
+          <div class="row-item"><div><h3>Achievements</h3></div><div>${unlockedCount}/${ACHIEVEMENTS.length}</div></div>
         </div>
+        <h3 class="sheet-section">Achievements</h3>
+        <p class="sheet-intro">Temporary resource packs and permanent tap / dwarf / station bonuses. Permanent rewards survive Reforge.</p>
+        <div class="list">${achievementRows}</div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
         <p class="muted" style="margin-top:12px">Collection banner slot reserved — shown only when this panel stays open.</p>
       </div>
