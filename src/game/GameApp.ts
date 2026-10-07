@@ -7,6 +7,7 @@ import { AudioBus } from '../audio/audio';
 import { ForgeScene } from '../forge/ForgeScene';
 import { createAdGate } from '../platform/ads';
 import { createPlatformBridge } from '../platform/crazygames';
+import { syncAchievements } from '../sim/achievements';
 import {
   applyOfflineProgress,
   applyTimeWarp,
@@ -29,7 +30,7 @@ import {
 import { deserializeState, loadLocalState, SAVE_KEY, saveLocalState, serializeState } from '../sim/save';
 import type { GameState } from '../sim/types';
 import { Hud, type PanelId } from '../ui/hud';
-import { formatRecipeEffects } from '../ui/effectsText';
+import { formatAchievementRewardLine, formatRecipeEffects } from '../ui/effectsText';
 import { getRecipe } from '../data/recipes';
 import type { SceneView } from '../forge/sceneView';
 
@@ -97,6 +98,7 @@ export class GameApp {
 
     const offline = applyOfflineProgress(this.state);
     this.state = offline.state;
+    this.applyAchievements(true);
     this.scene.sync(this.state);
     this.scene.resize();
 
@@ -133,6 +135,7 @@ export class GameApp {
       this.accum += dt;
       while (this.accum >= SIM_DT) {
         this.state = tickProduction(this.state, SIM_DT);
+        this.applyAchievements(true);
         const ready = completeExpeditionIfReady(this.state);
         this.state = ready.state;
         if (ready.event) {
@@ -252,6 +255,7 @@ export class GameApp {
     }
     const { state, event } = clickVein(this.state);
     this.state = state;
+    this.applyAchievements(true);
     const amount = event.type === 'click_vein' ? event.amount : 1;
     this.scene.triggerVeinHit(amount);
     this.hud.pulseVeinButton();
@@ -282,6 +286,7 @@ export class GameApp {
       return;
     }
     this.state = result.state;
+    this.applyAchievements(true);
     this.audio.craft();
     this.scene.triggerCraftBurst();
     this.scene.setAutoMineRate(getAutoMineRate(this.state));
@@ -304,13 +309,14 @@ export class GameApp {
       return;
     }
     this.state = result.state;
+    this.applyAchievements(true);
     this.audio.craft();
     this.scene.triggerCraftBurst();
     this.scene.triggerStationUnlock(id);
     this.scene.sync(this.state);
     const pretty = id.charAt(0).toUpperCase() + id.slice(1);
     this.hud.toast(`${pretty} built in the forge`, 'gain');
-    if (id === 'smelter' && result.state.milestones.firstStation) {
+    if (id === 'smelter' && this.state.milestones.firstStation) {
       this.overlayMode = 'milestone';
       this.panel = null;
       this.hud.setPanel(null);
@@ -454,6 +460,7 @@ export class GameApp {
       return;
     }
     this.state = result.state;
+    this.applyAchievements(true);
     this.audio.claim();
     this.platform.happytime();
     this.closeOverlay();
@@ -468,6 +475,7 @@ export class GameApp {
       return;
     }
     this.state = result.state;
+    this.applyAchievements(true);
     this.audio.prestige();
     this.scene.triggerCraftBurst();
     this.scene.sync(this.state);
@@ -535,11 +543,26 @@ export class GameApp {
 
     const warped = applyTimeWarp(this.state, BALANCE.timeWarpSeconds);
     this.state = warped.state;
+    this.applyAchievements(true);
     this.audio.craft();
     this.notice = `Warped ${BALANCE.timeWarpSeconds / 60} minutes.`;
     this.scene.sync(this.state);
     this.refreshHud();
     void this.persist();
+  }
+
+  /** Unlock newly met achievements and optionally toast rewards. */
+  private applyAchievements(toast: boolean) {
+    const { state, unlocked } = syncAchievements(this.state);
+    this.state = state;
+    if (!toast || unlocked.length === 0) return;
+    for (const def of unlocked) {
+      this.hud.toast(
+        `${def.name}: ${formatAchievementRewardLine(def)}`,
+        'gain',
+      );
+      this.scene.setAutoMineRate(getAutoMineRate(this.state));
+    }
   }
 
   private advanceOnboarding() {

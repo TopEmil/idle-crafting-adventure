@@ -1,3 +1,4 @@
+import { emptyUnlockedAchievements } from '../data/achievements';
 import { emptyWallet } from '../data/resources';
 import { emptyTalents } from '../data/talents';
 import type { GameState } from './types';
@@ -13,6 +14,8 @@ export function createInitialState(now = Date.now()): GameState {
     },
     ownedRecipes: [],
     talents: emptyTalents(),
+    unlockedAchievements: emptyUnlockedAchievements(),
+    lifetimeClicks: 0,
     activeExpedition: null,
     pendingLoot: null,
     totalOreProduced: 0,

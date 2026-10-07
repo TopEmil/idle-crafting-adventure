@@ -1,3 +1,8 @@
+import {
+  ACHIEVEMENTS,
+  emptyUnlockedAchievements,
+  type AchievementId,
+} from '../data/achievements';
 import { STATIONS } from '../data/stations';
 import { emptyTalents, TALENTS } from '../data/talents';
 import { createInitialState } from './createState';
@@ -9,7 +14,7 @@ export function serializeState(state: GameState): string {
   return JSON.stringify(state);
 }
 
-/** Fill missing fields from older saves (toggle, runLevel, talents, prestige cooldown). */
+/** Fill missing fields from older saves (toggle, runLevel, talents, achievements). */
 export function migrateState(state: GameState): GameState {
   const next = structuredClone(state);
   for (const def of STATIONS) {
@@ -36,6 +41,24 @@ export function migrateState(state: GameState): GameState {
   }
   if (typeof next.lastPrestigeAt !== 'number') {
     next.lastPrestigeAt = 0;
+  }
+  if (typeof next.lifetimeClicks !== 'number' || !Number.isFinite(next.lifetimeClicks)) {
+    next.lifetimeClicks = 0;
+  } else {
+    next.lifetimeClicks = Math.max(0, Math.floor(next.lifetimeClicks));
+  }
+  if (!Array.isArray(next.unlockedAchievements)) {
+    next.unlockedAchievements = emptyUnlockedAchievements();
+  } else {
+    const known = new Set(ACHIEVEMENTS.map((a) => a.id));
+    const seen = new Set<AchievementId>();
+    const cleaned: AchievementId[] = [];
+    for (const id of next.unlockedAchievements) {
+      if (!known.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      cleaned.push(id);
+    }
+    next.unlockedAchievements = cleaned;
   }
   return next;
 }

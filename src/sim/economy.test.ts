@@ -270,7 +270,9 @@ describe('offline & prestige', () => {
     expect(result.state.resources.relics).toBeGreaterThan(3);
     expect(result.state.talents.vein_attunement).toBe(2);
     expect(result.state.lastPrestigeAt).toBe(1_000_000);
-    expect(getClickPower(result.state)).toBeCloseTo(BALANCE.baseClickOre * (1 + 0.1 * 2));
+    expect(result.state.unlockedAchievements).toContain('first_reforge');
+    // Talent ×2 (+20%) and First Reforge achievement (+10%).
+    expect(getClickPower(result.state)).toBeCloseTo(BALANCE.baseClickOre * (1 + 0.1 * 2) * 1.1);
   });
 
   it('blocks prestige during 10-minute cooldown', () => {

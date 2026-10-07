@@ -1,5 +1,7 @@
+import type { AchievementId } from '../data/achievements';
 import { getRecipe, type RecipeId } from '../data/recipes';
 import { emptyTalents, getTalent, type TalentId } from '../data/talents';
+import { aggregateAchievementRewards } from './achievements';
 
 export interface AggregatedEffects {
   clickPower: number;
@@ -13,6 +15,7 @@ export interface AggregatedEffects {
 export function aggregateEffects(
   ownedRecipes: RecipeId[],
   talents: Record<TalentId, number> = emptyTalents(),
+  unlockedAchievements: readonly AchievementId[] = [],
 ): AggregatedEffects {
   let clickPower = 1;
   let stationOutput = 1;
@@ -38,6 +41,11 @@ export function aggregateEffects(
     if (e.expeditionLootPerLevel) expeditionLoot *= 1 + e.expeditionLootPerLevel * level;
     if (e.offlineRatePerLevel) offlineRate *= 1 + e.offlineRatePerLevel * level;
   }
+
+  const achievement = aggregateAchievementRewards(unlockedAchievements);
+  clickPower *= achievement.clickPower;
+  stationOutput *= achievement.stationOutput;
+  autoMine += achievement.autoMine;
 
   return { clickPower, stationOutput, expeditionLoot, offlineRate, autoMine };
 }
