@@ -35,6 +35,7 @@ export interface HudActions {
   onUpgradeStation: (id: StationId) => void;
   onToggleStation: (id: StationId) => void;
   onStartExpedition: (id: string) => void;
+  onRevealExpeditionLoot: () => void;
   onClaimExpedition: (mode: 'normal' | 'ad' | 'coin') => void;
   onPrestige: () => void;
   onTimeWarp: (viaAd: boolean) => void;
@@ -443,12 +444,14 @@ export class Hud {
   private renderExpeditions(state: GameState) {
     const unlocked = new Set(availableExpeditions(state).map((e) => e.id));
     const active = state.activeExpedition;
+    const pending = state.pendingLoot;
     const now = Date.now();
+    const busy = Boolean(active) || Boolean(pending);
 
     const rows = EXPEDITIONS.map((e) => {
       const isUnlocked = unlocked.has(e.id);
       let status = formatCost(e.cost) + ` · ${formatDuration(e.durationSec)}`;
-      let action = `<button class="btn btn-secondary" data-exp="${e.id}" type="button" ${!isUnlocked || active ? 'disabled' : ''}>Send</button>`;
+      let action = `<button class="btn btn-secondary" data-exp="${e.id}" type="button" ${!isUnlocked || busy ? 'disabled' : ''}>Send</button>`;
       if (!isUnlocked) {
         status = `Unlock at ${formatNumber(e.unlockAtOreProduced)} lifetime ore`;
         action = `<button class="btn btn-secondary" type="button" disabled>Locked</button>`;
@@ -456,8 +459,13 @@ export class Hud {
       if (active?.id === e.id) {
         const left = Math.max(0, (active.endsAt - now) / 1000);
         const pct = Math.min(100, ((e.durationSec - left) / e.durationSec) * 100);
-        status = left > 0 ? `Returning in ${formatDuration(left)}` : 'Ready to claim';
-        action = `<div class="progress-bar" style="width:88px"><span style="width:${pct}%"></span></div>`;
+        if (pending || left <= 0) {
+          status = 'Loot ready — claim it';
+          action = `<button class="btn btn-primary" id="exp-claim" type="button">Claim</button>`;
+        } else {
+          status = `Returning in ${formatDuration(left)}`;
+          action = `<div class="progress-bar" style="width:88px"><span style="width:${pct}%"></span></div>`;
+        }
       }
       const lootHint = Object.entries(e.baseLoot)
         .map(([k, v]) => `+${v} ${k}`)
@@ -489,6 +497,9 @@ export class Hud {
       btn.addEventListener('click', () => {
         this.actions.onStartExpedition((btn as HTMLElement).dataset.exp!);
       });
+    });
+    this.overlay.querySelector('#exp-claim')?.addEventListener('click', () => {
+      this.actions.onRevealExpeditionLoot();
     });
   }
 

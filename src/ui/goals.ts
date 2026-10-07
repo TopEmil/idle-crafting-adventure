@@ -1,7 +1,7 @@
 import { EXPEDITIONS } from '../data/expeditions';
 import { getRecipe } from '../data/recipes';
 import { STATIONS } from '../data/stations';
-import { availableRecipes, canPrestige } from '../sim/economy';
+import { availableExpeditions, availableRecipes, canAfford, canPrestige } from '../sim/economy';
 import type { GameState } from '../sim/types';
 import { formatNumber } from './format';
 
@@ -14,13 +14,68 @@ export interface GoalInfo {
 }
 
 export function nextGoal(state: GameState): GoalInfo {
+  // Pending expedition loot always wins — otherwise players get stuck without Dust.
+  if (state.pendingLoot) {
+    return {
+      id: 'exp-claim',
+      title: 'Claim expedition loot',
+      detail: 'Your scouts are back at the forge',
+      progress: 1,
+      ready: true,
+    };
+  }
+
+  if (state.activeExpedition) {
+    const left = Math.max(0, state.activeExpedition.endsAt - Date.now());
+    const def = EXPEDITIONS.find((e) => e.id === state.activeExpedition!.id);
+    const dur = (def?.durationSec ?? 60) * 1000;
+    const p = 1 - Math.min(1, left / dur);
+    return {
+      id: 'exp-active',
+      title: 'Scouts en route',
+      detail: left > 0 ? 'Await their return…' : 'Loot ready — open Expeditions',
+      progress: p,
+      ready: left <= 0,
+    };
+  }
+
   const nextRecipe = availableRecipes(state)[0];
   if (nextRecipe) {
-    const need = nextRecipe.cost.ore ?? 0;
-    const have = state.resources.ore;
-    // Multi-resource: use worst ratio
+    const dustNeed = nextRecipe.cost.glowdust ?? 0;
+    if (dustNeed > 0 && state.resources.glowdust < dustNeed) {
+      const firstDustRun = availableExpeditions(state).find((e) => (e.baseLoot.glowdust ?? 0) > 0);
+      if (firstDustRun && canAfford(state.resources, firstDustRun.cost)) {
+        return {
+          id: `exp-dust:${firstDustRun.id}`,
+          title: `Send ${firstDustRun.name}`,
+          detail: `Earn Glowdust for ${nextRecipe.name}`,
+          progress: Math.min(1, state.resources.glowdust / dustNeed),
+          ready: true,
+        };
+      }
+      if (firstDustRun) {
+        return {
+          id: `exp-dust-cost:${firstDustRun.id}`,
+          title: `Gather for ${firstDustRun.name}`,
+          detail: `Need Glowdust — expeditions are the source`,
+          progress: Math.min(1, state.resources.glowdust / dustNeed),
+          ready: false,
+        };
+      }
+      const gate = EXPEDITIONS.find((e) => (e.baseLoot.glowdust ?? 0) > 0);
+      if (gate && state.totalOreProduced < gate.unlockAtOreProduced) {
+        return {
+          id: `exp:${gate.id}`,
+          title: `Unlock ${gate.name}`,
+          detail: `${formatNumber(state.totalOreProduced)} / ${formatNumber(gate.unlockAtOreProduced)} lifetime ore → Glowdust`,
+          progress: Math.min(1, state.totalOreProduced / gate.unlockAtOreProduced),
+          ready: false,
+        };
+      }
+    }
+
     let ratio = 1;
-    let parts: string[] = [];
+    const parts: string[] = [];
     for (const [key, amount] of Object.entries(nextRecipe.cost)) {
       const owned = state.resources[key as keyof typeof state.resources] ?? 0;
       const r = amount > 0 ? Math.min(1, owned / amount) : 1;
@@ -30,7 +85,7 @@ export function nextGoal(state: GameState): GoalInfo {
     return {
       id: `recipe:${nextRecipe.id}`,
       title: `Craft ${nextRecipe.name}`,
-      detail: parts.join(' · ') || `${formatNumber(have)}/${formatNumber(need)}`,
+      detail: parts.join(' · '),
       progress: ratio,
       ready: ratio >= 1,
     };
@@ -66,30 +121,6 @@ export function nextGoal(state: GameState): GoalInfo {
       detail: `${formatNumber(state.totalOreProduced)} / ${formatNumber(nextExp.unlockAtOreProduced)} lifetime ore`,
       progress: p,
       ready: false,
-    };
-  }
-
-  if (state.activeExpedition && !state.pendingLoot) {
-    const left = Math.max(0, state.activeExpedition.endsAt - Date.now());
-    const def = EXPEDITIONS.find((e) => e.id === state.activeExpedition!.id);
-    const dur = (def?.durationSec ?? 60) * 1000;
-    const p = 1 - Math.min(1, left / dur);
-    return {
-      id: 'exp-active',
-      title: 'Scouts en route',
-      detail: left > 0 ? 'Await their return…' : 'Loot ready — open Expeditions',
-      progress: p,
-      ready: left <= 0,
-    };
-  }
-
-  if (state.pendingLoot) {
-    return {
-      id: 'exp-claim',
-      title: 'Claim expedition loot',
-      detail: 'Your scouts are back at the forge',
-      progress: 1,
-      ready: true,
     };
   }
 
