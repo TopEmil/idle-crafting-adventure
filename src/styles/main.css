@@ -76,7 +76,8 @@ body {
   inset: 0;
   pointer-events: none;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* Mid-space fills from the top so depth/scout can sit in the chrome band. */
+  grid-template-rows: 1fr auto;
   padding: var(--hud-pad);
   padding-bottom: calc(var(--hud-pad) + env(safe-area-inset-bottom, 0));
   z-index: 2;
@@ -87,10 +88,20 @@ body {
 }
 
 .top-bar {
+  position: absolute;
+  top: var(--hud-pad);
+  left: var(--hud-pad);
+  right: var(--hud-pad);
+  z-index: 3;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  pointer-events: none;
+}
+
+.top-bar .top-meta {
+  pointer-events: auto;
 }
 
 .brand-spacer {
@@ -214,18 +225,18 @@ body {
   pointer-events: none;
 }
 
-/* Keep depth / scout strips out of the playable art band (vein / pedestals). */
+/* Keep depth / scout strips in the top chrome band, clear of the dig shaft. */
 .hud.view-forge .mid-space,
 .hud.view-mine .mid-space {
   justify-content: flex-start;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .depth-strip {
   pointer-events: none;
   align-self: center;
-  width: min(360px, 88%);
-  margin-bottom: 6px;
+  width: min(300px, 46%);
+  margin: 0 0 6px;
   padding: 8px 12px;
   border-radius: 12px;
   background: color-mix(in srgb, var(--void) 58%, transparent);
@@ -274,9 +285,12 @@ body {
 
 .scout-strip {
   pointer-events: auto;
-  align-self: center;
-  width: min(420px, 92%);
-  margin: 0 0 8px;
+  /* Pin to the right cavern wall (torch side), clear of the dig shaft. */
+  position: absolute;
+  top: clamp(132px, 22vh, 210px);
+  right: 0;
+  width: min(260px, 42%);
+  margin: 0;
   padding: 9px 12px 10px;
   border-radius: 14px;
   background: color-mix(in srgb, var(--void) 68%, transparent);
@@ -288,6 +302,7 @@ body {
   text-align: left;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  z-index: 2;
 }
 
 .scout-strip:hover {
@@ -295,8 +310,8 @@ body {
 }
 
 .hud.view-forge .scout-strip {
-  margin-bottom: 0;
-  width: min(360px, 88%);
+  top: clamp(120px, 20vh, 190px);
+  width: min(240px, 40%);
   padding: 8px 10px;
 }
 
@@ -1176,10 +1191,15 @@ body {
     padding: 10px 1px;
   }
 
+  .depth-strip {
+    width: min(220px, 54%);
+    padding: 6px 10px;
+  }
+
   .scout-strip {
-    width: min(340px, 94%);
+    top: clamp(148px, 26vh, 230px);
+    width: min(200px, 46%);
     padding: 7px 10px 8px;
-    margin-bottom: 6px;
   }
 
   .scout-strip-head {
@@ -1210,6 +1230,12 @@ body {
   }
 
   .scout-strip {
+    top: clamp(96px, 18vh, 160px);
+    width: min(220px, 36%);
     padding: 6px 9px 7px;
+  }
+
+  .depth-strip {
+    width: min(240px, 40%);
   }
 }
