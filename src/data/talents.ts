@@ -37,7 +37,7 @@ export const TALENTS: TalentDef[] = [
   {
     id: 'vein_attunement',
     name: 'Vein Attunement',
-    description: 'Stronger taps on the mineral face.',
+    description: 'Heavier digs on the mineral face.',
     maxLevel: 20,
     baseCost: 1,
     costGrowth: 1.35,
