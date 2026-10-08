@@ -1,14 +1,19 @@
-import type { AchievementDef, AchievementRewards } from '../data/achievements';
+import type {
+  AchievementDef,
+  AchievementRewards,
+  AchievementTier,
+} from '../data/achievements';
 import type { RecipeDef } from '../data/recipes';
 import { resourceLabel, type ResourceId } from '../data/resources';
 import type { StationDef } from '../data/stations';
 import type { TalentDef } from '../data/talents';
-import { formatNumber } from './format';
+import { formatNumber, formatResourceInline } from './format';
 
 function resourceName(id: ResourceId): string {
   return resourceLabel(id);
 }
 
+/** Plain-text rewards for toasts / titles. */
 export function formatAchievementRewards(rewards: AchievementRewards): string {
   const parts: string[] = [];
   if (rewards.resources) {
@@ -28,8 +33,36 @@ export function formatAchievementRewards(rewards: AchievementRewards): string {
   return parts.join(' · ') || '—';
 }
 
-export function formatAchievementRewardLine(def: AchievementDef): string {
-  return formatAchievementRewards(def.rewards);
+export function formatAchievementRewardLine(tier: AchievementTier | AchievementDef): string {
+  const rewards = 'tiers' in tier ? tier.tiers[0]?.rewards : tier.rewards;
+  return rewards ? formatAchievementRewards(rewards) : '—';
+}
+
+/** Sheet line with ore icons instead of resource names. */
+export function formatAchievementRewardsHtml(rewards: AchievementRewards): string {
+  const parts: string[] = [];
+  if (rewards.resources) {
+    for (const [id, amount] of Object.entries(rewards.resources) as [ResourceId, number][]) {
+      parts.push(formatResourceInline(id, `+${formatNumber(amount)}`));
+    }
+  }
+  if (rewards.clickPower) {
+    parts.push(`+${Math.round((rewards.clickPower - 1) * 100)}% tap`);
+  }
+  if (rewards.stationOutput) {
+    parts.push(`+${Math.round((rewards.stationOutput - 1) * 100)}% stations`);
+  }
+  if (rewards.autoMine) {
+    parts.push(`Dwarf mine +${Math.round(rewards.autoMine * 100)}% tap/s`);
+  }
+  return parts.join('<span class="res-sep"> · </span>') || '—';
+}
+
+export function formatAchievementRewardLineHtml(
+  tier: AchievementTier | AchievementDef,
+): string {
+  const rewards = 'tiers' in tier ? tier.tiers[0]?.rewards : tier.rewards;
+  return rewards ? formatAchievementRewardsHtml(rewards) : '—';
 }
 
 export function formatRecipeEffects(recipe: RecipeDef): string {
@@ -99,15 +132,17 @@ export function formatTalentPerLevel(talent: TalentDef): string {
   return parts.join(' · ');
 }
 
+/** Station input/output rates with ore icons (HTML for sheet rows). */
 export function formatStationIO(station: StationDef, level = 1): string {
   const inParts = (Object.entries(station.inputs ?? {}) as [ResourceId, number][]).map(
-    ([id, rate]) => `-${formatNumber(rate * level)}/s ${resourceName(id)}`,
+    ([id, rate]) => formatResourceInline(id, `-${formatNumber(rate * level)}/s`),
   );
   const outParts = (Object.entries(station.outputs) as [ResourceId, number][]).map(
-    ([id, rate]) => `+${formatNumber(rate * level)}/s ${resourceName(id)}`,
+    ([id, rate]) => formatResourceInline(id, `+${formatNumber(rate * level)}/s`),
   );
-  const flow = [...inParts, ...outParts].join(' → ');
-  return `${flow} · auto while fueled`;
+  const arrow = '<span class="res-sep"> → </span>';
+  const flow = [...inParts, ...outParts].join(arrow);
+  return `${flow}<span class="res-sep"> · </span>auto while fueled`;
 }
 
 export function formatStationUpgradeHint(level: number): string {

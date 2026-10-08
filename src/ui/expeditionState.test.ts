@@ -28,7 +28,9 @@ describe('getExpeditionRowState', () => {
     expect(row.actionLabel).toBe('Need more');
     expect(row.canSend).toBe(false);
     expect(row.status).toContain('5/20');
-    expect(row.requirements).toMatch(/20 Ore/i);
+    expect(row.status).toContain('art/ores/ore.png');
+    expect(row.requirements).toContain('art/ores/ore.png');
+    expect(row.actionTitle).toMatch(/20 Ore/i);
   });
 
   it('allows send when unlocked and cost is covered', () => {
@@ -41,6 +43,8 @@ describe('getExpeditionRowState', () => {
     expect(row.canSend).toBe(true);
     expect(row.blocked).toBe(false);
     expect(row.requirements).toMatch(/Spend/i);
+    expect(row.requirements).toContain('art/ores/ore.png');
+    expect(row.actionTitle).toMatch(/20 Ore/i);
   });
 
   it('blocks other destinations while all squad slots are full', () => {

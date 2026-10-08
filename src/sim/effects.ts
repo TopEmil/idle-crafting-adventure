@@ -19,7 +19,7 @@ export interface AggregatedEffects {
 export function aggregateEffects(
   ownedRecipes: RecipeId[],
   talents: Record<TalentId, number> = emptyTalents(),
-  unlockedAchievements: readonly AchievementId[] = [],
+  claimedAchievements: Partial<Record<AchievementId, number>> = {},
 ): AggregatedEffects {
   let clickPower = 1;
   let stationOutput = 1;
@@ -51,7 +51,7 @@ export function aggregateEffects(
     if (e.relicGainPerLevel) relicGain *= 1 + e.relicGainPerLevel * level;
   }
 
-  const achievement = aggregateAchievementRewards(unlockedAchievements);
+  const achievement = aggregateAchievementRewards(claimedAchievements);
   clickPower *= achievement.clickPower;
   stationOutput *= achievement.stationOutput;
   autoMine += achievement.autoMine;

@@ -20,10 +20,13 @@ describe('effects text', () => {
     expect(formatRecipeEffects(getRecipe('scout_kit'))).toContain('Expedition loot');
   });
 
-  it('explains station IO rates', () => {
+  it('explains station IO rates with ore icons', () => {
     const text = formatStationIO(getStation('smelter'), 2);
     expect(text).toContain('/s');
     expect(text).toContain('auto');
+    expect(text).toContain('art/ores/ore.png');
+    expect(text).toContain('art/ores/emberglass.png');
+    expect(text).not.toMatch(/\/s Ore|\/s Emberglass/);
     expect(formatStationUpgradeHint(2)).toContain('Lv 2 → Lv 3');
   });
 
@@ -40,8 +43,8 @@ describe('effects text', () => {
   });
 
   it('explains achievement rewards', () => {
-    expect(formatAchievementRewards(getAchievement('first_strike').rewards)).toContain('Ore');
-    expect(formatAchievementRewards(getAchievement('vein_warmup').rewards)).toContain('+5% tap');
-    expect(formatAchievementRewards(getAchievement('copper_bound').rewards)).toContain('Dwarf mine');
+    expect(formatAchievementRewards(getAchievement('first_strike').tiers[0]!.rewards)).toContain('Ore');
+    expect(formatAchievementRewards(getAchievement('vein_warmup').tiers[0]!.rewards)).toContain('+5% tap');
+    expect(formatAchievementRewards(getAchievement('copper_bound').tiers[0]!.rewards)).toContain('Dwarf mine');
   });
 });
