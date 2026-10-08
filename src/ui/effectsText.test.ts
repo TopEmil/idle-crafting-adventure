@@ -20,10 +20,13 @@ describe('effects text', () => {
     expect(formatRecipeEffects(getRecipe('scout_kit'))).toContain('Expedition loot');
   });
 
-  it('explains station IO rates', () => {
+  it('explains station IO rates with ore icons', () => {
     const text = formatStationIO(getStation('smelter'), 2);
     expect(text).toContain('/s');
     expect(text).toContain('auto');
+    expect(text).toContain('art/ores/ore.png');
+    expect(text).toContain('art/ores/emberglass.png');
+    expect(text).not.toMatch(/\/s Ore|\/s Emberglass/);
     expect(formatStationUpgradeHint(2)).toContain('Lv 2 → Lv 3');
   });
 

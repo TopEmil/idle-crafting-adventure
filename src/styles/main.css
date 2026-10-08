@@ -138,15 +138,18 @@ body {
   image-rendering: auto;
 }
 
-.res-chip .res-name {
+.res-chip .res-amt,
+.res-inline .res-amt {
   color: var(--mist);
+  font-variant-numeric: tabular-nums;
 }
 
 .res-inline {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .res-sep {
@@ -463,14 +466,16 @@ body {
 }
 
 .craft-need-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px 4px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--slate);
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .craft-need-meter {
@@ -814,6 +819,10 @@ body {
 }
 
 .req-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
   margin-top: 4px;
   font-size: 0.78rem;
   font-weight: 600;
@@ -874,6 +883,10 @@ body {
 }
 
 .cost {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
   font-size: 0.8rem;
   color: var(--cyan);
   font-variant-numeric: tabular-nums;
@@ -881,6 +894,10 @@ body {
 }
 
 .effect-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
   margin-top: 4px;
   font-size: 0.78rem;
   font-weight: 700;

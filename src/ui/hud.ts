@@ -2,7 +2,7 @@ import { ACHIEVEMENTS } from '../data/achievements';
 import { BALANCE, relicsFromReforge } from '../data/balance';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
-import { RESOURCES, resourceIconSrc, resourceLabel, type ResourceId } from '../data/resources';
+import { RESOURCES, resourceIconSrc, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import { TALENTS, talentUpgradeCost, type TalentId } from '../data/talents';
 import { STRATA, stratumAtDepth } from '../data/strata';
@@ -23,16 +23,17 @@ import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
 import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
 import {
-  formatCost,
+  formatCostHtml,
   formatDuration,
   formatLootHtml,
   formatMissingCost,
+  formatMissingCostHtml,
   formatNumber,
   formatResourceInline,
 } from './format';
 import { nextGoal } from './goals';
 import {
-  formatAchievementRewardLine,
+  formatAchievementRewardLineHtml,
   formatRecipeEffects,
   formatStationIO,
   formatStationSpeedHint,
@@ -485,7 +486,7 @@ export class Hud {
       } else {
         need.hidden = false;
         need.classList.toggle('craft-need-ready', craft.affordable);
-        needLabel.textContent = craft.needDetail;
+        needLabel.innerHTML = craft.needDetail;
         needMeter.style.width = `${Math.round(craft.progress * 100)}%`;
       }
     }
@@ -500,8 +501,7 @@ export class Hud {
       if (r.hideUntilOwned && value <= 0) return '';
       const prev = this.lastResources[r.id] ?? value;
       const grew = value > prev + 0.01;
-      const label = resourceLabel(r.id);
-      return `<div class="res-chip${grew ? ' res-pop' : ''}" data-res="${r.id}" title="${r.name}"><img class="res-icon" src="${resourceIconSrc(r.id)}" alt="" width="18" height="18" decoding="async" /><span class="res-name">${label}</span> ${formatNumber(value)}</div>`;
+      return `<div class="res-chip${grew ? ' res-pop' : ''}" data-res="${r.id}" title="${r.name}"><img class="res-icon" src="${resourceIconSrc(r.id)}" alt="${r.name}" width="18" height="18" decoding="async" /><span class="res-amt">${formatNumber(value)}</span></div>`;
     }).join('');
     this.lastResources = { ...state.resources };
   }
@@ -552,13 +552,13 @@ export class Hud {
       else if (!affordable) actionLabel = 'Need more';
       const costHint =
         !have && unlocked && !affordable
-          ? formatMissingCost(r.cost, state.resources)
-          : formatCost(r.cost);
+          ? formatMissingCostHtml(r.cost, state.resources)
+          : formatCostHtml(r.cost);
       return `
         <div class="row-item${!have && unlocked && !affordable ? ' row-item-blocked' : ''}">
           <div>
             <h3>${r.name}${have ? ' ✓' : ''}</h3>
-            <div class="cost">${costHint} · ${r.category}</div>
+            <div class="cost">${costHint}<span class="res-sep"> · </span>${r.category}</div>
             <div class="effect-line">${effects}</div>
           </div>
           <button class="btn btn-secondary" data-craft="${r.id}" type="button" ${disabled ? 'disabled' : ''} title="${have || unlocked ? '' : req}">${actionLabel}</button>
@@ -595,6 +595,7 @@ export class Hud {
     const squadGate = canBuySquadSlot(state);
     const extras = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
     const canBuyMore = extras < BALANCE.maxExtraSquadSlots;
+    const relicCostHtml = formatResourceInline('relics', formatNumber(BALANCE.extraSquadRelicCost));
     const squadBuyLabel = squadGate.ok
       ? `Buy squad · ${BALANCE.extraSquadRelicCost} Relics`
       : canBuyMore
@@ -645,7 +646,7 @@ export class Hud {
         <div class="row-item" data-squad-buy>
           <div>
             <h3>Extra squad</h3>
-            <div class="cost">${BALANCE.extraSquadRelicCost} Relics · permanent across Reforge</div>
+            <div class="cost">${relicCostHtml}<span class="res-sep"> · </span>permanent across Reforge</div>
             <div class="req-line">More concurrent scout parties (${extras}/${BALANCE.maxExtraSquadSlots} bought)</div>
           </div>
           <button class="btn btn-secondary" id="btn-buy-squad" type="button" ${squadGate.ok ? '' : 'disabled'}>${squadBuyLabel}</button>
@@ -697,8 +698,8 @@ export class Hud {
       if (!statusEl || !actionEl) continue;
 
       const row = getExpeditionRowState(state, e, now);
-      statusEl.textContent = row.status;
-      if (reqEl) reqEl.textContent = row.requirements;
+      statusEl.innerHTML = row.status;
+      if (reqEl) reqEl.innerHTML = row.requirements;
       rowEl.classList.toggle('row-item-blocked', row.blocked);
       if (meterEl) {
         const showMeter = row.kind === 'locked' || row.kind === 'need_cost';
@@ -715,7 +716,7 @@ export class Hud {
       } else if (row.mode === 'progress') {
         const bar = actionEl.querySelector('[data-exp-bar]') as HTMLElement | null;
         if (bar) bar.style.width = `${row.activePct ?? 0}%`;
-        statusEl.textContent = row.status;
+        statusEl.innerHTML = row.status;
         // Keep rush button bound if DOM was rebuilt elsewhere.
         this.bindExpeditionActions();
       } else if (
@@ -729,7 +730,7 @@ export class Hud {
         if (btn) {
           btn.disabled = !row.canSend;
           btn.textContent = row.actionLabel;
-          btn.title = row.requirements;
+          btn.title = row.actionTitle;
         }
       }
     }
@@ -792,8 +793,8 @@ export class Hud {
         else if (!affordable) actionLabel = 'Need more';
         const costHint =
           prereqOk && depthOk && !affordable
-            ? formatMissingCost(s.unlockCost, state.resources)
-            : formatCost(s.unlockCost);
+            ? formatMissingCostHtml(s.unlockCost, state.resources)
+            : formatCostHtml(s.unlockCost);
         return `
           <div class="row-item${!prereqOk || !depthOk || !affordable ? ' row-item-blocked' : ''}">
             <div>
@@ -814,8 +815,8 @@ export class Hud {
       if (atCap) actionLabel = 'Max';
       else if (!affordable) actionLabel = 'Need more';
       const costHint = !atCap && !affordable
-        ? formatMissingCost(cost, state.resources)
-        : `Upgrade ${formatCost(cost)}`;
+        ? formatMissingCostHtml(cost, state.resources)
+        : `Upgrade ${formatCostHtml(cost)}`;
       const runLevel = stationRunMult(st);
       const powerLabel = st.enabled ? 'On' : 'Off';
       const powerClass = st.enabled ? 'btn-power is-on' : 'btn-power is-off';
@@ -1006,7 +1007,7 @@ export class Hud {
             <h3>${def.name}${done ? ' ✓' : ''}</h3>
             <div class="cost">${progressLabel}</div>
             <div class="req-meter" aria-hidden="true"><span style="width:${Math.round(ratio * 100)}%"></span></div>
-            <div class="effect-line">${formatAchievementRewardLine(def)}</div>
+            <div class="effect-line">${formatAchievementRewardLineHtml(def)}</div>
           </div>
           <p>${def.description}</p>
         </div>
