@@ -752,7 +752,7 @@ export class GameApp {
       const key = `${def.id}:${tier.level}`;
       if (this.notifiedReadyAchievements.has(key)) continue;
       this.notifiedReadyAchievements.add(key);
-      this.hud.toast(`${tier.name} ready — claim in Achieve`, 'gain');
+      this.hud.toast(`${tier.name} ready — claim in Awards`, 'gain');
     }
   }
 

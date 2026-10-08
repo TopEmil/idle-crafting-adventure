@@ -662,9 +662,9 @@ body {
 }
 
 .nav-row {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 8px;
   border-radius: 18px;
   background: var(--glass);
@@ -675,14 +675,17 @@ body {
 
 .nav-btn {
   position: relative;
-  padding: 12px 4px;
+  flex: 1 1 calc(25% - 6px);
+  min-width: 0;
+  padding: 10px 4px;
   border-radius: 12px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--slate);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1.15;
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }

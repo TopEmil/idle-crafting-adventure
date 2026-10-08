@@ -150,7 +150,7 @@ export class Hud {
           <button class="nav-btn" data-panel="talents" type="button">Talents</button>
           <button class="nav-btn" data-panel="reforge" type="button">Reforge</button>
           <button class="nav-btn" data-panel="achievements" type="button" id="nav-achievements">
-            Achieve<span class="nav-badge" id="achieve-badge" hidden></span>
+            Awards<span class="nav-badge" id="achieve-badge" hidden></span>
           </button>
           <button class="nav-btn" data-panel="ledger" type="button">Ledger</button>
         </div>
@@ -1126,7 +1126,7 @@ export class Hud {
           <div class="row-item"><div><h3>Achievement tiers</h3></div><div>${claimedCount}/${totalAchievementTiers()}</div></div>
         </div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
-        <p class="muted" style="margin-top:12px">Open Achieve to claim rewards and track multi-level station paths.</p>
+        <p class="muted" style="margin-top:12px">Open Awards to claim rewards and track multi-level station paths.</p>
       </div>
     `;
     this.bindSheet();
