@@ -30,11 +30,14 @@ import {
 /** Timber-framed dig shaft + forge workshop hall */
 const MINE_BG_URL = `${import.meta.env.BASE_URL}art/mine-cavern-bg.jpg`;
 const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-hall-bg.jpg`;
-/** Painted station art when available; others use procedural drawStationBody. */
-const STATION_ART: Partial<Record<StationId, string>> = {
+/** Painted station art — same isometric stone + cyan-rune style for every slot. */
+const STATION_ART: Record<StationId, string> = {
   smelter: `${import.meta.env.BASE_URL}art/stations/smelter.png`,
   anvil: `${import.meta.env.BASE_URL}art/stations/anvil.png`,
   enchanter: `${import.meta.env.BASE_URL}art/stations/enchanter.png`,
+  crucible: `${import.meta.env.BASE_URL}art/stations/crucible.png`,
+  gemcutter: `${import.meta.env.BASE_URL}art/stations/gemcutter.png`,
+  aetherforge: `${import.meta.env.BASE_URL}art/stations/aetherforge.png`,
 };
 /** 5-frame dwarf mining loop (pick wind-up → strike → recover). */
 const DWARF_MINE_FRAMES = [1, 2, 3, 4, 5].map(
