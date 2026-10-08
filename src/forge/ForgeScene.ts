@@ -138,6 +138,8 @@ export class ForgeScene {
   private lastPointer: { x: number; y: number } | null = null;
   private lastDigCol: number | null = null;
   private autoMineRate = 0;
+  /** Ore shattered by auto dig since last dwarf floater. */
+  private pendingAutoOre = 0;
   private dwarfTimer = 0;
   private dwarfSwingT = 0;
   private readonly dwarfPeriod = 1.25;
@@ -262,9 +264,14 @@ export class ForgeScene {
     return this.lastDigCol;
   }
 
-  /** Ore/sec from economy — drives dwarf visibility and strike floats. */
+  /** Dig strike rate from economy — drives dwarf visibility. */
   setAutoMineRate(rate: number) {
     this.autoMineRate = Math.max(0, rate);
+  }
+
+  /** Queue ore from sim auto-dig shatters for the next dwarf floater. */
+  reportAutoOre(amount: number) {
+    if (amount > 0) this.pendingAutoOre += amount;
   }
 
   getView(): SceneView {
@@ -360,7 +367,9 @@ export class ForgeScene {
     this.combo = Math.min(12, this.combo + 1);
 
     this.spawnRockDebris(hitPos.x, hitPos.y, shattered ? 16 : 8, this.combo);
-    this.spawnOreFloater(hitPos.x, hitPos.y, amount, 18 + Math.min(10, this.combo));
+    if (amount > 0) {
+      this.spawnOreFloater(hitPos.x, hitPos.y, amount, 18 + Math.min(10, this.combo));
+    }
     if (find) {
       this.spawnFindFloater(hitPos.x, hitPos.y - 18, find.label, find.amount);
     }
@@ -860,7 +869,8 @@ export class ForgeScene {
     const shattered = Boolean(cell && cell.hp <= cell.maxHp * 0.35);
     this.hitFlash = Math.max(this.hitFlash, 0.14);
     this.spawnRockDebris(pos.x, pos.y, shattered ? 10 : 5, 2);
-    const amount = this.autoMineRate * this.dwarfPeriod;
+    const amount = this.pendingAutoOre;
+    this.pendingAutoOre = 0;
     if (amount > 0.05) {
       this.spawnOreFloater(pos.x, pos.y - 6, amount, 14);
     }

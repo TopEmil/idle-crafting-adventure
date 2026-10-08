@@ -4,6 +4,9 @@ export const SIM_HZ = 10;
 export const SIM_DT = 1 / SIM_HZ;
 
 export const BALANCE = {
+  /** Ore granted when a shaft cell shatters (scaled by hardness × depth). */
+  baseVeinOre: 1,
+  /** @deprecated Use baseVeinOre — kept as alias for older references. */
   baseClickOre: 1,
   clickGrowthPerLevel: 0,
   offlineCapHours: 8,

@@ -52,7 +52,7 @@ export const RECIPES: RecipeDef[] = [
   {
     id: 'copper_pick',
     name: 'Copper Pick',
-    description: 'Sharper taps — a forge dwarf joins the dig.',
+    description: 'Heavier swings — a forge dwarf joins the dig.',
     cost: { ore: 15 },
     effects: { clickPower: 1.5, autoMine: 0.25 },
     category: 'tool',

@@ -25,7 +25,7 @@ import {
   canBuySquadSlot,
   canPrestige,
   expeditionSlotCount,
-  getClickPower,
+  getDigDamage,
   prestigeCooldownRemaining,
   stationRunMult,
   stationUpgradeCostMap,
@@ -216,7 +216,7 @@ export class Hud {
     this.setView(this.view);
     const veinBtn = this.root.querySelector('#btn-vein') as HTMLButtonElement | null;
     if (veinBtn) {
-      veinBtn.textContent = `Mine (+${formatNumber(getClickPower(state))})`;
+      veinBtn.textContent = `Mine (${formatNumber(getDigDamage(state))} dmg)`;
       veinBtn.classList.toggle('btn-primary', this.view === 'mine');
       veinBtn.classList.toggle('btn-secondary', this.view === 'forge');
     }

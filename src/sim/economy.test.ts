@@ -13,8 +13,9 @@ import {
   completeExpeditionIfReady,
   craftRecipe,
   expeditionSlotCount,
+  AUTO_DIG_STRIKES_PER_SEC,
   getAutoMineRate,
-  getClickPower,
+  getDigDamage,
   prestige,
   prestigeCooldownRemaining,
   rushExpedition,
@@ -53,16 +54,46 @@ describe('balance helpers', () => {
 });
 
 describe('click & craft', () => {
-  it('awards ore on vein click', () => {
+  it('awards ore only when a vein cell shatters', () => {
     const state = createInitialState();
     const { state: next, event } = clickVein(state);
     expect(event.type).toBe('click_vein');
-    expect(event.type === 'click_vein' && event.amount).toBe(getClickPower(next));
-    expect(next.resources.ore).toBe(getClickPower(next));
-    expect(next.totalOreProduced).toBe(next.resources.ore);
-    expect(next.allTimeOre).toBe(next.resources.ore);
-    expect(next.seasonOre).toBe(next.resources.ore);
     expect(next.mineFaceDamage.some((d) => d > 0)).toBe(true);
+    if (event.type === 'click_vein' && event.amount > 0) {
+      expect(next.resources.ore).toBe(event.amount);
+      expect(next.totalOreProduced).toBe(event.amount);
+      expect(next.allTimeOre).toBe(event.amount);
+      expect(next.seasonOre).toBe(event.amount);
+    } else {
+      expect(next.resources.ore).toBe(0);
+      expect(next.totalOreProduced).toBe(0);
+    }
+  });
+
+  it('does not grant extra ore from overkill damage', () => {
+    let state = createInitialState();
+    // Crack col 0 with base damage until it shatters
+    let yieldFromNormal = 0;
+    for (let i = 0; i < 20; i++) {
+      const { state: next, event } = clickVein(state, { col: 0, mode: 'player' });
+      state = next;
+      if (event.type === 'click_vein' && event.amount > 0) {
+        yieldFromNormal = event.amount;
+        break;
+      }
+    }
+    expect(yieldFromNormal).toBeGreaterThan(0);
+
+    // One-shot a fresh col 0 with dig damage ≫ cell HP — same fixed vein yield
+    const fresh = createInitialState();
+    fresh.talents.vein_attunement = 20; // dig damage 3.0
+    expect(getDigDamage(fresh)).toBeGreaterThanOrEqual(3);
+    const oneShot = clickVein(fresh, { col: 0, mode: 'player' });
+    expect(oneShot.event.type).toBe('click_vein');
+    if (oneShot.event.type === 'click_vein') {
+      expect(oneShot.event.amount).toBe(yieldFromNormal);
+      expect(oneShot.event.amount).toBeGreaterThan(0);
+    }
   });
 
   it('grants active-only find loot when a rare tile shatters', () => {
@@ -89,19 +120,20 @@ describe('click & craft', () => {
       state = clickVein(state).state;
     }
     expect(state.mineDepth).toBeGreaterThan(0);
-    expect(getClickPower(state)).toBeGreaterThan(BALANCE.baseClickOre);
+    // Dig damage is independent of depth (depth boosts ore yield / HP instead).
+    expect(getDigDamage(state)).toBe(1);
   });
 
   it('crafts copper pick within early ore budget', () => {
     let state = createInitialState();
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       state = clickVein(state).state;
     }
     const result = craftRecipe(state, 'copper_pick');
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.state.ownedRecipes).toContain('copper_pick');
-      expect(getClickPower(result.state)).toBeGreaterThan(getClickPower(state));
+      expect(getDigDamage(result.state)).toBeGreaterThan(getDigDamage(state));
     }
   });
 
@@ -119,11 +151,14 @@ describe('click & craft', () => {
     if (!crafted.ok) return;
     state = crafted.state;
     const rate = getAutoMineRate(state);
-    expect(rate).toBeCloseTo(getClickPower(state) * 0.25);
+    expect(rate).toBeCloseTo(AUTO_DIG_STRIKES_PER_SEC * (1 + 0.25));
     const before = state.resources.ore;
-    state = tickProduction(state, 2);
+    const beforeTotal = state.totalOreProduced;
+    // Dig long enough to shatter at least one cell (HP ~2–5, ~1 strike/s, dmg 1.5)
+    state = tickProduction(state, 8);
     expect(state.resources.ore).toBeGreaterThan(before);
-    expect(state.totalOreProduced).toBeGreaterThan(0);
+    expect(state.totalOreProduced).toBeGreaterThan(beforeTotal);
+    expect(state.mineFaceDamage.some((d) => d > 0) || state.mineDepth > 0).toBe(true);
   });
 });
 
@@ -375,8 +410,8 @@ describe('offline & prestige', () => {
     expect(result.state.lastPrestigeAt).toBe(1_000_000);
     // First Reforge is claimable after prestige but not auto-granted.
     expect(result.state.claimedAchievements.first_reforge ?? 0).toBe(0);
-    // Talent ×2 (+20%) only until the achievement is claimed.
-    expect(getClickPower(result.state)).toBeCloseTo(BALANCE.baseClickOre * (1 + 0.1 * 2));
+    // Talent ×2 (+20%) only until the achievement is claimed → dig damage.
+    expect(getDigDamage(result.state)).toBeCloseTo(1 + 0.1 * 2);
   });
 
   it('blocks prestige during 10-minute cooldown', () => {
@@ -395,17 +430,17 @@ describe('offline & prestige', () => {
 });
 
 describe('talents', () => {
-  it('spends relics to raise talent levels and boost click power', () => {
+  it('spends relics to raise talent levels and boost dig damage', () => {
     let state = createInitialState();
     state.resources.relics = 5;
-    const base = getClickPower(state);
+    const base = getDigDamage(state);
     const bought = buyTalent(state, 'vein_attunement');
     expect(bought.ok).toBe(true);
     if (!bought.ok) return;
     state = bought.state;
     expect(state.talents.vein_attunement).toBe(1);
     expect(state.resources.relics).toBe(4);
-    expect(getClickPower(state)).toBeGreaterThan(base);
+    expect(getDigDamage(state)).toBeGreaterThan(base);
   });
 
   it('rejects buy when out of relics or maxed', () => {

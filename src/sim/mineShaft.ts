@@ -1,5 +1,6 @@
+import { BALANCE } from '../data/balance';
 import { resourceLabel, type ResourceId } from '../data/resources';
-import { stratumAtDepth, type StratumDef } from '../data/strata';
+import { depthOreMult, stratumAtDepth, type StratumDef } from '../data/strata';
 
 export const SHAFT_COLS = 8;
 export const SHAFT_LOOKAHEAD = 5;
@@ -52,7 +53,7 @@ export function createMineShaftProgress(depth = 0, faceDamage?: number[]): MineS
   while (dmg.length < SHAFT_COLS) dmg.push(0);
   return {
     depth: Math.max(0, Math.floor(depth)),
-    faceDamage: dmg.map((n) => Math.max(0, Math.floor(n))),
+    faceDamage: dmg.map((n) => Math.max(0, Number(n) || 0)),
   };
 }
 
@@ -155,6 +156,18 @@ export function faceCellHp(depth: number, faceDamage: number[], col: number): nu
   return Math.max(0, max - dmg);
 }
 
+/**
+ * Fixed ore payout when a face cell shatters.
+ * Scales with stratum hardness and depth — not with dig damage.
+ */
+export function oreYieldAtDepth(depth: number): number {
+  const stratum = stratumAtDepth(depth);
+  return Math.max(
+    1,
+    Math.round(BALANCE.baseVeinOre * stratum.hardness * depthOreMult(depth)),
+  );
+}
+
 export function faceTotalHp(depth: number): number {
   let total = 0;
   for (let col = 0; col < SHAFT_COLS; col++) {
@@ -178,7 +191,8 @@ export function normalizeProgress(progress: MineShaftProgress): MineShaftProgres
   let depth = Math.max(0, Math.floor(progress.depth));
   let faceDamage = [...(progress.faceDamage ?? emptyFaceDamage())];
   while (faceDamage.length < SHAFT_COLS) faceDamage.push(0);
-  faceDamage = faceDamage.slice(0, SHAFT_COLS).map((n) => Math.max(0, Math.floor(n)));
+  // Keep fractional damage so dig-damage multipliers (e.g. ×1.05) accumulate.
+  faceDamage = faceDamage.slice(0, SHAFT_COLS).map((n) => Math.max(0, Number(n) || 0));
 
   for (let guard = 0; guard < 10_000; guard++) {
     if (!faceCleared(depth, faceDamage)) break;
@@ -223,6 +237,8 @@ export interface DigResult {
   stratum: StratumDef;
   hitCol: number;
   hitKind: TileKind;
+  /** Ore granted from shattered cells this call (0 if nothing broke). */
+  oreYield: number;
   /** Active-only rare loot (null for stone or auto digs) */
   loot: TileLoot | null;
 }
@@ -242,13 +258,19 @@ export function pickAutoCol(depth: number, faceDamage: number[]): number {
   return stoneCol >= 0 ? stoneCol : anyCol;
 }
 
-/** Apply dig hits. Player can target a column; auto prefers stone. */
+/**
+ * Apply dig strikes. Each strike deals `damage` to one face cell;
+ * overkill does not spill to the next cell (max one shatter per strike).
+ * Player can target a column; auto prefers stone.
+ */
 export function digShaft(
   progress: MineShaftProgress,
-  hits = 1,
-  opts?: { col?: number; mode?: DigMode },
+  damage = 1,
+  opts?: { col?: number; mode?: DigMode; strikes?: number },
 ): DigResult {
   const mode: DigMode = opts?.mode ?? 'player';
+  const strikeDamage = Math.max(0, damage);
+  let strikesLeft = Math.max(1, Math.floor(opts?.strikes ?? 1));
   let { depth, faceDamage } = normalizeProgress(progress);
   faceDamage = [...faceDamage];
 
@@ -256,10 +278,12 @@ export function digShaft(
   let rowsCleared = 0;
   let hitCol = 0;
   let hitKind: TileKind = 'stone';
+  let oreYield = 0;
   let loot: TileLoot | null = null;
 
-  let remaining = Math.max(0, Math.floor(hits));
-  while (remaining > 0) {
+  while (strikesLeft > 0) {
+    strikesLeft -= 1;
+
     let targetCol =
       mode === 'player' && opts?.col != null && opts.col >= 0 && opts.col < SHAFT_COLS
         ? opts.col
@@ -273,20 +297,24 @@ export function digShaft(
       const advanced = normalizeProgress({ depth, faceDamage });
       depth = advanced.depth;
       faceDamage = [...advanced.faceDamage];
-      remaining -= 1;
       continue;
     }
 
     hitCol = targetCol;
     hitKind = tileKindAt(depth, targetCol);
     const hpBefore = faceCellHp(depth, faceDamage, targetCol);
-    faceDamage[targetCol] = (faceDamage[targetCol] ?? 0) + 1;
-    remaining -= 1;
+    if (hpBefore <= 0 || strikeDamage <= 0) continue;
 
-    if (hpBefore > 0 && faceCellHp(depth, faceDamage, targetCol) <= 0) {
+    // Cap applied damage at remaining HP — overkill is wasted (no spillover).
+    const applied = Math.min(strikeDamage, hpBefore);
+    faceDamage[targetCol] = (faceDamage[targetCol] ?? 0) + applied;
+
+    if (faceCellHp(depth, faceDamage, targetCol) <= 0) {
       shattered = true;
+      oreYield += oreYieldAtDepth(depth);
       if (mode === 'player') {
-        loot = lootForTile(hitKind);
+        const found = lootForTile(hitKind);
+        if (found) loot = found;
       }
     }
 
@@ -306,6 +334,7 @@ export function digShaft(
     stratum: stratumAtDepth(progressOut.depth),
     hitCol,
     hitKind,
+    oreYield,
     loot,
   };
 }

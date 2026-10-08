@@ -82,10 +82,12 @@ describe('content expansion', () => {
   });
 
   it('auto dig advances depth without rare loot', () => {
-    const result = digShaft({ depth: 0, faceDamage: [0, 0, 0, 0, 0, 0, 0, 0] }, 40, {
+    const result = digShaft({ depth: 0, faceDamage: [0, 0, 0, 0, 0, 0, 0, 0] }, 1, {
       mode: 'auto',
+      strikes: 40,
     });
     expect(result.loot).toBeNull();
     expect(result.progress.depth).toBeGreaterThan(0);
+    expect(result.oreYield).toBeGreaterThan(0);
   });
 });

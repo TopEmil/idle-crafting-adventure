@@ -172,6 +172,9 @@ export class GameApp {
       while (this.accum >= SIM_DT) {
         const tick = tickProductionDetailed(this.state, SIM_DT);
         this.state = tick.state;
+        if (tick.autoOreGained > 0) {
+          this.scene.reportAutoOre(tick.autoOreGained);
+        }
         this.emitStationGainFloaters(tick.stationGains);
         this.applyAchievements(true);
         const ready = completeExpeditionIfReady(this.state);

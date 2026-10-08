@@ -22,13 +22,13 @@ export function formatAchievementRewards(rewards: AchievementRewards): string {
     }
   }
   if (rewards.clickPower) {
-    parts.push(`+${Math.round((rewards.clickPower - 1) * 100)}% tap`);
+    parts.push(`+${Math.round((rewards.clickPower - 1) * 100)}% dig damage`);
   }
   if (rewards.stationOutput) {
     parts.push(`+${Math.round((rewards.stationOutput - 1) * 100)}% stations`);
   }
   if (rewards.autoMine) {
-    parts.push(`Dwarf mine +${Math.round(rewards.autoMine * 100)}% tap/s`);
+    parts.push(`Dwarf dig +${Math.round(rewards.autoMine * 100)}% rate`);
   }
   return parts.join(' · ') || '—';
 }
@@ -47,13 +47,13 @@ export function formatAchievementRewardsHtml(rewards: AchievementRewards): strin
     }
   }
   if (rewards.clickPower) {
-    parts.push(`+${Math.round((rewards.clickPower - 1) * 100)}% tap`);
+    parts.push(`+${Math.round((rewards.clickPower - 1) * 100)}% dig damage`);
   }
   if (rewards.stationOutput) {
     parts.push(`+${Math.round((rewards.stationOutput - 1) * 100)}% stations`);
   }
   if (rewards.autoMine) {
-    parts.push(`Dwarf mine +${Math.round(rewards.autoMine * 100)}% tap/s`);
+    parts.push(`Dwarf dig +${Math.round(rewards.autoMine * 100)}% rate`);
   }
   return parts.join('<span class="res-sep"> · </span>') || '—';
 }
@@ -68,8 +68,8 @@ export function formatAchievementRewardLineHtml(
 export function formatRecipeEffects(recipe: RecipeDef): string {
   const parts: string[] = [];
   const e = recipe.effects;
-  if (e.clickPower) parts.push(`Tap power ×${e.clickPower}`);
-  if (e.autoMine) parts.push(`Dwarf mine +${Math.round(e.autoMine * 100)}% tap/s`);
+  if (e.clickPower) parts.push(`Dig damage ×${e.clickPower}`);
+  if (e.autoMine) parts.push(`Dwarf dig +${Math.round(e.autoMine * 100)}% rate`);
   if (e.stationOutput) parts.push(`Station output ×${e.stationOutput}`);
   if (e.expeditionLoot) parts.push(`Expedition loot ×${e.expeditionLoot}`);
   if (e.offlineRate) parts.push(`Offline rate ×${e.offlineRate}`);
@@ -82,7 +82,7 @@ export function formatTalentEffects(talent: TalentDef, level: number): string {
   const e = talent.effects;
   const n = Math.max(1, level);
   if (e.clickPowerPerLevel) {
-    parts.push(`Tap power ×${(1 + e.clickPowerPerLevel * n).toFixed(2)}`);
+    parts.push(`Dig damage ×${(1 + e.clickPowerPerLevel * n).toFixed(2)}`);
   }
   if (e.stationOutputPerLevel) {
     parts.push(`Station output ×${(1 + e.stationOutputPerLevel * n).toFixed(2)}`);
@@ -94,7 +94,7 @@ export function formatTalentEffects(talent: TalentDef, level: number): string {
     parts.push(`Offline rate ×${(1 + e.offlineRatePerLevel * n).toFixed(2)}`);
   }
   if (e.autoMinePerLevel) {
-    parts.push(`Dwarf mine +${Math.round(e.autoMinePerLevel * n * 100)}% tap/s`);
+    parts.push(`Dwarf dig +${Math.round(e.autoMinePerLevel * n * 100)}% rate`);
   }
   if (e.expeditionSpeedPerLevel) {
     parts.push(`Expeditions ${Math.round(e.expeditionSpeedPerLevel * n * 100)}% faster`);
@@ -109,7 +109,7 @@ export function formatTalentPerLevel(talent: TalentDef): string {
   const parts: string[] = [];
   const e = talent.effects;
   if (e.clickPowerPerLevel) {
-    parts.push(`+${Math.round(e.clickPowerPerLevel * 100)}% tap / lvl`);
+    parts.push(`+${Math.round(e.clickPowerPerLevel * 100)}% dig / lvl`);
   }
   if (e.stationOutputPerLevel) {
     parts.push(`+${Math.round(e.stationOutputPerLevel * 100)}% stations / lvl`);
@@ -121,7 +121,7 @@ export function formatTalentPerLevel(talent: TalentDef): string {
     parts.push(`+${Math.round(e.offlineRatePerLevel * 100)}% offline / lvl`);
   }
   if (e.autoMinePerLevel) {
-    parts.push(`+${Math.round(e.autoMinePerLevel * 100)}% dwarf / lvl`);
+    parts.push(`+${Math.round(e.autoMinePerLevel * 100)}% dwarf dig / lvl`);
   }
   if (e.expeditionSpeedPerLevel) {
     parts.push(`+${Math.round(e.expeditionSpeedPerLevel * 100)}% scout speed / lvl`);

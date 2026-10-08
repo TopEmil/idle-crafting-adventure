@@ -65,7 +65,7 @@ export function migrateState(state: GameState): GameState {
       next.mineFaceDamage = emptyFaceDamage();
     }
   } else {
-    next.mineFaceDamage = next.mineFaceDamage.map((n) => Math.max(0, Math.floor(n ?? 0)));
+    next.mineFaceDamage = next.mineFaceDamage.map((n) => Math.max(0, Number(n) || 0));
   }
   delete (next as GameState & { mineFaceHits?: number }).mineFaceHits;
   if (typeof next.mineDigAcc !== 'number' || next.mineDigAcc < 0) {

@@ -18,8 +18,8 @@ describe('progression walkthrough (sim)', () => {
   it('walks gather → craft → smelter → expedition claim', () => {
     let state = createInitialState(1_000_000);
 
-    // Gather enough for copper pick
-    for (let i = 0; i < 20; i++) state = clickVein(state).state;
+    // Gather enough for copper pick (ore only on shatter)
+    for (let i = 0; i < 40; i++) state = clickVein(state).state;
     expect(nextGoal(state).id).toBe('recipe:copper_pick');
     expect(nextGoal(state).ready).toBe(true);
 
@@ -27,7 +27,7 @@ describe('progression walkthrough (sim)', () => {
     expect(pick.ok).toBe(true);
     if (!pick.ok) return;
     state = pick.state;
-    expect(formatRecipeEffects(getRecipe('copper_pick'))).toContain('Tap power');
+    expect(formatRecipeEffects(getRecipe('copper_pick'))).toContain('Dig damage');
 
     // Fund and unlock smelter
     state.resources.ore = 200;

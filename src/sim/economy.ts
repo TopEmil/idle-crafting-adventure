@@ -18,7 +18,7 @@ import {
   talentUpgradeCost,
   type TalentId,
 } from '../data/talents';
-import { depthOreMult, stratumAtDepth, STRATA, type StratumId } from '../data/strata';
+import { stratumAtDepth, STRATA, type StratumId } from '../data/strata';
 import {
   digShaft,
   emptyFaceDamage,
@@ -124,17 +124,28 @@ function scaleLoot(
   return out;
 }
 
-export function getClickPower(state: GameState): number {
+/** Dig damage per strike from recipes / talents / achievements. */
+export function getDigDamage(state: GameState): number {
   const effects = effectsFor(state);
-  const depthMult = depthOreMult(shaftProgress(state).depth);
-  return BALANCE.baseClickOre * effects.clickPower * depthMult;
+  return Math.max(1, effects.clickPower);
 }
 
-/** Ore/sec from the dwarf miner when autoMine recipes are owned. */
+/** @deprecated Prefer getDigDamage — same value (dig damage, not ore/tap). */
+export function getClickPower(state: GameState): number {
+  return getDigDamage(state);
+}
+
+/** Base dwarf dig strikes per second when autoMine is unlocked. */
+export const AUTO_DIG_STRIKES_PER_SEC = 0.8;
+
+/**
+ * Dwarf dig strike rate (strikes/sec). Scales with autoMine so pick/dwarf
+ * upgrades still speed shaft progress; ore only arrives on shatter.
+ */
 export function getAutoMineRate(state: GameState): number {
   const effects = effectsFor(state);
   if (effects.autoMine <= 0) return 0;
-  return getClickPower(state) * effects.autoMine;
+  return AUTO_DIG_STRIKES_PER_SEC * (1 + effects.autoMine);
 }
 
 export function clickVein(
@@ -143,12 +154,15 @@ export function clickVein(
 ): { state: GameState; event: GameEvent } {
   const next = structuredClone(state);
   const mode: DigMode = opts?.mode ?? 'player';
-  const dig = digShaft(shaftProgress(next), 1, { col: opts?.col, mode });
+  const damage = getDigDamage(next);
+  const dig = digShaft(shaftProgress(next), damage, { col: opts?.col, mode });
   applyShaftProgress(next, dig.progress.depth, dig.progress.faceDamage);
   next.lastMineHitCol = dig.hitCol;
-  const amount = getClickPower(next);
-  next.resources.ore += amount;
-  recordOreMined(next, amount);
+  const amount = dig.oreYield;
+  if (amount > 0) {
+    next.resources.ore += amount;
+    recordOreMined(next, amount);
+  }
   next.lifetimeClicks = (next.lifetimeClicks ?? 0) + 1;
   if (dig.loot) {
     next.resources[dig.loot.resource] =
@@ -477,27 +491,33 @@ export function tickProduction(state: GameState, dt: number): GameState {
 export function tickProductionDetailed(
   state: GameState,
   dt: number,
-): { state: GameState; stationGains: StationTickGain[] } {
-  if (dt <= 0) return { state, stationGains: [] };
+): { state: GameState; stationGains: StationTickGain[]; autoOreGained: number } {
+  if (dt <= 0) return { state, stationGains: [], autoOreGained: 0 };
   const next = structuredClone(state);
   const effects = effectsFor(next);
   const pMult = effects.stationOutput;
   const stationGains: StationTickGain[] = [];
+  let autoOreGained = 0;
 
   const autoRate = getAutoMineRate(next);
   if (autoRate > 0) {
-    // ~0.8 shaft hits/sec — close to the dwarf strike period in ForgeScene.
-    next.mineDigAcc = (next.mineDigAcc ?? 0) + dt * 0.8;
+    next.mineDigAcc = (next.mineDigAcc ?? 0) + dt * autoRate;
     const digHits = Math.floor(next.mineDigAcc);
     if (digHits > 0) {
       next.mineDigAcc -= digHits;
-      const dig = digShaft(shaftProgress(next), digHits, { mode: 'auto' });
+      const damage = getDigDamage(next);
+      const dig = digShaft(shaftProgress(next), damage, {
+        mode: 'auto',
+        strikes: digHits,
+      });
       applyShaftProgress(next, dig.progress.depth, dig.progress.faceDamage);
       next.lastMineHitCol = dig.hitCol;
+      if (dig.oreYield > 0) {
+        next.resources.ore += dig.oreYield;
+        recordOreMined(next, dig.oreYield);
+        autoOreGained += dig.oreYield;
+      }
     }
-    const ore = getAutoMineRate(next) * dt;
-    next.resources.ore += ore;
-    recordOreMined(next, ore);
   }
 
   for (const def of STATIONS) {
@@ -535,7 +555,7 @@ export function tickProductionDetailed(
   }
 
   next.playTimeSec += dt;
-  return { state: next, stationGains };
+  return { state: next, stationGains, autoOreGained };
 }
 
 /**
