@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stratumAtDepth } from '../data/strata';
+import { STRATA, stratumAtDepth } from '../data/strata';
 import {
   buildShaftCells,
   createMineShaftProgress,
@@ -62,9 +62,13 @@ describe('mine shaft', () => {
     }
   });
 
-  it('scales ore yield with depth hardness', () => {
+  it('scales ore yield with hardness doubling', () => {
     expect(oreYieldAtDepth(0)).toBe(2);
-    expect(oreYieldAtDepth(175)).toBeGreaterThan(oreYieldAtDepth(0));
+    // Aether Core hardness 1024 × depthMult 1.45
+    expect(oreYieldAtDepth(175)).toBe(Math.round(1024 * 1.45));
+    for (let i = 1; i < STRATA.length; i++) {
+      expect(STRATA[i]!.hardness).toBe(STRATA[i - 1]!.hardness * 2);
+    }
   });
 
   it('normalizeProgress collapses a fully damaged face', () => {

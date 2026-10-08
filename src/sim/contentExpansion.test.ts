@@ -49,8 +49,8 @@ describe('content expansion', () => {
   it('gates moss crawl and crucible on depth + new ore', () => {
     let state = createInitialState();
     state.totalOreProduced = 500;
-    state.resources.ore = 200;
-    state.resources.glowdust = 40;
+    state.resources.ore = 500;
+    state.resources.glowdust = 100;
     state.stations.anvil.unlocked = true;
     state.stations.anvil.level = 1;
     state.stations.anvil.runLevel = 1;
@@ -63,7 +63,9 @@ describe('content expansion', () => {
     const opened = startExpedition(state, 'moss_crawl', 1_000);
     expect(opened.ok).toBe(true);
 
-    state.resources.verdiglass = 8;
+    state.resources.verdiglass = 20;
+    state.resources.glowdust = 100;
+    state.resources.ore = 500;
     const crucibleBlocked = unlockStation(state, 'crucible');
     // depth already 6 — should unlock if funded
     expect(crucibleBlocked.ok).toBe(true);

@@ -31,6 +31,7 @@ import {
   stationUpgradeCostMap,
 } from '../sim/economy';
 import { faceDamageSum, faceTotalHp } from '../sim/mineShaft';
+import { recipeCost, stationUnlockCost } from '../sim/pricing';
 import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
 import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
@@ -521,7 +522,7 @@ export class Hud {
     if (!craft.recipe) {
       craftBtn.title = 'Every recipe is already crafted';
     } else if (!craft.affordable) {
-      craftBtn.title = formatMissingCost(craft.recipe.cost, state.resources);
+      craftBtn.title = formatMissingCost(recipeCost(craft.recipe), state.resources);
     } else {
       craftBtn.title = `Craft ${craft.recipe.name}`;
     }
@@ -592,7 +593,8 @@ export class Hud {
     const rows = RECIPES.map((r) => {
       const have = owned.has(r.id);
       const unlocked = !r.requires || r.requires.every((req) => owned.has(req));
-      const affordable = canAfford(state.resources, r.cost);
+      const cost = recipeCost(r);
+      const affordable = canAfford(state.resources, cost);
       const disabled = have || !unlocked || !affordable;
       const effects = formatRecipeEffects(r);
       const req = r.requires?.length
@@ -604,8 +606,8 @@ export class Hud {
       else if (!affordable) actionLabel = 'Need more';
       const costHint =
         !have && unlocked && !affordable
-          ? formatMissingCostHtml(r.cost, state.resources)
-          : formatCostHtml(r.cost);
+          ? formatMissingCostHtml(cost, state.resources)
+          : formatCostHtml(cost);
       return `
         <div class="row-item${!have && unlocked && !affordable ? ' row-item-blocked' : ''}">
           <div>
@@ -827,7 +829,8 @@ export class Hud {
       if (!st.unlocked) {
         const prereqOk = !s.unlockRequires || state.stations[s.unlockRequires].unlocked;
         const depthOk = s.unlockAtDepth == null || (state.mineDepth ?? 0) >= s.unlockAtDepth;
-        const affordable = canAfford(state.resources, s.unlockCost);
+        const unlock = stationUnlockCost(s);
+        const affordable = canAfford(state.resources, unlock);
         const gates: string[] = [];
         if (s.unlockRequires) {
           gates.push(
@@ -845,8 +848,8 @@ export class Hud {
         else if (!affordable) actionLabel = 'Need more';
         const costHint =
           prereqOk && depthOk && !affordable
-            ? formatMissingCostHtml(s.unlockCost, state.resources)
-            : formatCostHtml(s.unlockCost);
+            ? formatMissingCostHtml(unlock, state.resources)
+            : formatCostHtml(unlock);
         return `
           <div class="row-item${!prereqOk || !depthOk || !affordable ? ' row-item-blocked' : ''}">
             <div>

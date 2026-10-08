@@ -1,9 +1,16 @@
 import {
   BALANCE,
   relicsFromReforge,
-  stationUpgradeCost,
   SIM_DT,
 } from '../data/balance';
+import {
+  expeditionCost,
+  expeditionLoot,
+  expeditionOreGate,
+  recipeCost,
+  stationLevelCost,
+  stationUnlockCost,
+} from './pricing';
 import {
   EXPEDITIONS,
   expeditionUnlocked,
@@ -198,11 +205,12 @@ export function craftRecipe(
       }
     }
   }
-  if (!canAfford(state.resources, recipe.cost)) {
+  const cost = recipeCost(recipe);
+  if (!canAfford(state.resources, cost)) {
     return { ok: false, reason: 'Not enough resources' };
   }
   const next = structuredClone(state);
-  pay(next.resources, recipe.cost);
+  pay(next.resources, cost);
   next.ownedRecipes.push(recipeId);
   return { ok: true, state: next, event: { type: 'craft', recipeId } };
 }
@@ -224,11 +232,12 @@ export function unlockStation(
       reason: `Dig to depth ${station.unlockAtDepth} (${stratumAtDepth(station.unlockAtDepth).name})`,
     };
   }
-  if (!canAfford(state.resources, station.unlockCost)) {
+  const unlock = stationUnlockCost(station);
+  if (!canAfford(state.resources, unlock)) {
     return { ok: false, reason: 'Not enough resources' };
   }
   const next = structuredClone(state);
-  pay(next.resources, station.unlockCost);
+  pay(next.resources, unlock);
   next.stations[stationId].unlocked = true;
   next.stations[stationId].level = 1;
   next.stations[stationId].runLevel = 1;
@@ -249,10 +258,7 @@ export function upgradeStation(
   if (!current.unlocked) return { ok: false, reason: 'Locked' };
   if (current.level >= BALANCE.stationLevelCap) return { ok: false, reason: 'Max level' };
 
-  const cost: Partial<Record<ResourceId, number>> = {};
-  for (const [key, base] of Object.entries(station.baseCost) as [ResourceId, number][]) {
-    cost[key] = stationUpgradeCost(base, station.costGrowth, current.level);
-  }
+  const cost = stationLevelCost(station, current.level);
   if (!canAfford(state.resources, cost)) {
     return { ok: false, reason: 'Not enough resources' };
   }
@@ -352,10 +358,11 @@ export function startExpedition(
   }
   const def = getExpedition(expeditionId);
   if (!expeditionUnlocked(def, state.totalOreProduced, state.mineDepth ?? 0)) {
-    if (state.totalOreProduced < def.unlockAtOreProduced) {
+    const oreGate = expeditionOreGate(def);
+    if (state.totalOreProduced < oreGate) {
       return {
         ok: false,
-        reason: `Need ${def.unlockAtOreProduced} lifetime ore (have ${Math.floor(state.totalOreProduced)})`,
+        reason: `Need ${oreGate} lifetime ore (have ${Math.floor(state.totalOreProduced)})`,
       };
     }
     return {
@@ -363,11 +370,12 @@ export function startExpedition(
       reason: `Dig to depth ${def.unlockAtDepth} first`,
     };
   }
-  if (!canAfford(state.resources, def.cost)) {
+  const tripCost = expeditionCost(def);
+  if (!canAfford(state.resources, tripCost)) {
     return { ok: false, reason: 'Not enough resources for this expedition' };
   }
   const next = structuredClone(state);
-  pay(next.resources, def.cost);
+  pay(next.resources, tripCost);
   const durationSec = def.durationSec * effectsFor(next).expeditionDuration;
   next.activeExpeditions = [
     ...(next.activeExpeditions ?? []),
@@ -410,9 +418,16 @@ export function rollExpeditionLoot(
 ): Partial<Record<ResourceId, number>> {
   const def = getExpedition(expeditionId);
   const effects = effectsFor(state);
-  const loot = scaleLoot(def.baseLoot, effects.expeditionLoot);
+  const hardness = def.costHardness ?? 2;
+  const loot = scaleLoot(
+    expeditionLoot(def.baseLoot, hardness),
+    effects.expeditionLoot,
+  );
   if (rng() < def.bonusChance) {
-    const bonus = scaleLoot(def.bonusLoot, effects.expeditionLoot);
+    const bonus = scaleLoot(
+      expeditionLoot(def.bonusLoot, hardness),
+      effects.expeditionLoot,
+    );
     for (const [key, amount] of Object.entries(bonus) as [ResourceId, number][]) {
       loot[key] = (loot[key] ?? 0) + amount;
     }
@@ -760,12 +775,7 @@ export function stationUpgradeCostMap(
   stationId: StationId,
   level: number,
 ): Partial<Record<ResourceId, number>> {
-  const station = getStation(stationId);
-  const cost: Partial<Record<ResourceId, number>> = {};
-  for (const [key, base] of Object.entries(station.baseCost) as [ResourceId, number][]) {
-    cost[key] = stationUpgradeCost(base, station.costGrowth, level);
-  }
-  return cost;
+  return stationLevelCost(getStation(stationId), level);
 }
 
 export { canAfford, SIM_DT };

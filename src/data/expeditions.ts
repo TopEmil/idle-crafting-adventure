@@ -1,3 +1,4 @@
+import { scaleOreGate } from './balance';
 import type { ResourceId } from './resources';
 
 export type ExpeditionId =
@@ -18,9 +19,12 @@ export interface ExpeditionDef {
   description: string;
   /** Duration in seconds */
   durationSec: number;
+  /** Authored ore gate; runtime gate × (costHardness / 2). */
   unlockAtOreProduced: number;
   /** Optional dig-depth gate (mineDepth). */
   unlockAtDepth?: number;
+  /** Economy tier for cost + ore-gate scaling. */
+  costHardness?: number;
   cost: Partial<Record<ResourceId, number>>;
   baseLoot: Partial<Record<ResourceId, number>>;
   /** Extra random loot range */
@@ -35,6 +39,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'Scouts skim the cyan shallows for Glowdust.',
     durationSec: 45,
     unlockAtOreProduced: 50,
+    costHardness: 2,
     cost: { ore: 20 },
     baseLoot: { glowdust: 18, ore: 12 },
     bonusChance: 0.35,
@@ -46,6 +51,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'Damp galleries where Verdiglass beads on the stone.',
     durationSec: 70,
     unlockAtOreProduced: 120,
+    costHardness: 4,
     unlockAtDepth: 6,
     cost: { ore: 30, glowdust: 10 },
     baseLoot: { verdiglass: 10, glowdust: 16, ore: 15 },
@@ -58,6 +64,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'A fractured wall glittering with Emberglass.',
     durationSec: 90,
     unlockAtOreProduced: 200,
+    costHardness: 8,
     cost: { ore: 40, glowdust: 15 },
     baseLoot: { emberglass: 28, glowdust: 20 },
     bonusChance: 0.3,
@@ -69,6 +76,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'Heat vents spit Emberglass and half-forged Alloy.',
     durationSec: 140,
     unlockAtOreProduced: 400,
+    costHardness: 16,
     unlockAtDepth: 20,
     cost: { emberglass: 25, verdiglass: 8 },
     baseLoot: { emberglass: 40, alloy: 12, verdiglass: 8 },
@@ -81,6 +89,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'Heat shimmer and rare Alloy seams.',
     durationSec: 180,
     unlockAtOreProduced: 600,
+    costHardness: 32,
     cost: { emberglass: 40, glowdust: 25 },
     baseLoot: { alloy: 22, emberglass: 35, glowdust: 15 },
     bonusChance: 0.25,
@@ -92,6 +101,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'Cold seams that crack Verdiglass into sharper dust.',
     durationSec: 240,
     unlockAtOreProduced: 1200,
+    costHardness: 64,
     unlockAtDepth: 42,
     cost: { verdiglass: 20, alloy: 15, glowdust: 30 },
     baseLoot: { verdiglass: 28, glowdust: 40, alloy: 18 },
@@ -104,6 +114,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'Deep dark. High risk. Legendary returns.',
     durationSec: 360,
     unlockAtOreProduced: 2000,
+    costHardness: 128,
     cost: { alloy: 30, glowdust: 40, emberglass: 50 },
     baseLoot: { alloy: 50, glowdust: 45, emberglass: 60, nightiron: 8 },
     bonusChance: 0.4,
@@ -115,6 +126,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'Where Nightiron cools and Starshards wake.',
     durationSec: 480,
     unlockAtOreProduced: 5000,
+    costHardness: 256,
     cost: { nightiron: 12, alloy: 40, glowdust: 60 },
     baseLoot: { nightiron: 20, starshard: 10, alloy: 40 },
     bonusChance: 0.35,
@@ -126,6 +138,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'Hollows lit by fallen Starshards — scouts haul bright metal.',
     durationSec: 600,
     unlockAtOreProduced: 9000,
+    costHardness: 512,
     unlockAtDepth: 120,
     cost: { starshard: 12, nightiron: 20, verdiglass: 25 },
     baseLoot: { starshard: 22, nightiron: 18, alloy: 55, aetherite: 2 },
@@ -138,6 +151,7 @@ export const EXPEDITIONS: ExpeditionDef[] = [
     description: 'The Core thrums. Only Aetherite parties return.',
     durationSec: 780,
     unlockAtOreProduced: 16_000,
+    costHardness: 1024,
     unlockAtDepth: 175,
     cost: { aetherite: 8, starshard: 25, nightiron: 30 },
     baseLoot: { aetherite: 14, starshard: 30, nightiron: 25, alloy: 70 },
@@ -159,7 +173,11 @@ export function expeditionUnlocked(
   totalOreProduced: number,
   mineDepth: number,
 ): boolean {
-  if (totalOreProduced < expedition.unlockAtOreProduced) return false;
+  const oreGate = scaleOreGate(
+    expedition.unlockAtOreProduced,
+    expedition.costHardness ?? 2,
+  );
+  if (totalOreProduced < oreGate) return false;
   if (expedition.unlockAtDepth != null && mineDepth < expedition.unlockAtDepth) {
     return false;
   }
