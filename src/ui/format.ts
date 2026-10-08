@@ -1,5 +1,5 @@
 import type { ResourceId } from '../data/resources';
-import { RESOURCES } from '../data/resources';
+import { resourceIconSrc, resourceLabel } from '../data/resources';
 
 export function formatNumber(n: number): string {
   if (!Number.isFinite(n)) return '0';
@@ -11,11 +11,28 @@ export function formatNumber(n: number): string {
 
 export function formatCost(cost: Partial<Record<ResourceId, number>>): string {
   return (Object.entries(cost) as [ResourceId, number][])
-    .map(([id, amount]) => {
-      const def = RESOURCES.find((r) => r.id === id);
-      return `${formatNumber(amount)} ${def?.short ?? id}`;
-    })
+    .map(([id, amount]) => `${formatNumber(amount)} ${resourceLabel(id)}`)
     .join(' · ');
+}
+
+/** Expedition loot line using the same labels as the inventory strip. */
+export function formatLoot(loot: Partial<Record<ResourceId, number>>): string {
+  return (Object.entries(loot) as [ResourceId, number][])
+    .map(([id, amount]) => `+${formatNumber(amount)} ${resourceLabel(id)}`)
+    .join(' · ');
+}
+
+/** Inline icon + shared resource label (optional amount prefix) for HUD / sheets. */
+export function formatResourceInline(id: ResourceId, amountText?: string): string {
+  const label = resourceLabel(id);
+  const text = amountText ? `${amountText} ${label}` : label;
+  return `<span class="res-inline"><img class="res-icon" src="${resourceIconSrc(id)}" alt="" width="16" height="16" decoding="async" />${text}</span>`;
+}
+
+export function formatLootHtml(loot: Partial<Record<ResourceId, number>>): string {
+  return (Object.entries(loot) as [ResourceId, number][])
+    .map(([id, amount]) => formatResourceInline(id, `+${formatNumber(amount)}`))
+    .join('<span class="res-sep"> · </span>');
 }
 
 /** Human-readable missing pieces when a cost is not yet affordable. */
@@ -28,8 +45,7 @@ export function formatMissingCost(
       const have = wallet[id] ?? 0;
       const shortfall = amount - have;
       if (shortfall <= 0) return null;
-      const def = RESOURCES.find((r) => r.id === id);
-      return `${formatNumber(shortfall)} ${def?.short ?? id}`;
+      return `${formatNumber(shortfall)} ${resourceLabel(id)}`;
     })
     .filter(Boolean);
   return missing.length ? `Need ${missing.join(' · ')}` : '';
