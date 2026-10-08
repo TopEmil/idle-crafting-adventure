@@ -2,7 +2,7 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 
 import type { GameState } from '../sim/types';
 import { stationRunMult } from '../sim/economy';
 import { getStation, STATIONS, type StationId } from '../data/stations';
-import type { ResourceId } from '../data/resources';
+import { RESOURCES, type ResourceId } from '../data/resources';
 import type { SceneView } from './sceneView';
 import {
   FORGE_FOCUS,
@@ -437,6 +437,31 @@ export class ForgeScene {
         color: stationId === 'enchanter' ? COLORS.cyan : COLORS.ember,
       });
     }
+  }
+
+  /** Floating +N Glass / Alloy / … when a station completes a whole resource unit. */
+  triggerStationGain(stationId: StationId, resource: ResourceId, amount: number) {
+    if (this.view !== 'forge' || amount <= 0) return;
+    const slot = this.stationLayout().find((s) => s.id === stationId);
+    if (!slot) return;
+    const def = RESOURCES.find((r) => r.id === resource);
+    const short = def?.short ?? resource;
+    const fill = parseCssHex(def?.color) ?? getStation(stationId).visualTint;
+    const label = new Text({
+      text: `+${trimAmount(amount)} ${short}`,
+      style: {
+        fontFamily: 'DM Sans, sans-serif',
+        fontSize: 15,
+        fontWeight: '700',
+        fill,
+        dropShadow: { color: 0x0b1c22, blur: 4, distance: 1, alpha: 0.85 },
+      },
+    });
+    label.anchor.set(0.5, 1);
+    label.x = slot.x + (Math.random() * 18 - 9);
+    label.y = slot.y - 28 - Math.random() * 10;
+    this.floatLayer.addChild(label);
+    this.floaters.push({ text: label, life: 1.05, max: 1.05, vy: -40 });
   }
 
   /** Pop-in animation when a station is purchased */
@@ -1509,4 +1534,9 @@ function trimAmount(n: number): string {
   if (n >= 100) return Math.floor(n).toString();
   const t = Math.round(n * 10) / 10;
   return t.toString().replace(/\.0$/, '');
+}
+
+function parseCssHex(color?: string): number | null {
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return null;
+  return Number.parseInt(color.slice(1), 16);
 }
