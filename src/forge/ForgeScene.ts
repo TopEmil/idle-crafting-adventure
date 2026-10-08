@@ -1179,10 +1179,8 @@ export class ForgeScene {
 
   private async loadStationArt() {
     for (const def of STATIONS) {
-      const url = STATION_ART[def.id];
-      if (!url) continue;
       try {
-        const texture = await Assets.load(url);
+        const texture = await Assets.load(STATION_ART[def.id]);
         const sprite = new Sprite(texture);
         sprite.anchor.set(0.5, 0.98);
         sprite.visible = false;
