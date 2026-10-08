@@ -1,5 +1,5 @@
+import { resourceLabel, type ResourceId } from '../data/resources';
 import { stratumAtDepth, type StratumDef } from '../data/strata';
-import type { ResourceId } from '../data/resources';
 
 export const SHAFT_COLS = 8;
 export const SHAFT_LOOKAHEAD = 5;
@@ -175,15 +175,15 @@ export function normalizeProgress(progress: MineShaftProgress): MineShaftProgres
 export function lootForTile(kind: TileKind): TileLoot | null {
   switch (kind) {
     case 'glow':
-      return { resource: 'glowdust', amount: 2, label: 'Glowdust' };
+      return { resource: 'glowdust', amount: 2, label: resourceLabel('glowdust') };
     case 'ember':
-      return { resource: 'emberglass', amount: 1, label: 'Emberglass' };
+      return { resource: 'emberglass', amount: 1, label: resourceLabel('emberglass') };
     case 'geode':
-      return { resource: 'alloy', amount: 1, label: 'Alloy' };
+      return { resource: 'alloy', amount: 1, label: resourceLabel('alloy') };
     case 'night':
-      return { resource: 'nightiron', amount: 1, label: 'Nightiron' };
+      return { resource: 'nightiron', amount: 1, label: resourceLabel('nightiron') };
     case 'star':
-      return { resource: 'starshard', amount: 1, label: 'Starshard' };
+      return { resource: 'starshard', amount: 1, label: resourceLabel('starshard') };
     case 'stone':
       return null;
     default: {

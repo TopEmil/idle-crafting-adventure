@@ -1,12 +1,12 @@
 import type { AchievementDef, AchievementRewards } from '../data/achievements';
 import type { RecipeDef } from '../data/recipes';
-import { RESOURCES, type ResourceId } from '../data/resources';
+import { resourceLabel, type ResourceId } from '../data/resources';
 import type { StationDef } from '../data/stations';
 import type { TalentDef } from '../data/talents';
 import { formatNumber } from './format';
 
 function resourceName(id: ResourceId): string {
-  return RESOURCES.find((r) => r.id === id)?.short ?? id;
+  return resourceLabel(id);
 }
 
 export function formatAchievementRewards(rewards: AchievementRewards): string {

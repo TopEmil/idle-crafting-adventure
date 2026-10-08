@@ -128,11 +128,29 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.res-chip .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  box-shadow: 0 0 8px currentColor;
+.res-chip .res-icon,
+.res-inline .res-icon,
+.loot-list .res-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+  image-rendering: auto;
+}
+
+.res-chip .res-name {
+  color: var(--mist);
+}
+
+.res-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
+}
+
+.res-sep {
+  opacity: 0.55;
 }
 
 .icon-btn {
@@ -1027,6 +1045,12 @@ body {
   .res-chip {
     font-size: 10.5px;
     padding: 3px 6px;
+  }
+
+  .res-chip .res-icon,
+  .res-inline .res-icon {
+    width: 14px;
+    height: 14px;
   }
 
   .icon-btn {

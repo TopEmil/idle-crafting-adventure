@@ -2,7 +2,7 @@ import { ACHIEVEMENTS } from '../data/achievements';
 import { BALANCE, relicsFromReforge } from '../data/balance';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
-import { RESOURCES, type ResourceId } from '../data/resources';
+import { RESOURCES, resourceIconSrc, resourceLabel, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import { TALENTS, talentUpgradeCost, type TalentId } from '../data/talents';
 import { STRATA, stratumAtDepth } from '../data/strata';
@@ -22,7 +22,14 @@ import { faceDamageSum, faceTotalHp } from '../sim/mineShaft';
 import type { GameState } from '../sim/types';
 import { getCraftQuickState } from './craftState';
 import { expeditionActionHtml, getExpeditionRowState } from './expeditionState';
-import { formatCost, formatDuration, formatMissingCost, formatNumber } from './format';
+import {
+  formatCost,
+  formatDuration,
+  formatLootHtml,
+  formatMissingCost,
+  formatNumber,
+  formatResourceInline,
+} from './format';
 import { nextGoal } from './goals';
 import {
   formatAchievementRewardLine,
@@ -306,8 +313,7 @@ export class Hud {
   showOfflineSummary(seconds: number, gains: Partial<Record<ResourceId, number>>) {
     const items = (Object.entries(gains) as [ResourceId, number][])
       .map(([id, amount]) => {
-        const name = RESOURCES.find((r) => r.id === id)?.name ?? id;
-        return `<li><span>${name}</span><span>+${formatNumber(amount)}</span></li>`;
+        return `<li><span>${formatResourceInline(id)}</span><span>+${formatNumber(amount)}</span></li>`;
       })
       .join('');
     this.overlay.innerHTML = `
@@ -330,8 +336,7 @@ export class Hud {
   ) {
     const items = (Object.entries(loot) as [ResourceId, number][])
       .map(([id, amount]) => {
-        const name = RESOURCES.find((r) => r.id === id)?.short ?? id;
-        return `<li><span>${name}</span><span>+${formatNumber(amount)}</span></li>`;
+        return `<li><span>${formatResourceInline(id)}</span><span>+${formatNumber(amount)}</span></li>`;
       })
       .join('');
 
@@ -450,7 +455,8 @@ export class Hud {
       if (r.hideUntilOwned && value <= 0) return '';
       const prev = this.lastResources[r.id] ?? value;
       const grew = value > prev + 0.01;
-      return `<div class="res-chip${grew ? ' res-pop' : ''}" data-res="${r.id}"><span class="dot" style="background:${r.color};color:${r.color}"></span>${r.short} ${formatNumber(value)}</div>`;
+      const label = resourceLabel(r.id);
+      return `<div class="res-chip${grew ? ' res-pop' : ''}" data-res="${r.id}" title="${r.name}"><img class="res-icon" src="${resourceIconSrc(r.id)}" alt="" width="18" height="18" decoding="async" /><span class="res-name">${label}</span> ${formatNumber(value)}</div>`;
     }).join('');
     this.lastResources = { ...state.resources };
   }
@@ -552,9 +558,7 @@ export class Hud {
 
     const rows = EXPEDITIONS.map((e) => {
       const row = getExpeditionRowState(state, e, now);
-      const lootHint = Object.entries(e.baseLoot)
-        .map(([k, v]) => `+${v} ${k}`)
-        .join(' · ');
+      const lootHint = formatLootHtml(e.baseLoot);
       const showMeter = row.kind === 'locked' || row.kind === 'need_cost';
       const meter = showMeter
         ? `<div class="req-meter" data-exp-meter aria-hidden="true"><span style="width:${Math.round(row.progress * 100)}%"></span></div>`
