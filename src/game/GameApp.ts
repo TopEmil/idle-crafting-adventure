@@ -1,6 +1,7 @@
 import { SIM_DT, BALANCE } from '../data/balance';
 import type { ExpeditionId } from '../data/expeditions';
 import type { RecipeId } from '../data/recipes';
+import type { ResourceId } from '../data/resources';
 import type { StationId } from '../data/stations';
 import type { TalentId } from '../data/talents';
 import { AudioBus } from '../audio/audio';
@@ -19,12 +20,14 @@ import {
   clickVein,
   completeExpeditionIfReady,
   craftRecipe,
+  drainStationGainFloaters,
   getAutoMineRate,
   prestige,
   rushExpedition,
   startExpedition,
   adjustStationRunLevel,
-  tickProduction,
+  tickProductionDetailed,
+  type StationTickGain,
   toggleStation,
   unlockStation,
   upgradeStation,
@@ -69,6 +72,10 @@ export class GameApp {
   private pausedForAd = false;
   private lastStratumId = '';
   private pendingResourceOffer: ResourceOffer | null = null;
+  /** Fractional leftovers until a whole-unit +N floater can fire. */
+  private stationGainPending: Partial<
+    Record<StationId, Partial<Record<ResourceId, number>>>
+  > = {};
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -156,7 +163,9 @@ export class GameApp {
     if (!this.pausedForAd && this.overlayMode === 'none') {
       this.accum += dt;
       while (this.accum >= SIM_DT) {
-        this.state = tickProduction(this.state, SIM_DT);
+        const tick = tickProductionDetailed(this.state, SIM_DT);
+        this.state = tick.state;
+        this.emitStationGainFloaters(tick.stationGains);
         this.applyAchievements(true);
         const ready = completeExpeditionIfReady(this.state);
         this.state = ready.state;
@@ -281,6 +290,19 @@ export class GameApp {
 
     if (was === 'loot' || was === 'prestige' || was === 'milestone') {
       void this.maybeMidgame(was === 'loot' ? 'expedition_claim' : was === 'prestige' ? 'prestige' : 'milestone');
+    }
+  }
+
+  private emitStationGainFloaters(gains: StationTickGain[]) {
+    if (!gains.length) return;
+    const drained = drainStationGainFloaters(this.stationGainPending, gains);
+    this.stationGainPending = drained.pending;
+    for (const floater of drained.floaters) {
+      this.scene.triggerStationGain(
+        floater.stationId,
+        floater.resource,
+        floater.amount,
+      );
     }
   }
 
@@ -614,6 +636,7 @@ export class GameApp {
       return;
     }
     this.state = result.state;
+    this.stationGainPending = {};
     this.applyAchievements(true);
     this.audio.prestige();
     this.scene.triggerCraftBurst();

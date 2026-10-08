@@ -464,11 +464,26 @@ export function claimExpedition(
   return { ok: true, state: next, event: { type: 'claim_expedition', doubled } };
 }
 
+/** Per-station outputs produced during a single production tick. */
+export type StationTickGain = {
+  stationId: StationId;
+  outputs: Partial<Record<ResourceId, number>>;
+};
+
 export function tickProduction(state: GameState, dt: number): GameState {
-  if (dt <= 0) return state;
+  return tickProductionDetailed(state, dt).state;
+}
+
+/** Same as tickProduction, but also reports station output deltas for VFX. */
+export function tickProductionDetailed(
+  state: GameState,
+  dt: number,
+): { state: GameState; stationGains: StationTickGain[] } {
+  if (dt <= 0) return { state, stationGains: [] };
   const next = structuredClone(state);
   const effects = effectsFor(next);
   const pMult = effects.stationOutput;
+  const stationGains: StationTickGain[] = [];
 
   const autoRate = getAutoMineRate(next);
   if (autoRate > 0) {
@@ -506,17 +521,55 @@ export function tickProduction(state: GameState, dt: number): GameState {
       }
     }
 
+    const outputs: Partial<Record<ResourceId, number>> = {};
     for (const [key, rate] of Object.entries(def.outputs) as [ResourceId, number][]) {
       const gained = rate * levelMult * pMult * dt;
       next.resources[key] += gained;
+      outputs[key] = (outputs[key] ?? 0) + gained;
       if (key === 'ore') {
         recordOreMined(next, gained);
       }
     }
+    if (Object.keys(outputs).length > 0) {
+      stationGains.push({ stationId: def.id, outputs });
+    }
   }
 
   next.playTimeSec += dt;
-  return next;
+  return { state: next, stationGains };
+}
+
+/**
+ * Fold fractional station gains into whole-unit floaters (e.g. +1 Glass).
+ * Leftover fractions stay in `pending` until the next call.
+ */
+export function drainStationGainFloaters(
+  pending: Partial<Record<StationId, Partial<Record<ResourceId, number>>>>,
+  gains: StationTickGain[],
+): {
+  pending: Partial<Record<StationId, Partial<Record<ResourceId, number>>>>;
+  floaters: { stationId: StationId; resource: ResourceId; amount: number }[];
+} {
+  const nextPending: Partial<Record<StationId, Partial<Record<ResourceId, number>>>> = {
+    ...pending,
+  };
+  const floaters: { stationId: StationId; resource: ResourceId; amount: number }[] = [];
+
+  for (const gain of gains) {
+    const bag = { ...(nextPending[gain.stationId] ?? {}) };
+    for (const [key, amount] of Object.entries(gain.outputs) as [ResourceId, number][]) {
+      if (!(amount > 0)) continue;
+      const total = (bag[key] ?? 0) + amount;
+      const whole = Math.floor(total);
+      bag[key] = total - whole;
+      if (whole >= 1) {
+        floaters.push({ stationId: gain.stationId, resource: key, amount: whole });
+      }
+    }
+    nextPending[gain.stationId] = bag;
+  }
+
+  return { pending: nextPending, floaters };
 }
 
 /**

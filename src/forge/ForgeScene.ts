@@ -2,7 +2,7 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 
 import type { GameState } from '../sim/types';
 import { stationRunMult } from '../sim/economy';
 import { getStation, STATIONS, type StationId } from '../data/stations';
-import type { ResourceId } from '../data/resources';
+import { RESOURCES, type ResourceId } from '../data/resources';
 import type { SceneView } from './sceneView';
 import {
   FORGE_FOCUS,
@@ -30,11 +30,14 @@ import {
 /** Timber-framed dig shaft + forge workshop hall */
 const MINE_BG_URL = `${import.meta.env.BASE_URL}art/mine-cavern-bg.jpg`;
 const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-hall-bg.jpg`;
-/** Painted station art when available; others use procedural drawStationBody. */
-const STATION_ART: Partial<Record<StationId, string>> = {
+/** Painted station art — same isometric stone + cyan-rune style for every slot. */
+const STATION_ART: Record<StationId, string> = {
   smelter: `${import.meta.env.BASE_URL}art/stations/smelter.png`,
   anvil: `${import.meta.env.BASE_URL}art/stations/anvil.png`,
   enchanter: `${import.meta.env.BASE_URL}art/stations/enchanter.png`,
+  crucible: `${import.meta.env.BASE_URL}art/stations/crucible.png`,
+  gemcutter: `${import.meta.env.BASE_URL}art/stations/gemcutter.png`,
+  aetherforge: `${import.meta.env.BASE_URL}art/stations/aetherforge.png`,
 };
 /** 5-frame dwarf mining loop (pick wind-up → strike → recover). */
 const DWARF_MINE_FRAMES = [1, 2, 3, 4, 5].map(
@@ -434,6 +437,31 @@ export class ForgeScene {
         color: stationId === 'enchanter' ? COLORS.cyan : COLORS.ember,
       });
     }
+  }
+
+  /** Floating +N Glass / Alloy / … when a station completes a whole resource unit. */
+  triggerStationGain(stationId: StationId, resource: ResourceId, amount: number) {
+    if (this.view !== 'forge' || amount <= 0) return;
+    const slot = this.stationLayout().find((s) => s.id === stationId);
+    if (!slot) return;
+    const def = RESOURCES.find((r) => r.id === resource);
+    const short = def?.short ?? resource;
+    const fill = parseCssHex(def?.color) ?? getStation(stationId).visualTint;
+    const label = new Text({
+      text: `+${trimAmount(amount)} ${short}`,
+      style: {
+        fontFamily: 'DM Sans, sans-serif',
+        fontSize: 15,
+        fontWeight: '700',
+        fill,
+        dropShadow: { color: 0x0b1c22, blur: 4, distance: 1, alpha: 0.85 },
+      },
+    });
+    label.anchor.set(0.5, 1);
+    label.x = slot.x + (Math.random() * 18 - 9);
+    label.y = slot.y - 28 - Math.random() * 10;
+    this.floatLayer.addChild(label);
+    this.floaters.push({ text: label, life: 1.05, max: 1.05, vy: -40 });
   }
 
   /** Pop-in animation when a station is purchased */
@@ -1176,10 +1204,8 @@ export class ForgeScene {
 
   private async loadStationArt() {
     for (const def of STATIONS) {
-      const url = STATION_ART[def.id];
-      if (!url) continue;
       try {
-        const texture = await Assets.load(url);
+        const texture = await Assets.load(STATION_ART[def.id]);
         const sprite = new Sprite(texture);
         sprite.anchor.set(0.5, 0.98);
         sprite.visible = false;
@@ -1508,4 +1534,9 @@ function trimAmount(n: number): string {
   if (n >= 100) return Math.floor(n).toString();
   const t = Math.round(n * 10) / 10;
   return t.toString().replace(/\.0$/, '');
+}
+
+function parseCssHex(color?: string): number | null {
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return null;
+  return Number.parseInt(color.slice(1), 16);
 }
