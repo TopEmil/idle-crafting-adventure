@@ -100,35 +100,46 @@ body {
   flex-shrink: 0;
 }
 
+.top-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
 .resources {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
-  max-width: min(72vw, 540px);
-  padding: 6px;
-  border-radius: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  width: min(46vw, 196px);
+  max-width: 100%;
+  padding: 6px 8px;
+  border-radius: 14px;
   background: var(--glass);
   border: 1px solid var(--glass-border);
   backdrop-filter: blur(10px);
   box-shadow: 0 8px 28px color-mix(in srgb, var(--void) 45%, transparent);
 }
 
-.res-chip {
-  display: inline-flex;
+.res-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
-  padding: 5px 9px;
-  background: color-mix(in srgb, var(--teal-light) 55%, transparent);
-  border: 1px solid color-mix(in srgb, var(--slate) 22%, transparent);
-  border-radius: 999px;
-  font-size: 12.5px;
+  column-gap: 8px;
+  width: 100%;
+  padding: 3px 2px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
-.res-chip .res-icon,
+.res-row .res-icon,
 .res-inline .res-icon,
 .loot-list .res-icon {
   width: 18px;
@@ -138,8 +149,22 @@ body {
   image-rendering: auto;
 }
 
-.res-chip .res-name {
+.res-row .res-name {
+  justify-self: start;
+  text-align: left;
   color: var(--mist);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.res-row .res-value {
+  justify-self: end;
+  text-align: right;
+  color: var(--mist);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .res-inline {
@@ -333,7 +358,7 @@ body {
   color: var(--amber);
 }
 
-.res-chip.res-pop {
+.res-row.res-pop {
   animation: res-pop 0.35s ease;
 }
 
@@ -1035,19 +1060,25 @@ body {
     gap: 8px;
   }
 
+  .top-meta {
+    gap: 4px;
+  }
+
   .resources {
-    max-width: calc(100vw - 150px);
-    gap: 3px;
-    padding: 4px;
+    width: min(48vw, 168px);
+    gap: 0;
+    padding: 4px 6px;
     border-radius: 12px;
   }
 
-  .res-chip {
+  .res-row {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    column-gap: 6px;
     font-size: 10.5px;
-    padding: 3px 6px;
+    padding: 2px 1px;
   }
 
-  .res-chip .res-icon,
+  .res-row .res-icon,
   .res-inline .res-icon {
     width: 14px;
     height: 14px;

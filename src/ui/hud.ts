@@ -85,8 +85,10 @@ export class Hud {
     this.root.innerHTML = `
       <div class="top-bar">
         <div class="brand-spacer" aria-hidden="true"></div>
-        <div class="resources" id="resources"></div>
-        <button class="icon-btn" id="btn-mute" type="button" aria-label="Mute">♪</button>
+        <div class="top-meta">
+          <button class="icon-btn" id="btn-mute" type="button" aria-label="Mute">♪</button>
+          <div class="resources" id="resources" role="table" aria-label="Inventory"></div>
+        </div>
       </div>
       <div class="mid-space">
         <div class="depth-strip" id="depth-strip" hidden>
@@ -480,7 +482,7 @@ export class Hud {
       const prev = this.lastResources[r.id] ?? value;
       const grew = value > prev + 0.01;
       const label = resourceLabel(r.id);
-      return `<div class="res-chip${grew ? ' res-pop' : ''}" data-res="${r.id}" title="${r.name}"><img class="res-icon" src="${resourceIconSrc(r.id)}" alt="" width="18" height="18" decoding="async" /><span class="res-name">${label}</span> ${formatNumber(value)}</div>`;
+      return `<div class="res-row${grew ? ' res-pop' : ''}" data-res="${r.id}" role="row" title="${r.name}"><img class="res-icon" src="${resourceIconSrc(r.id)}" alt="" width="18" height="18" decoding="async" /><span class="res-name">${label}</span><span class="res-value">${formatNumber(value)}</span></div>`;
     }).join('');
     this.lastResources = { ...state.resources };
   }
