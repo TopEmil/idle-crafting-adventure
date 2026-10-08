@@ -1,4 +1,4 @@
-import { RESOURCES, type ResourceId } from '../data/resources';
+import { resourceLabel, type ResourceId } from '../data/resources';
 import type { RecipeDef } from '../data/recipes';
 import { availableRecipes, canAfford } from '../sim/economy';
 import type { GameState } from '../sim/types';
@@ -25,8 +25,7 @@ export function formatCostProgress(
     const owned = wallet[key] ?? 0;
     const ratio = amount > 0 ? Math.min(1, owned / amount) : 1;
     progress = Math.min(progress, ratio);
-    const short = RESOURCES.find((r) => r.id === key)?.short ?? key;
-    parts.push(`${formatNumber(owned)}/${formatNumber(amount)} ${short}`);
+    parts.push(`${formatNumber(owned)}/${formatNumber(amount)} ${resourceLabel(key)}`);
   }
   return {
     detail: parts.join(' · '),
