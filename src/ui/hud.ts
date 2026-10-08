@@ -574,6 +574,7 @@ export class Hud {
     const squadGate = canBuySquadSlot(state);
     const extras = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
     const canBuyMore = extras < BALANCE.maxExtraSquadSlots;
+    const relicCostHtml = formatResourceInline('relics', formatNumber(BALANCE.extraSquadRelicCost));
     const squadBuyLabel = squadGate.ok
       ? `Buy squad · ${BALANCE.extraSquadRelicCost} Relics`
       : canBuyMore
@@ -624,7 +625,7 @@ export class Hud {
         <div class="row-item" data-squad-buy>
           <div>
             <h3>Extra squad</h3>
-            <div class="cost">${BALANCE.extraSquadRelicCost} Relics · permanent across Reforge</div>
+            <div class="cost">${relicCostHtml}<span class="res-sep"> · </span>permanent across Reforge</div>
             <div class="req-line">More concurrent scout parties (${extras}/${BALANCE.maxExtraSquadSlots} bought)</div>
           </div>
           <button class="btn btn-secondary" id="btn-buy-squad" type="button" ${squadGate.ok ? '' : 'disabled'}>${squadBuyLabel}</button>
