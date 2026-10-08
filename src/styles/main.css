@@ -127,7 +127,7 @@ body {
 
 .res-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(3.75ch, auto);
   align-items: center;
   column-gap: 8px;
   width: 100%;
@@ -1072,7 +1072,7 @@ body {
   }
 
   .res-row {
-    grid-template-columns: 14px minmax(0, 1fr) auto;
+    grid-template-columns: 14px minmax(0, 1fr) minmax(3.5ch, auto);
     column-gap: 6px;
     font-size: 10.5px;
     padding: 2px 1px;
