@@ -724,15 +724,6 @@ function cosmeticForPrestige(count: number): string {
   return 'ember_crest';
 }
 
-export function applyTimeWarp(
-  state: GameState,
-  seconds: number,
-  now = Date.now(),
-): { state: GameState; event: GameEvent } {
-  const { state: next } = simulateSeconds(state, seconds, now);
-  return { state: next, event: { type: 'time_warp', seconds } };
-}
-
 export function availableExpeditions(state: GameState) {
   return EXPEDITIONS.filter((e) =>
     expeditionUnlocked(e, state.totalOreProduced, state.mineDepth ?? 0),

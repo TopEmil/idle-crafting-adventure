@@ -170,6 +170,24 @@ export function migrateState(state: GameState): GameState {
   }
   ensureSeasonWindow(next);
 
+  if (!next.ads) {
+    next.ads = {
+      midgameReadyAfter: 0,
+      rewardedCooldownUntil: 0,
+      resourceOfferReadyAfter: Date.now() + BALANCE.resourceOfferIntervalMs,
+      resourceOffersClaimed: 0,
+    };
+  } else {
+    if (typeof next.ads.resourceOfferReadyAfter !== 'number') {
+      next.ads.resourceOfferReadyAfter = Date.now() + BALANCE.resourceOfferIntervalMs;
+    }
+    if (typeof next.ads.resourceOffersClaimed !== 'number' || !Number.isFinite(next.ads.resourceOffersClaimed)) {
+      next.ads.resourceOffersClaimed = 0;
+    } else {
+      next.ads.resourceOffersClaimed = Math.max(0, Math.floor(next.ads.resourceOffersClaimed));
+    }
+  }
+
   return next;
 }
 

@@ -63,7 +63,7 @@ export interface HudActions {
   onClaimExpedition: (mode: 'normal' | 'ad' | 'coin') => void;
   onPrestige: () => void;
   onBuyTalent: (id: TalentId) => void;
-  onTimeWarp: (viaAd: boolean) => void;
+  onResourceOffer: (mode: 'ad' | 'dismiss') => void;
   onSkipOnboarding: () => void;
   onAdvanceOnboarding: () => void;
   onToggleMute: () => void;
@@ -343,14 +343,14 @@ export class Hud {
     let rewardBlock = '';
     if (options.adsDisabled) {
       rewardBlock = options.coinAlt
-        ? `<button class="btn btn-secondary" id="claim-coin" type="button">2× for ${BALANCE.timeWarpCoinCost} Ore</button>`
+        ? `<button class="btn btn-secondary" id="claim-coin" type="button">2× for ${BALANCE.rewardBoostOreCost} Ore</button>`
         : `<p class="notice">Bonus rewards unavailable in this build.</p>`;
     } else if (options.adblock) {
       rewardBlock = `<p class="notice">Ad blocked — reward boost unavailable. Game stays fully playable.</p>`;
     } else if (options.canReward) {
       rewardBlock = `
         <button class="btn btn-reward" id="claim-double" type="button">▶ 2× Loot</button>
-        ${options.coinAlt ? `<button class="btn btn-secondary" id="claim-coin" type="button">2× for ${BALANCE.timeWarpCoinCost} Ore</button>` : ''}
+        ${options.coinAlt ? `<button class="btn btn-secondary" id="claim-coin" type="button">2× for ${BALANCE.rewardBoostOreCost} Ore</button>` : ''}
       `;
     } else {
       rewardBlock = `<p class="muted">Reward boost cooling down…</p>`;
@@ -403,6 +403,30 @@ export class Hud {
     `;
     this.markOverlayOpen();
     this.overlay.querySelector('#ms-ok')?.addEventListener('click', () => this.actions.onCloseOverlay());
+  }
+
+  showResourceOffer(opts: {
+    resourceName: string;
+    amount: number;
+    reason: string;
+  }) {
+    this.overlay.innerHTML = `
+      <div class="modal">
+        <h2>Vein favor</h2>
+        <p>Short on <strong>${opts.resourceName}</strong> to ${opts.reason}?</p>
+        <ul class="loot-list">
+          <li><span>${opts.resourceName}</span><span>+${formatNumber(opts.amount)}</span></li>
+        </ul>
+        <p class="muted">Optional rewarded boost — equal weight to skip.</p>
+        <div class="modal-actions">
+          <button class="btn btn-reward" id="offer-ad" type="button">▶ Watch for +${formatNumber(opts.amount)}</button>
+          <button class="btn btn-ghost" id="offer-skip" type="button">No thanks</button>
+        </div>
+      </div>
+    `;
+    this.markOverlayOpen();
+    this.overlay.querySelector('#offer-ad')?.addEventListener('click', () => this.actions.onResourceOffer('ad'));
+    this.overlay.querySelector('#offer-skip')?.addEventListener('click', () => this.actions.onResourceOffer('dismiss'));
   }
 
   clearOverlay() {
@@ -812,15 +836,6 @@ export class Hud {
         </div>
         <p class="muted">Machines sit on the Forge hall pedestals · Use −/+ Speed to run slower than owned level · Cosmetic: ${state.activeCosmetic}</p>
         <div class="list">${stationRows}</div>
-        <div class="row-item">
-          <div>
-            <h3>Time Warp</h3>
-            <div class="cost">+${BALANCE.timeWarpSeconds / 60} min production</div>
-          </div>
-          <button class="btn btn-reward" id="btn-warp-ad" type="button">▶ Warp</button>
-          <p>Optional rewarded boost. Equal coin spend available below.</p>
-        </div>
-        <button class="btn btn-secondary" id="btn-warp-coin" type="button">Warp for ${BALANCE.timeWarpCoinCost} Ore</button>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
       </div>
     `;
@@ -842,8 +857,6 @@ export class Hud {
     this.overlay.querySelectorAll('[data-upgrade]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onUpgradeStation((btn as HTMLElement).dataset.upgrade as StationId));
     });
-    this.overlay.querySelector('#btn-warp-ad')?.addEventListener('click', () => this.actions.onTimeWarp(true));
-    this.overlay.querySelector('#btn-warp-coin')?.addEventListener('click', () => this.actions.onTimeWarp(false));
   }
 
   private renderReforge(state: GameState, notice?: string) {

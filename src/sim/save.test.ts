@@ -167,6 +167,24 @@ describe('save migration', () => {
     expect(migrated.resources.aetherite).toBe(0);
   });
 
+  it('defaults missing resource-offer ad fields', () => {
+    const state = createInitialState();
+    const legacy = structuredClone(state) as unknown as {
+      ads: {
+        midgameReadyAfter: number;
+        rewardedCooldownUntil: number;
+        resourceOfferReadyAfter?: number;
+        resourceOffersClaimed?: number;
+      };
+    };
+    delete legacy.ads.resourceOfferReadyAfter;
+    delete legacy.ads.resourceOffersClaimed;
+
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.ads.resourceOfferReadyAfter).toBeGreaterThan(0);
+    expect(migrated.ads.resourceOffersClaimed).toBe(0);
+  });
+
   it('fills missing late stations and dwarf/stratum fields', () => {
     const state = createInitialState();
     const legacy = structuredClone(state) as unknown as {

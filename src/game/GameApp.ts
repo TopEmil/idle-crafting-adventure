@@ -12,7 +12,6 @@ import { syncAchievements } from '../sim/achievements';
 import { stratumAtDepth } from '../data/strata';
 import {
   applyOfflineProgress,
-  applyTimeWarp,
   availableRecipes,
   buySquadSlot,
   buyTalent,
@@ -34,6 +33,14 @@ import {
   upgradeStation,
 } from '../sim/economy';
 import { maybeSubmitLeaderboardScore } from '../sim/leaderboardSync';
+import {
+  applyResourceOffer,
+  canSuggestResourceOffer,
+  markResourceOfferShown,
+  nextResourceOffer,
+  resourceLabel,
+  type ResourceOffer,
+} from '../sim/resourceOffer';
 import { deserializeState, loadLocalState, SAVE_KEY, saveLocalState, serializeState } from '../sim/save';
 import type { GameState } from '../sim/types';
 import { Hud, type PanelId } from '../ui/hud';
@@ -51,12 +58,20 @@ export class GameApp {
   private accum = 0;
   private lastFrame = performance.now();
   private panel: PanelId = null;
-  private overlayMode: 'none' | 'offline' | 'loot' | 'onboarding' | 'milestone' | 'prestige' = 'none';
+  private overlayMode:
+    | 'none'
+    | 'offline'
+    | 'loot'
+    | 'onboarding'
+    | 'milestone'
+    | 'prestige'
+    | 'resource_offer' = 'none';
   private notice = '';
   private saveTimer = 0;
   private running = false;
   private pausedForAd = false;
   private lastStratumId = '';
+  private pendingResourceOffer: ResourceOffer | null = null;
   /** Fractional leftovers until a whole-unit +N floater can fire. */
   private stationGainPending: Partial<
     Record<StationId, Partial<Record<ResourceId, number>>>
@@ -87,7 +102,7 @@ export class GameApp {
       onClaimExpedition: (mode) => void this.handleClaim(mode),
       onPrestige: () => void this.handlePrestige(),
       onBuyTalent: (id) => this.handleBuyTalent(id),
-      onTimeWarp: (viaAd) => void this.handleTimeWarp(viaAd),
+      onResourceOffer: (mode) => void this.handleResourceOffer(mode),
       onSkipOnboarding: () => this.finishOnboarding(),
       onAdvanceOnboarding: () => this.advanceOnboarding(),
       onToggleMute: () => {
@@ -166,6 +181,8 @@ export class GameApp {
       // Always surface the claim modal once the player is free to interact.
       if (this.state.pendingLoot && this.overlayMode === 'none') {
         this.showLootModal();
+      } else if (this.overlayMode === 'none' && !this.panel) {
+        this.maybeShowResourceOffer();
       }
       this.scene.setAutoMineRate(getAutoMineRate(this.state));
       this.scene.sync(this.state);
@@ -234,7 +251,12 @@ export class GameApp {
   }
 
   private openPanel(panel: PanelId) {
-    if (this.overlayMode === 'loot' || this.overlayMode === 'offline' || this.overlayMode === 'prestige') {
+    if (
+      this.overlayMode === 'loot' ||
+      this.overlayMode === 'offline' ||
+      this.overlayMode === 'prestige' ||
+      this.overlayMode === 'resource_offer'
+    ) {
       return;
     }
     // Opening nav must NEVER request ads
@@ -555,16 +577,16 @@ export class GameApp {
       canReward: rewardGate.ok,
       adblock: this.platform.adblock,
       adsDisabled: !this.platform.adsEnabled,
-      coinAlt: this.state.resources.ore >= BALANCE.timeWarpCoinCost,
+      coinAlt: this.state.resources.ore >= BALANCE.rewardBoostOreCost,
     });
   }
 
   private async handleClaim(mode: 'normal' | 'ad' | 'coin') {
     let doubled = false;
     if (mode === 'coin') {
-      if (this.state.resources.ore >= BALANCE.timeWarpCoinCost) {
+      if (this.state.resources.ore >= BALANCE.rewardBoostOreCost) {
         this.state = structuredClone(this.state);
-        this.state.resources.ore -= BALANCE.timeWarpCoinCost;
+        this.state.resources.ore -= BALANCE.rewardBoostOreCost;
         doubled = true;
       }
     } else if (mode === 'ad') {
@@ -642,52 +664,74 @@ export class GameApp {
     this.refreshHud();
   }
 
-  private async handleTimeWarp(viaAd: boolean) {
-    if (viaAd) {
-      if (!this.platform.adsEnabled) {
-        this.notice = 'Rewarded ads disabled in this environment.';
-        this.refreshHud();
-        return;
-      }
-      if (this.platform.adblock) {
-        this.notice = 'Ad blocked — time warp unavailable. Try the ore option.';
-        this.refreshHud();
-        return;
-      }
-      const gate = this.ads.canShowRewarded(this.state);
-      if (!gate.ok) {
-        this.notice = 'Reward boost cooling down.';
-        this.refreshHud();
-        return;
-      }
-      this.pausedForAd = true;
-      this.audio.pauseForAd();
-      const result = await this.ads.runAd(this.platform, 'rewarded', {});
-      this.audio.resumeAfterAd();
-      this.pausedForAd = false;
-      if (result.status !== 'finished') {
-        this.notice = 'No reward — ad did not complete.';
-        this.refreshHud();
-        return;
-      }
-      this.state = this.ads.markRewardedUsed(this.state);
-    } else {
-      if (this.state.resources.ore < BALANCE.timeWarpCoinCost) {
-        this.notice = 'Not enough ore.';
-        this.refreshHud();
-        return;
-      }
-      this.state = structuredClone(this.state);
-      this.state.resources.ore -= BALANCE.timeWarpCoinCost;
+  private maybeShowResourceOffer() {
+    if (!this.platform.adsEnabled || this.platform.adblock) return;
+    if (!this.ads.canShowRewarded(this.state).ok) return;
+    if (!canSuggestResourceOffer(this.state)) return;
+
+    const offer = nextResourceOffer(this.state);
+    if (!offer) return;
+
+    this.pendingResourceOffer = offer;
+    this.state = markResourceOfferShown(this.state);
+    this.overlayMode = 'resource_offer';
+    this.panel = null;
+    this.hud.setPanel(null);
+    this.platform.gameplayStop();
+    this.hud.showResourceOffer({
+      resourceName: resourceLabel(offer.resource),
+      amount: offer.amount,
+      reason: offer.reason,
+    });
+  }
+
+  private async handleResourceOffer(mode: 'ad' | 'dismiss') {
+    const offer = this.pendingResourceOffer;
+    this.pendingResourceOffer = null;
+
+    if (mode === 'dismiss' || !offer) {
+      this.closeOverlay();
+      return;
     }
 
-    const warped = applyTimeWarp(this.state, BALANCE.timeWarpSeconds);
-    this.state = warped.state;
+    if (!this.platform.adsEnabled) {
+      this.notice = 'Rewarded ads disabled in this environment.';
+      this.closeOverlay();
+      return;
+    }
+    if (this.platform.adblock) {
+      this.notice = 'Ad blocked — resource boost unavailable.';
+      this.closeOverlay();
+      return;
+    }
+
+    const gate = this.ads.canShowRewarded(this.state);
+    if (!gate.ok) {
+      this.notice = 'Reward boost cooling down.';
+      this.closeOverlay();
+      return;
+    }
+
+    this.pausedForAd = true;
+    this.audio.pauseForAd();
+    const result = await this.ads.runAd(this.platform, 'rewarded', {});
+    this.audio.resumeAfterAd();
+    this.pausedForAd = false;
+
+    if (result.status !== 'finished') {
+      this.notice = 'No reward — ad did not complete.';
+      this.closeOverlay();
+      return;
+    }
+
+    this.state = this.ads.markRewardedUsed(this.state);
+    const granted = applyResourceOffer(this.state, offer);
+    this.state = granted.state;
     this.applyAchievements(true);
-    this.audio.craft();
-    this.notice = `Warped ${BALANCE.timeWarpSeconds / 60} minutes.`;
+    this.audio.claim();
+    this.hud.toast(`+${offer.amount} ${resourceLabel(offer.resource)}`, 'gain');
     this.scene.sync(this.state);
-    this.refreshHud();
+    this.closeOverlay();
     void this.persist();
   }
 
