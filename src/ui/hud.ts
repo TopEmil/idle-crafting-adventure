@@ -30,7 +30,6 @@ import {
   formatNumber,
   formatResourceInline,
 } from './format';
-import { nextGoal } from './goals';
 import {
   formatAchievementRewardLine,
   formatRecipeEffects,
@@ -42,6 +41,7 @@ import {
 } from './effectsText';
 import type { SceneView } from '../forge/sceneView';
 import { leaderboardScore, msUntilSeasonEnd } from '../sim/oreScore';
+import { formatScoutTimeLeft, getScoutPartyRows } from './scoutStatus';
 
 export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'talents' | 'reforge' | 'ledger' | null;
 
@@ -98,13 +98,10 @@ export class Hud {
           </div>
           <div class="depth-meter"><span id="depth-meter"></span></div>
         </div>
-        <div class="goal-strip" id="goal-strip" hidden>
-          <div class="goal-copy">
-            <div class="goal-title" id="goal-title">Next goal</div>
-            <div class="goal-detail" id="goal-detail"></div>
-          </div>
-          <div class="goal-meter"><span id="goal-meter"></span></div>
-        </div>
+        <button class="scout-strip" id="scout-strip" type="button" hidden aria-label="Open expeditions">
+          <div class="scout-strip-head">Scouting parties</div>
+          <div class="scout-list" id="scout-list"></div>
+        </button>
         <div class="float-layer" id="float-layer" aria-hidden="true"></div>
       </div>
       <div class="bottom-dock">
@@ -114,13 +111,7 @@ export class Hud {
         </div>
         <div class="cta-row">
           <button class="btn btn-primary" id="btn-vein" type="button">Mine</button>
-          <div class="craft-cta">
-            <button class="btn btn-secondary" id="btn-craft" type="button">Craft</button>
-            <div class="craft-need" id="craft-need" hidden>
-              <div class="craft-need-label" id="craft-need-label"></div>
-              <div class="craft-need-meter" aria-hidden="true"><span id="craft-need-meter"></span></div>
-            </div>
-          </div>
+          <button class="btn btn-secondary" id="btn-craft" type="button">Craft</button>
         </div>
         <div class="nav-row">
           <button class="nav-btn" data-panel="recipes" type="button">Recipes</button>
@@ -136,6 +127,9 @@ export class Hud {
 
     this.root.querySelector('#btn-vein')?.addEventListener('click', () => this.actions.onClickVein());
     this.root.querySelector('#btn-craft')?.addEventListener('click', () => this.actions.onCraftQuick());
+    this.root.querySelector('#scout-strip')?.addEventListener('click', () => {
+      this.actions.onOpenPanel('expeditions');
+    });
     this.root.querySelector('#btn-mute')?.addEventListener('click', () => {
       this.actions.onToggleMute();
     });
@@ -182,7 +176,7 @@ export class Hud {
   renderChrome(state: GameState) {
     this.renderResources(state);
     this.renderDepth(state);
-    this.renderGoal(state);
+    this.renderScoutParties(state);
     this.renderCraftQuick(state);
     this.setView(this.view);
     const veinBtn = this.root.querySelector('#btn-vein') as HTMLButtonElement | null;
@@ -267,18 +261,26 @@ export class Hud {
     if (meter) meter.style.width = `${Math.round(faceProgress * 100)}%`;
   }
 
-  private renderGoal(state: GameState) {
-    const strip = this.root.querySelector('#goal-strip') as HTMLElement | null;
-    if (!strip) return;
-    const goal = nextGoal(state);
-    strip.hidden = false;
-    strip.classList.toggle('goal-ready', goal.ready);
-    const title = this.root.querySelector('#goal-title');
-    const detail = this.root.querySelector('#goal-detail');
-    const meter = this.root.querySelector('#goal-meter') as HTMLElement | null;
-    if (title) title.textContent = goal.ready ? `Ready · ${goal.title}` : goal.title;
-    if (detail) detail.textContent = goal.detail;
-    if (meter) meter.style.width = `${Math.round(goal.progress * 100)}%`;
+  private renderScoutParties(state: GameState) {
+    const strip = this.root.querySelector('#scout-strip') as HTMLButtonElement | null;
+    const list = this.root.querySelector('#scout-list');
+    if (!strip || !list) return;
+
+    const rows = getScoutPartyRows(state);
+    strip.hidden = rows.length === 0;
+    strip.classList.toggle('scout-ready', rows.some((row) => row.ready));
+    list.innerHTML = rows
+      .map((row) => {
+        const time = formatScoutTimeLeft(row);
+        const pct = Math.round(row.progress * 100);
+        return `<div class="scout-row${row.ready ? ' is-ready' : ''}" role="listitem">
+          <span class="scout-party">Party ${row.partyIndex}</span>
+          <span class="scout-route">${row.expeditionName}</span>
+          <span class="scout-time">${time}</span>
+          <span class="scout-meter" aria-hidden="true"><span style="width:${pct}%"></span></span>
+        </div>`;
+      })
+      .join('');
   }
 
   showOnboarding(step: number) {
@@ -439,9 +441,6 @@ export class Hud {
 
   private renderCraftQuick(state: GameState) {
     const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
-    const need = this.root.querySelector('#craft-need') as HTMLElement | null;
-    const needLabel = this.root.querySelector('#craft-need-label');
-    const needMeter = this.root.querySelector('#craft-need-meter') as HTMLElement | null;
     if (!craftBtn) return;
 
     const craft = getCraftQuickState(state);
@@ -458,17 +457,6 @@ export class Hud {
       craftBtn.title = formatMissingCost(craft.recipe.cost, state.resources);
     } else {
       craftBtn.title = `Craft ${craft.recipe.name}`;
-    }
-
-    if (need && needLabel && needMeter) {
-      if (!craft.needDetail) {
-        need.hidden = true;
-      } else {
-        need.hidden = false;
-        need.classList.toggle('craft-need-ready', craft.affordable);
-        needLabel.textContent = craft.needDetail;
-        needMeter.style.width = `${Math.round(craft.progress * 100)}%`;
-      }
     }
   }
 

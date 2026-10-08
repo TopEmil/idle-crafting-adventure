@@ -9,7 +9,6 @@ import {
   unlockStation,
   upgradeStation,
 } from './economy';
-import { nextGoal } from '../ui/goals';
 import { formatRecipeEffects, formatStationIO } from '../ui/effectsText';
 import { getRecipe } from '../data/recipes';
 import { getStation } from '../data/stations';
@@ -20,8 +19,7 @@ describe('progression walkthrough (sim)', () => {
 
     // Gather enough for copper pick
     for (let i = 0; i < 20; i++) state = clickVein(state).state;
-    expect(nextGoal(state).id).toBe('recipe:copper_pick');
-    expect(nextGoal(state).ready).toBe(true);
+    expect(state.resources.ore).toBeGreaterThanOrEqual(15);
 
     const pick = craftRecipe(state, 'copper_pick');
     expect(pick.ok).toBe(true);
