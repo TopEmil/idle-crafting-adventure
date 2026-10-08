@@ -42,6 +42,7 @@ import {
 import type { SceneView } from '../forge/sceneView';
 import { leaderboardScore, msUntilSeasonEnd } from '../sim/oreScore';
 import { formatScoutTimeLeft, getScoutPartyRows } from './scoutStatus';
+import { sheetScrollAfterRebuild } from './sheetScroll';
 
 export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'talents' | 'reforge' | 'ledger' | null;
 
@@ -77,6 +78,8 @@ export class Hud {
   private actions: HudActions;
   private lastResources: Partial<Record<ResourceId, number>> = {};
   private floatRoot: HTMLElement | null = null;
+  /** Panel currently shown in the overlay sheet — used to keep scroll on refresh. */
+  private renderedSheetPanel: PanelId = null;
 
   constructor(root: HTMLElement, overlay: HTMLElement, actions: HudActions) {
     this.root = root;
@@ -196,9 +199,27 @@ export class Hud {
     this.renderChrome(state);
 
     if (this.panel) {
+      const sheet = this.overlay.querySelector('.sheet') as HTMLElement | null;
+      const samePanel = this.renderedSheetPanel === this.panel;
+      const scrollTop = sheetScrollAfterRebuild(
+        this.renderedSheetPanel,
+        this.panel,
+        sheet?.scrollTop ?? 0,
+      );
       this.renderPanel(state, opts?.notice);
-    } else if (!this.overlay.querySelector('.modal') && !this.overlay.querySelector('.onboarding')) {
-      // keep overlay empty unless modal/onboarding managed elsewhere
+      const next = this.overlay.querySelector('.sheet') as HTMLElement | null;
+      if (next) {
+        if (samePanel) {
+          next.classList.add('sheet-refresh');
+          next.scrollTop = scrollTop;
+        }
+        this.renderedSheetPanel = this.panel;
+      }
+    } else {
+      this.renderedSheetPanel = null;
+      if (!this.overlay.querySelector('.modal') && !this.overlay.querySelector('.onboarding')) {
+        // keep overlay empty unless modal/onboarding managed elsewhere
+      }
     }
   }
 

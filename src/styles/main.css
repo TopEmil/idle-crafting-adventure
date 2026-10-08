@@ -751,6 +751,11 @@ body {
   touch-action: pan-y;
 }
 
+/* In-place sheet rebuilds (talent buys, station upgrades) — keep position, skip entrance. */
+.sheet.sheet-refresh {
+  animation: none;
+}
+
 @keyframes sheet-up {
   from {
     transform: translateY(28px);
