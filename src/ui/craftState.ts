@@ -1,15 +1,15 @@
-import { resourceLabel, type ResourceId } from '../data/resources';
+import type { ResourceId } from '../data/resources';
 import type { RecipeDef } from '../data/recipes';
 import { availableRecipes, canAfford } from '../sim/economy';
 import type { GameState } from '../sim/types';
-import { formatNumber } from './format';
+import { formatNumber, formatResourceInline } from './format';
 
 export interface CraftQuickState {
   recipe: RecipeDef | null;
   affordable: boolean;
   /** Primary button label */
   label: string;
-  /** Secondary cost/progress line under the button; null when crafted out */
+  /** Secondary cost/progress line under the button (HTML); null when crafted out */
   needDetail: string | null;
   /** 0..1 cheapest resource ratio toward the next craft */
   progress: number;
@@ -25,10 +25,10 @@ export function formatCostProgress(
     const owned = wallet[key] ?? 0;
     const ratio = amount > 0 ? Math.min(1, owned / amount) : 1;
     progress = Math.min(progress, ratio);
-    parts.push(`${formatNumber(owned)}/${formatNumber(amount)} ${resourceLabel(key)}`);
+    parts.push(formatResourceInline(key, `${formatNumber(owned)}/${formatNumber(amount)}`));
   }
   return {
-    detail: parts.join(' · '),
+    detail: parts.join('<span class="res-sep"> · </span>'),
     progress,
     affordable: canAfford(wallet, cost),
   };

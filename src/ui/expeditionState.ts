@@ -7,7 +7,7 @@ import {
 } from '../sim/economy';
 import type { GameState } from '../sim/types';
 import { formatCostProgress } from './craftState';
-import { formatCost, formatDuration, formatNumber } from './format';
+import { formatCost, formatCostHtml, formatDuration, formatNumber } from './format';
 
 export type ExpeditionRowKind =
   | 'locked'
@@ -31,10 +31,12 @@ export type ExpeditionActionMode =
 export interface ExpeditionRowState {
   kind: ExpeditionRowKind;
   mode: ExpeditionActionMode;
-  /** Primary cost / unlock / timer line */
+  /** Primary cost / unlock / timer line (may include HTML resource icons) */
   status: string;
-  /** Explicit requirements the player must meet */
+  /** Explicit requirements the player must meet (may include HTML resource icons) */
   requirements: string;
+  /** Plain-text tooltip for the action button (no HTML) */
+  actionTitle: string;
   /** Send / Locked / Need more / Scout busy / Claim button label */
   actionLabel: string;
   canSend: boolean;
@@ -66,6 +68,7 @@ export function getExpeditionRowState(
         mode: 'claim',
         status: 'Loot ready — claim it',
         requirements: 'Tap Claim to collect loot',
+        actionTitle: 'Tap Claim to collect loot',
         actionLabel: 'Claim',
         canSend: false,
         blocked: false,
@@ -80,6 +83,7 @@ export function getExpeditionRowState(
         mode: 'claim_first',
         status: 'Back at camp — waiting in line',
         requirements: 'Claim the other squad’s loot first',
+        actionTitle: 'Claim the other squad’s loot first',
         actionLabel: 'Wait',
         canSend: false,
         blocked: true,
@@ -93,6 +97,7 @@ export function getExpeditionRowState(
       mode: 'progress',
       status: `Returning in ${formatDuration(left)}`,
       requirements: `Cost paid · ${formatDuration(expedition.durationSec)} run · watch an ad to rush`,
+      actionTitle: `Cost paid · ${formatDuration(expedition.durationSec)} run · watch an ad to rush`,
       actionLabel: 'En route',
       canSend: false,
       blocked: false,
@@ -115,13 +120,15 @@ export function getExpeditionRowState(
     const parts: string[] = [];
     if (!oreOk) parts.push(`${formatNumber(have)} / ${formatNumber(need)} lifetime ore`);
     if (!depthOk) parts.push(`Depth ${depthHave} / ${depthNeed}`);
+    const requirements = !oreOk
+      ? `Unlock at ${formatNumber(need)} lifetime ore produced`
+      : `Dig to depth ${depthNeed} to open this route`;
     return {
       kind: 'locked',
       mode: 'locked',
       status: parts.join(' · '),
-      requirements: !oreOk
-        ? `Unlock at ${formatNumber(need)} lifetime ore produced`
-        : `Dig to depth ${depthNeed} to open this route`,
+      requirements,
+      actionTitle: requirements,
       actionLabel: 'Locked',
       canSend: false,
       blocked: true,
@@ -131,12 +138,17 @@ export function getExpeditionRowState(
     };
   }
 
+  const costPlain = formatCost(expedition.cost);
+  const costHtml = formatCostHtml(expedition.cost);
+  const duration = formatDuration(expedition.durationSec);
+
   if (state.pendingLoot) {
     return {
       kind: 'claim_first',
       mode: 'claim_first',
-      status: `${formatCost(expedition.cost)} · ${formatDuration(expedition.durationSec)}`,
+      status: `${costHtml}<span class="res-sep"> · </span>${duration}`,
       requirements: 'Claim pending loot before sending again',
+      actionTitle: 'Claim pending loot before sending again',
       actionLabel: 'Claim first',
       canSend: false,
       blocked: true,
@@ -149,14 +161,16 @@ export function getExpeditionRowState(
   const slots = expeditionSlotCount(state);
   const busy = activeSquadCount(state);
   if (busy >= slots) {
+    const requirements =
+      slots <= BALANCE.baseExpeditionSlots
+        ? 'All squads busy — buy an extra squad with Relics, or rush with an ad'
+        : 'All squads busy — rush one with an ad or wait';
     return {
       kind: 'busy',
       mode: 'busy',
-      status: `${formatCost(expedition.cost)} · ${formatDuration(expedition.durationSec)}`,
-      requirements:
-        slots <= BALANCE.baseExpeditionSlots
-          ? 'All squads busy — buy an extra squad with Relics, or rush with an ad'
-          : 'All squads busy — rush one with an ad or wait',
+      status: `${costHtml}<span class="res-sep"> · </span>${duration}`,
+      requirements,
+      actionTitle: requirements,
       actionLabel: 'Squads busy',
       canSend: false,
       blocked: true,
@@ -173,7 +187,8 @@ export function getExpeditionRowState(
       kind: 'need_cost',
       mode: 'need_cost',
       status: costProgress.detail,
-      requirements: `Needs ${formatCost(expedition.cost)} to send · ${formatDuration(expedition.durationSec)}`,
+      requirements: `Needs ${costHtml} to send · ${duration}`,
+      actionTitle: `Needs ${costPlain} to send · ${duration}`,
       actionLabel: 'Need more',
       canSend: false,
       blocked: true,
@@ -186,8 +201,9 @@ export function getExpeditionRowState(
   return {
     kind: 'ready',
     mode: 'send',
-    status: `Ready · ${costProgress.detail} · ${formatDuration(expedition.durationSec)}`,
-    requirements: `Spend ${formatCost(expedition.cost)} · returns in ${formatDuration(expedition.durationSec)}`,
+    status: `Ready · ${costProgress.detail} · ${duration}`,
+    requirements: `Spend ${costHtml} · returns in ${duration}`,
+    actionTitle: `Spend ${costPlain} · returns in ${duration}`,
     actionLabel: 'Send',
     canSend: true,
     blocked: false,
@@ -220,7 +236,7 @@ export function expeditionActionHtml(row: ExpeditionRowState, expeditionId: stri
     case 'claim_first':
     case 'need_cost':
     case 'send':
-      return `<button class="btn btn-secondary" data-exp="${expeditionId}" type="button" ${row.canSend ? '' : 'disabled'} title="${row.requirements}">${row.actionLabel}</button>`;
+      return `<button class="btn btn-secondary" data-exp="${expeditionId}" type="button" ${row.canSend ? '' : 'disabled'} title="${row.actionTitle}">${row.actionLabel}</button>`;
     default: {
       const _exhaustive: never = row.mode;
       return _exhaustive;
