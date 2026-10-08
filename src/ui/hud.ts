@@ -116,6 +116,10 @@ export class Hud {
         <div class="top-meta">
           <button class="icon-btn" id="btn-mute" type="button" aria-label="Mute">♪</button>
           <div class="resources" id="resources" role="table" aria-label="Inventory"></div>
+          <button class="scout-strip" id="scout-strip" type="button" hidden aria-label="Open expeditions">
+            <div class="scout-strip-head">Scouting parties</div>
+            <div class="scout-list" id="scout-list"></div>
+          </button>
         </div>
       </div>
       <div class="mid-space">
@@ -126,10 +130,6 @@ export class Hud {
           </div>
           <div class="depth-meter"><span id="depth-meter"></span></div>
         </div>
-        <button class="scout-strip" id="scout-strip" type="button" hidden aria-label="Open expeditions">
-          <div class="scout-strip-head">Scouting parties</div>
-          <div class="scout-list" id="scout-list"></div>
-        </button>
         <div class="float-layer" id="float-layer" aria-hidden="true"></div>
       </div>
       <div class="bottom-dock">

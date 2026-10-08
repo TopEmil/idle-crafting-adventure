@@ -851,9 +851,10 @@ export class ForgeScene {
 
     const cosmetic = this.state?.activeCosmetic ?? 'default';
     if (cosmetic !== 'default') {
+      // Soft shaft wash only — no floating badge over the dig face.
       const tint = cosmetic === 'cyan_hearth' ? COLORS.cyan : COLORS.amber;
-      g.star(x, y - shaftH * 0.42, 5, 11, 5, this.pulse);
-      g.fill({ color: tint, alpha: 0.85 });
+      g.circle(x, y - shaftH * 0.28, 36 * breath);
+      g.fill({ color: tint, alpha: 0.1 });
     }
   }
 
