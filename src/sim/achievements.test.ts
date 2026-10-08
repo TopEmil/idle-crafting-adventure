@@ -59,7 +59,7 @@ describe('achievements', () => {
 
   it('adds idle dwarf power from Copper Bound after claim', () => {
     let state = createInitialState();
-    for (let i = 0; i < 20; i++) state = clickVein(state).state;
+    for (let i = 0; i < 40; i++) state = clickVein(state).state;
     const crafted = craftRecipe(state, 'copper_pick');
     expect(crafted.ok).toBe(true);
     if (!crafted.ok) return;

@@ -5,11 +5,13 @@ import {
   createMineShaftProgress,
   digShaft,
   emptyFaceDamage,
+  faceCellHp,
   faceCleared,
   faceHitsToDamage,
   faceTotalHp,
   lootForTile,
   normalizeProgress,
+  oreYieldAtDepth,
   SHAFT_COLS,
   tileKindAt,
 } from './mineShaft';
@@ -39,9 +41,30 @@ describe('mine shaft', () => {
 
   it('batch auto digs prefer stone and carry across rows', () => {
     const need0 = faceTotalHp(0);
-    const result = digShaft(createMineShaftProgress(), need0 + 3, { mode: 'auto' });
+    const result = digShaft(createMineShaftProgress(), 1, {
+      mode: 'auto',
+      strikes: need0 + 3,
+    });
     expect(result.rowsCleared).toBeGreaterThanOrEqual(1);
     expect(result.progress.depth).toBeGreaterThanOrEqual(1);
+    expect(result.oreYield).toBeGreaterThan(0);
+  });
+
+  it('applies dig damage to one cell without spillover overkill', () => {
+    const progress = createMineShaftProgress();
+    const hp = faceCellHp(0, progress.faceDamage, 0);
+    const result = digShaft(progress, hp + 50, { mode: 'player', col: 0 });
+    expect(result.shattered).toBe(true);
+    expect(result.oreYield).toBe(oreYieldAtDepth(0));
+    // Overkill must not damage other columns on the same strike.
+    for (let col = 1; col < SHAFT_COLS; col++) {
+      expect(result.progress.faceDamage[col] ?? 0).toBe(0);
+    }
+  });
+
+  it('scales ore yield with depth hardness', () => {
+    expect(oreYieldAtDepth(0)).toBe(2);
+    expect(oreYieldAtDepth(175)).toBeGreaterThan(oreYieldAtDepth(0));
   });
 
   it('normalizeProgress collapses a fully damaged face', () => {
@@ -132,9 +155,9 @@ describe('mine shaft', () => {
     }
     expect(glowCol).toBeGreaterThanOrEqual(0);
 
-    const auto = digShaft(progress, 20, { mode: 'auto', col: glowCol });
+    const auto = digShaft(progress, 1, { mode: 'auto', col: glowCol, strikes: 20 });
     // Auto may dig other cols first; force dig the glow col as player after prep
-    const player = digShaft(progress, 20, { mode: 'player', col: glowCol });
+    const player = digShaft(progress, 1, { mode: 'player', col: glowCol, strikes: 20 });
     expect(player.loot?.resource === 'glowdust' || player.shattered).toBe(true);
     // Auto never grants rare loot
     expect(auto.loot).toBeNull();

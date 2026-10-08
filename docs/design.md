@@ -55,9 +55,9 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 ## Systems summary
 
 1. **Resources:** Ore, Emberglass, Glowdust, Alloy, Verdiglass, Nightiron, Starshard, Aetherite, Relics (prestige currency). Mid/late ores hide until found.
-2. **Mine shaft:** Ten strata from Glow Shallows → Aether Core. New depths flash a discovery toast and grant a small bonus; rare tiles (glow, verdant, ember, geode, night, star, aether) only burst loot on player digs. The dwarf auto-miner follows the live dig column.
+2. **Mine shaft:** Ten strata from Glow Shallows → Aether Core. Face cells have HP; ore (and rare finds) grant only when a cell shatters. Dig-damage upgrades clear veins faster but cannot exceed a vein’s fixed yield. Deeper strata yield more ore per vein and have higher HP. New depths flash a discovery toast and grant a small bonus; rare tiles (glow, verdant, ember, geode, night, star, aether) only burst rare loot on player digs. The dwarf auto-miner follows the live dig column.
 3. **Stations:** Smelter → Anvil → Enchanter, then Verdant Crucible (depth 6+), Gemcutter (55+), Aetherforge (175+) — ores and depth unlock later machines.
-4. **Recipes:** Tools and gear that boost click power / station output / dwarf auto-mine (28 crafts).
+4. **Recipes:** Tools and gear that boost dig damage / station output / dwarf dig rate (28 crafts).
 5. **Expeditions:** Ten timed scout routes; several also need dig depth. Return modal is the primary midgame-ad hook.
 6. **Talents:** Eight Relic trees (tap, stations, loot, offline, dwarf, seam sense, caravan speed, Relic lore).
 7. **Offline:** Simulated ticks up to cap; summary lists gains.

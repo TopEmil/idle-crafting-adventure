@@ -19,11 +19,12 @@ export interface TalentDef {
   costGrowth: number;
   /** Additive mult contribution per level (level 1 → 1 + rate). */
   effects: {
+    /** Multiplicative dig damage per level (applied as 1 + rate × level). */
     clickPowerPerLevel?: number;
     stationOutputPerLevel?: number;
     expeditionLootPerLevel?: number;
     offlineRatePerLevel?: number;
-    /** Additive dwarf autoMine fraction of tap power → ore/sec per level. */
+    /** Additive dwarf dig strike-rate bonus per level. */
     autoMinePerLevel?: number;
     /** Fraction shorter expedition duration per level (0.05 = 5% faster). */
     expeditionSpeedPerLevel?: number;
@@ -36,7 +37,7 @@ export const TALENTS: TalentDef[] = [
   {
     id: 'vein_attunement',
     name: 'Vein Attunement',
-    description: 'Stronger taps on the mineral face.',
+    description: 'Heavier digs on the mineral face.',
     maxLevel: 20,
     baseCost: 1,
     costGrowth: 1.35,
