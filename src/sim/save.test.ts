@@ -69,15 +69,32 @@ describe('save migration', () => {
   it('defaults missing achievements and lifetimeClicks', () => {
     const state = createInitialState();
     const legacy = structuredClone(state) as unknown as {
-      unlockedAchievements?: typeof state.unlockedAchievements;
+      claimedAchievements?: typeof state.claimedAchievements;
+      unlockedAchievements?: string[];
       lifetimeClicks?: number;
     };
+    delete legacy.claimedAchievements;
     delete legacy.unlockedAchievements;
     delete legacy.lifetimeClicks;
 
     const migrated = migrateState(legacy as typeof state);
-    expect(migrated.unlockedAchievements).toEqual([]);
+    expect(migrated.claimedAchievements).toEqual({});
     expect(migrated.lifetimeClicks).toBe(0);
+  });
+
+  it('migrates legacy unlockedAchievements into claimed tier 1', () => {
+    const state = createInitialState();
+    const legacy = structuredClone(state) as unknown as {
+      claimedAchievements?: typeof state.claimedAchievements;
+      unlockedAchievements?: string[];
+    };
+    delete legacy.claimedAchievements;
+    legacy.unlockedAchievements = ['first_strike', 'vein_warmup', 'bogus'];
+
+    const migrated = migrateState(legacy as typeof state);
+    expect(migrated.claimedAchievements.first_strike).toBe(1);
+    expect(migrated.claimedAchievements.vein_warmup).toBe(1);
+    expect((migrated as { unlockedAchievements?: unknown }).unlockedAchievements).toBeUndefined();
   });
 
   it('seeds allTimeOre from legacy run totals and starts a clean season', () => {
@@ -109,7 +126,7 @@ describe('save migration', () => {
     state.stations.smelter = { unlocked: true, level: 5, runLevel: 2, enabled: false };
     state.talents.scout_instinct = 3;
     state.lastPrestigeAt = 42;
-    state.unlockedAchievements = ['first_strike', 'vein_warmup'];
+    state.claimedAchievements = { first_strike: 1, vein_warmup: 1, hearth_lit: 2 };
     state.lifetimeClicks = 120;
     state.extraSquadSlots = 2;
     state.resources.nightiron = 4;
@@ -122,7 +139,11 @@ describe('save migration', () => {
     expect(parsed?.stations.smelter.runLevel).toBe(2);
     expect(parsed?.talents.scout_instinct).toBe(3);
     expect(parsed?.lastPrestigeAt).toBe(42);
-    expect(parsed?.unlockedAchievements).toEqual(['first_strike', 'vein_warmup']);
+    expect(parsed?.claimedAchievements).toEqual({
+      first_strike: 1,
+      vein_warmup: 1,
+      hearth_lit: 2,
+    });
     expect(parsed?.lifetimeClicks).toBe(120);
     expect(parsed?.extraSquadSlots).toBe(2);
     expect(parsed?.resources.nightiron).toBe(4);

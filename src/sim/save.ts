@@ -1,6 +1,6 @@
 import {
   ACHIEVEMENTS,
-  emptyUnlockedAchievements,
+  emptyClaimedAchievements,
   type AchievementId,
 } from '../data/achievements';
 import { BALANCE } from '../data/balance';
@@ -101,19 +101,33 @@ export function migrateState(state: GameState): GameState {
   } else {
     next.lifetimeClicks = Math.max(0, Math.floor(next.lifetimeClicks));
   }
-  if (!Array.isArray(next.unlockedAchievements)) {
-    next.unlockedAchievements = emptyUnlockedAchievements();
-  } else {
-    const known = new Set(ACHIEVEMENTS.map((a) => a.id));
-    const seen = new Set<AchievementId>();
-    const cleaned: AchievementId[] = [];
-    for (const id of next.unlockedAchievements) {
-      if (!known.has(id) || seen.has(id)) continue;
-      seen.add(id);
-      cleaned.push(id);
+  // Claimed tiers (new) — migrate legacy unlockedAchievements[] → claimed level 1.
+  const legacyAchievements = next as GameState & {
+    unlockedAchievements?: AchievementId[];
+  };
+  const knownIds = new Set(ACHIEVEMENTS.map((a) => a.id));
+  const maxTier = new Map(ACHIEVEMENTS.map((a) => [a.id, a.tiers.length] as const));
+  const claimed: Partial<Record<AchievementId, number>> = emptyClaimedAchievements();
+
+  if (next.claimedAchievements && typeof next.claimedAchievements === 'object') {
+    for (const [rawId, rawLevel] of Object.entries(next.claimedAchievements)) {
+      const id = rawId as AchievementId;
+      if (!knownIds.has(id)) continue;
+      const level = Math.max(0, Math.floor(Number(rawLevel) || 0));
+      if (level <= 0) continue;
+      claimed[id] = Math.min(level, maxTier.get(id) ?? level);
     }
-    next.unlockedAchievements = cleaned;
   }
+
+  if (Array.isArray(legacyAchievements.unlockedAchievements)) {
+    for (const id of legacyAchievements.unlockedAchievements) {
+      if (!knownIds.has(id)) continue;
+      claimed[id] = Math.max(claimed[id] ?? 0, 1);
+    }
+  }
+
+  next.claimedAchievements = claimed;
+  delete legacyAchievements.unlockedAchievements;
 
   // Fill newly added resource keys on older saves.
   const wallet = emptyWallet();

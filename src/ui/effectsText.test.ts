@@ -40,8 +40,8 @@ describe('effects text', () => {
   });
 
   it('explains achievement rewards', () => {
-    expect(formatAchievementRewards(getAchievement('first_strike').rewards)).toContain('Ore');
-    expect(formatAchievementRewards(getAchievement('vein_warmup').rewards)).toContain('+5% tap');
-    expect(formatAchievementRewards(getAchievement('copper_bound').rewards)).toContain('Dwarf mine');
+    expect(formatAchievementRewards(getAchievement('first_strike').tiers[0]!.rewards)).toContain('Ore');
+    expect(formatAchievementRewards(getAchievement('vein_warmup').tiers[0]!.rewards)).toContain('+5% tap');
+    expect(formatAchievementRewards(getAchievement('copper_bound').tiers[0]!.rewards)).toContain('Dwarf mine');
   });
 });

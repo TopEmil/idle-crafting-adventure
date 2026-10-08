@@ -30,8 +30,11 @@ export interface GameState {
   ownedRecipes: RecipeId[];
   /** Permanent talent levels — persist across Reforge. */
   talents: Record<TalentId, number>;
-  /** Unlocked achievement ids — persist across Reforge; rewards granted once. */
-  unlockedAchievements: AchievementId[];
+  /**
+   * Highest claimed achievement tier per id — persist across Reforge.
+   * Rewards are granted only when the player claims a ready tier.
+   */
+  claimedAchievements: Partial<Record<AchievementId, number>>;
   /** Lifetime vein taps — persist across Reforge (achievement progress). */
   lifetimeClicks: number;
   /** Concurrent scout parties currently out (or waiting to claim). */
@@ -112,4 +115,4 @@ export type GameEvent =
   | { type: 'offline_summary'; seconds: number; gains: Partial<Record<ResourceId, number>> }
   | { type: 'milestone'; id: string }
   | { type: 'resource_offer'; resource: ResourceId; amount: number }
-  | { type: 'achievement'; id: AchievementId };
+  | { type: 'achievement'; id: AchievementId; level: number };
