@@ -86,6 +86,10 @@ export interface GameState {
   ads: {
     midgameReadyAfter: number;
     rewardedCooldownUntil: number;
+    /** Next time a progressive resource ad suggestion may appear (ms). */
+    resourceOfferReadyAfter: number;
+    /** Successful resource-offer claims — scales reward amounts. */
+    resourceOffersClaimed: number;
   };
 }
 
@@ -107,5 +111,5 @@ export type GameEvent =
   | { type: 'buy_talent'; talentId: TalentId }
   | { type: 'offline_summary'; seconds: number; gains: Partial<Record<ResourceId, number>> }
   | { type: 'milestone'; id: string }
-  | { type: 'time_warp'; seconds: number }
+  | { type: 'resource_offer'; resource: ResourceId; amount: number }
   | { type: 'achievement'; id: AchievementId };

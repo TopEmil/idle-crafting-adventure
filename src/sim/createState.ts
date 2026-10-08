@@ -48,6 +48,8 @@ export function createInitialState(now = Date.now()): GameState {
     ads: {
       midgameReadyAfter: now + 180_000,
       rewardedCooldownUntil: 0,
+      resourceOfferReadyAfter: now + 180_000,
+      resourceOffersClaimed: 0,
     },
   };
 }

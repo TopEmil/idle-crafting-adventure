@@ -113,10 +113,10 @@ Midgame ad may fire **after** confirm modal closes — never mid-animation freez
 | Type | When | Never |
 | --- | --- | --- |
 | Midgame | After expedition claim, prestige confirm, major milestone | During active play; on nav/settings/shop open |
-| Rewarded | Opt-in 2× loot, time-warp, cosmetic | Forced; reward on error |
+| Rewarded | Opt-in 2× loot, progressive resource boost (~5 min), cosmetic | Forced; reward on error |
 | Banner | Optional on Ledger if open ≥5s avg | Over gameplay |
 
-Pacing: first midgame after ~3–5 min **or** first real expedition claim. Mute/pause only in `adStarted`; always resume on `adFinished` / `adError`. Adblock: fully playable; notice only on blocked reward features. When ads disabled (Basic Launch): no freeze, no dead reward buttons.
+Pacing: first midgame after ~3–5 min **or** first real expedition claim. Progressive resource offers: opt-in rewarded suggestion about every 5 min for the scarcest resource toward the next craft/station goal; grant size scales with prior accepts and progression. Mute/pause only in `adStarted`; always resume on `adFinished` / `adError`. Adblock: fully playable; notice only on blocked reward features. When ads disabled (Basic Launch): no freeze, no dead reward buttons.
 
 ## Platform
 

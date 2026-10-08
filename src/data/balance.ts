@@ -20,8 +20,12 @@ export const BALANCE = {
   /** First purchase should be reachable under 30s of tapping */
   earlyOrePerTap: 1,
   stationLevelCap: 50,
-  timeWarpSeconds: 300,
-  timeWarpCoinCost: 120,
+  /** Ore cost for optional 2× expedition loot when ads are unavailable. */
+  rewardBoostOreCost: 120,
+  /** Wall-clock gap between progressive resource ad suggestions (ms). */
+  resourceOfferIntervalMs: 300_000,
+  /** Min playtime before the first resource ad suggestion (seconds). */
+  resourceOfferMinPlaySec: 180,
   /** Starting concurrent scout parties (squads). */
   baseExpeditionSlots: 1,
   /** Relic cost to unlock one extra concurrent squad. */
