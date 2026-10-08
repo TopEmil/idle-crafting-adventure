@@ -101,30 +101,33 @@ export function tileKindAt(row: number, col: number): TileKind {
 function cellMaxHp(row: number, col: number): number {
   const stratum = stratumAtDepth(row);
   const kind = tileKindAt(row, col);
-  let kindBonus = 0;
+  const h = stratum.hardness;
+  // Rare pockets stay meaningfully tougher as hardness doubles each stratum.
+  let kindMult = 0;
   switch (kind) {
     case 'stone':
-      kindBonus = 0;
+      kindMult = 0;
       break;
     case 'glow':
     case 'verdant':
     case 'ember':
-      kindBonus = 1;
+      kindMult = 0.25;
       break;
     case 'geode':
     case 'night':
-      kindBonus = 2;
+      kindMult = 0.5;
       break;
     case 'star':
     case 'aether':
-      kindBonus = 3;
+      kindMult = 0.75;
       break;
     default: {
       const _exhaustive: never = kind;
       return _exhaustive;
     }
   }
-  return stratum.hardness + ((row * 3 + col * 7) % 2) + kindBonus;
+  const jitter = ((row * 3 + col * 7) % 2) * Math.max(1, Math.round(h * 0.1));
+  return Math.max(1, Math.round(h * (1 + kindMult)) + jitter);
 }
 
 function cellTint(stratum: StratumDef, row: number, col: number, kind: TileKind): number {
@@ -158,13 +161,13 @@ export function faceCellHp(depth: number, faceDamage: number[], col: number): nu
 
 /**
  * Fixed ore payout when a face cell shatters.
- * Scales with stratum hardness and depth — not with dig damage.
+ * Uses stratum veinOre × depth flavor — not dig damage or raw hardness.
  */
 export function oreYieldAtDepth(depth: number): number {
   const stratum = stratumAtDepth(depth);
   return Math.max(
     1,
-    Math.round(BALANCE.baseVeinOre * stratum.hardness * depthOreMult(depth)),
+    Math.round(BALANCE.baseVeinOre * stratum.veinOre * depthOreMult(depth)),
   );
 }
 

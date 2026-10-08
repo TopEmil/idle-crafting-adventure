@@ -15,8 +15,14 @@ describe('strata', () => {
     expect(stratumAtDepth(175).id).toBe('aether_core');
   });
 
-  it('doubles the early content ladder with ten strata', () => {
+  it('doubles hardness each stratum across the ten-deep ladder', () => {
     expect(STRATA).toHaveLength(10);
+    expect(STRATA[0]!.hardness).toBe(2);
+    expect(STRATA[STRATA.length - 1]!.hardness).toBe(1024);
+    for (let i = 1; i < STRATA.length; i++) {
+      expect(STRATA[i]!.hardness).toBe(STRATA[i - 1]!.hardness * 2);
+      expect(STRATA[i]!.veinOre).toBeGreaterThanOrEqual(STRATA[i - 1]!.veinOre);
+    }
   });
 
   it('caps depth ore multiplier', () => {

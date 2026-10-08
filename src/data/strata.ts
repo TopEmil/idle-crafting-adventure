@@ -19,8 +19,16 @@ export interface StratumDef {
   name: string;
   /** First cleared-row depth where this stratum applies */
   startDepth: number;
-  /** Base rock HP per cell at this depth */
+  /**
+   * Base rock HP per cell — roughly doubles each stratum so late dig
+   * damage (hundreds) still takes multiple hits on deep veins.
+   */
   hardness: number;
+  /**
+   * Base ore granted when a cell shatters here (scaled by depthOreMult).
+   * Kept milder than hardness so HP can climb without exploding economy.
+   */
+  veinOre: number;
   tint: number;
   fleck: number;
   wall: number;
@@ -34,6 +42,7 @@ export const STRATA: StratumDef[] = [
     name: 'Glow Shallows',
     startDepth: 0,
     hardness: 2,
+    veinOre: 2,
     tint: 0x3a4a52,
     fleck: 0x2ec4b6,
     wall: 0x1a3340,
@@ -42,7 +51,8 @@ export const STRATA: StratumDef[] = [
     id: 'moss_gallery',
     name: 'Moss Gallery',
     startDepth: 6,
-    hardness: 2,
+    hardness: 4,
+    veinOre: 2,
     tint: 0x354a3e,
     fleck: 0x6bbf59,
     wall: 0x142820,
@@ -52,7 +62,8 @@ export const STRATA: StratumDef[] = [
     id: 'crystal_fault',
     name: 'Crystal Fault',
     startDepth: 12,
-    hardness: 3,
+    hardness: 8,
+    veinOre: 3,
     tint: 0x3d5568,
     fleck: 0x7ec8e3,
     wall: 0x152a38,
@@ -62,7 +73,8 @@ export const STRATA: StratumDef[] = [
     id: 'slag_vents',
     name: 'Slag Vents',
     startDepth: 20,
-    hardness: 3,
+    hardness: 16,
+    veinOre: 3,
     tint: 0x4a4038,
     fleck: 0xc45c26,
     wall: 0x1a1410,
@@ -72,7 +84,8 @@ export const STRATA: StratumDef[] = [
     id: 'ember_rift',
     name: 'Ember Rift',
     startDepth: 30,
-    hardness: 4,
+    hardness: 32,
+    veinOre: 4,
     tint: 0x4a3a36,
     fleck: 0xe85d04,
     wall: 0x1c1814,
@@ -82,7 +95,8 @@ export const STRATA: StratumDef[] = [
     id: 'frost_seam',
     name: 'Frost Seam',
     startDepth: 42,
-    hardness: 4,
+    hardness: 64,
+    veinOre: 5,
     tint: 0x3a4858,
     fleck: 0xa8d4e8,
     wall: 0x121820,
@@ -92,7 +106,8 @@ export const STRATA: StratumDef[] = [
     id: 'abyss_vein',
     name: 'Abyss Vein',
     startDepth: 55,
-    hardness: 5,
+    hardness: 128,
+    veinOre: 6,
     tint: 0x2a3348,
     fleck: 0x9b87f5,
     wall: 0x0c1018,
@@ -102,7 +117,8 @@ export const STRATA: StratumDef[] = [
     id: 'deep_dark',
     name: 'Deep Dark',
     startDepth: 90,
-    hardness: 6,
+    hardness: 256,
+    veinOre: 8,
     tint: 0x243038,
     fleck: 0xf48c06,
     wall: 0x080e12,
@@ -112,7 +128,8 @@ export const STRATA: StratumDef[] = [
     id: 'starfall_hollow',
     name: 'Starfall Hollow',
     startDepth: 120,
-    hardness: 7,
+    hardness: 512,
+    veinOre: 10,
     tint: 0x2e3040,
     fleck: 0xe8d5a3,
     wall: 0x0a0c14,
@@ -122,7 +139,8 @@ export const STRATA: StratumDef[] = [
     id: 'aether_core',
     name: 'Aether Core',
     startDepth: 175,
-    hardness: 8,
+    hardness: 1024,
+    veinOre: 12,
     tint: 0x2a4048,
     fleck: 0x9ed8e0,
     wall: 0x081418,
