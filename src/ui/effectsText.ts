@@ -60,6 +60,15 @@ export function formatTalentEffects(talent: TalentDef, level: number): string {
   if (e.offlineRatePerLevel) {
     parts.push(`Offline rate ×${(1 + e.offlineRatePerLevel * n).toFixed(2)}`);
   }
+  if (e.autoMinePerLevel) {
+    parts.push(`Dwarf mine +${Math.round(e.autoMinePerLevel * n * 100)}% tap/s`);
+  }
+  if (e.expeditionSpeedPerLevel) {
+    parts.push(`Expeditions ${Math.round(e.expeditionSpeedPerLevel * n * 100)}% faster`);
+  }
+  if (e.relicGainPerLevel) {
+    parts.push(`Reforge Relics ×${(1 + e.relicGainPerLevel * n).toFixed(2)}`);
+  }
   return parts.join(' · ');
 }
 
@@ -77,6 +86,15 @@ export function formatTalentPerLevel(talent: TalentDef): string {
   }
   if (e.offlineRatePerLevel) {
     parts.push(`+${Math.round(e.offlineRatePerLevel * 100)}% offline / lvl`);
+  }
+  if (e.autoMinePerLevel) {
+    parts.push(`+${Math.round(e.autoMinePerLevel * 100)}% dwarf / lvl`);
+  }
+  if (e.expeditionSpeedPerLevel) {
+    parts.push(`+${Math.round(e.expeditionSpeedPerLevel * 100)}% scout speed / lvl`);
+  }
+  if (e.relicGainPerLevel) {
+    parts.push(`+${Math.round(e.relicGainPerLevel * 100)}% Relics / lvl`);
   }
   return parts.join(' · ');
 }

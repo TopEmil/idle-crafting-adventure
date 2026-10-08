@@ -3,6 +3,7 @@ import type { ExpeditionId } from '../data/expeditions';
 import type { RecipeId } from '../data/recipes';
 import type { ResourceId } from '../data/resources';
 import type { StationId } from '../data/stations';
+import type { StratumId } from '../data/strata';
 import type { TalentId } from '../data/talents';
 
 export interface ActiveExpedition {
@@ -62,6 +63,10 @@ export interface GameState {
   mineFaceDamage: number[];
   /** Fractional auto-mine dig accumulator (hits/sec). */
   mineDigAcc: number;
+  /** Last column the miner (player or dwarf) struck — drives dwarf follow VFX. */
+  lastMineHitCol: number;
+  /** Strata discovered this run (resets on Reforge); gates discovery bonuses. */
+  discoveredStrata: StratumId[];
   playTimeSec: number;
   prestigeCount: number;
   totalRelicsEarned: number;

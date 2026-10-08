@@ -3,8 +3,10 @@ export type ResourceId =
   | 'emberglass'
   | 'glowdust'
   | 'alloy'
+  | 'verdiglass'
   | 'nightiron'
   | 'starshard'
+  | 'aetherite'
   | 'relics';
 
 export interface ResourceDef {
@@ -23,6 +25,14 @@ export const RESOURCES: ResourceDef[] = [
   { id: 'glowdust', name: 'Glowdust', short: 'Dust', color: '#2EC4B6', starting: 0 },
   { id: 'alloy', name: 'Deep Alloy', short: 'Alloy', color: '#F48C06', starting: 0 },
   {
+    id: 'verdiglass',
+    name: 'Verdiglass',
+    short: 'Verd',
+    color: '#6BBF59',
+    starting: 0,
+    hideUntilOwned: true,
+  },
+  {
     id: 'nightiron',
     name: 'Nightiron',
     short: 'Night',
@@ -38,6 +48,14 @@ export const RESOURCES: ResourceDef[] = [
     starting: 0,
     hideUntilOwned: true,
   },
+  {
+    id: 'aetherite',
+    name: 'Aetherite',
+    short: 'Aether',
+    color: '#9ED8E0',
+    starting: 0,
+    hideUntilOwned: true,
+  },
   { id: 'relics', name: 'Reforge Relics', short: 'Relics', color: '#E8F1F2', starting: 0 },
 ];
 
@@ -49,8 +67,10 @@ export function emptyWallet(): Record<ResourceId, number> {
     emberglass: 0,
     glowdust: 0,
     alloy: 0,
+    verdiglass: 0,
     nightiron: 0,
     starshard: 0,
+    aetherite: 0,
     relics: 0,
   };
 }
