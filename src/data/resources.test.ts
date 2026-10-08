@@ -13,8 +13,10 @@ describe('resources display', () => {
     expect(resourceLabel('emberglass')).toBe('Emberglass');
     expect(resourceLabel('glowdust')).toBe('Glowdust');
     expect(resourceLabel('alloy')).toBe('Alloy');
+    expect(resourceLabel('verdiglass')).toBe('Verdiglass');
     expect(resourceLabel('nightiron')).toBe('Nightiron');
     expect(resourceLabel('starshard')).toBe('Starshard');
+    expect(resourceLabel('aetherite')).toBe('Aetherite');
     expect(resourceLabel('relics')).toBe('Relics');
   });
 

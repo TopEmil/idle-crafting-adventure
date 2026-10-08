@@ -5,7 +5,15 @@ export const SHAFT_COLS = 8;
 export const SHAFT_LOOKAHEAD = 5;
 export const SHAFT_LOOKBEHIND = 3;
 
-export type TileKind = 'stone' | 'glow' | 'ember' | 'geode' | 'night' | 'star';
+export type TileKind =
+  | 'stone'
+  | 'glow'
+  | 'verdant'
+  | 'ember'
+  | 'geode'
+  | 'night'
+  | 'star'
+  | 'aether';
 
 export interface TileLoot {
   resource: ResourceId;
@@ -75,15 +83,17 @@ export function tileKindAt(row: number, col: number): TileKind {
   const stratum = stratumAtDepth(row);
   const roll = cellRoll(row, col);
   // Rares get slightly more common deeper, but stay sparse
-  const rareBoost = Math.min(0.06, row * 0.0008);
-  if (roll < 0.07 + rareBoost) return 'glow';
-  if (roll < 0.11 + rareBoost * 1.4 && stratum.startDepth >= 12) return 'ember';
-  if (roll < 0.14 + rareBoost * 1.8 && stratum.startDepth >= 30) return 'geode';
-  // Late-game ores — only after digging into Abyss / Deep Dark
-  if (roll < 0.165 + rareBoost * 2 && stratum.startDepth >= 55) return 'night';
-  if (roll < 0.185 + rareBoost * 2.2 && stratum.startDepth >= 90) return 'star';
+  const rareBoost = Math.min(0.07, row * 0.0007);
+  if (roll < 0.065 + rareBoost) return 'glow';
+  if (roll < 0.095 + rareBoost * 1.2 && stratum.startDepth >= 6) return 'verdant';
+  if (roll < 0.125 + rareBoost * 1.4 && stratum.startDepth >= 12) return 'ember';
+  if (roll < 0.15 + rareBoost * 1.7 && stratum.startDepth >= 30) return 'geode';
+  if (roll < 0.17 + rareBoost * 2 && stratum.startDepth >= 55) return 'night';
+  if (roll < 0.188 + rareBoost * 2.1 && stratum.startDepth >= 90) return 'star';
+  if (roll < 0.205 + rareBoost * 2.3 && stratum.startDepth >= 175) return 'aether';
   // Early glow pockets even in shallows
   if (stratum.id === 'glow_shallows' && roll < 0.09) return 'glow';
+  if (stratum.id === 'moss_gallery' && roll < 0.11) return 'verdant';
   return 'stone';
 }
 
@@ -96,6 +106,7 @@ function cellMaxHp(row: number, col: number): number {
       kindBonus = 0;
       break;
     case 'glow':
+    case 'verdant':
     case 'ember':
       kindBonus = 1;
       break;
@@ -104,6 +115,7 @@ function cellMaxHp(row: number, col: number): number {
       kindBonus = 2;
       break;
     case 'star':
+    case 'aether':
       kindBonus = 3;
       break;
     default: {
@@ -116,20 +128,24 @@ function cellMaxHp(row: number, col: number): number {
 
 function cellTint(stratum: StratumDef, row: number, col: number, kind: TileKind): number {
   if (kind === 'glow') return 0x2a5a58;
+  if (kind === 'verdant') return 0x2a4a32;
   if (kind === 'ember') return 0x5a3a28;
   if (kind === 'geode') return 0x3a3a5a;
   if (kind === 'night') return 0x2a2a48;
   if (kind === 'star') return 0x4a4530;
+  if (kind === 'aether') return 0x2a4850;
   const shift = ((row + col) % 3) * 0x060808;
   return (stratum.tint + shift) & 0xffffff;
 }
 
 function cellFleck(stratum: StratumDef, kind: TileKind): number {
   if (kind === 'glow') return 0x2ec4b6;
+  if (kind === 'verdant') return 0x6bbf59;
   if (kind === 'ember') return 0xe85d04;
   if (kind === 'geode') return 0xa8c8e8;
   if (kind === 'night') return 0x7b8cde;
   if (kind === 'star') return 0xe8d5a3;
+  if (kind === 'aether') return 0x9ed8e0;
   return stratum.fleck;
 }
 
@@ -176,6 +192,8 @@ export function lootForTile(kind: TileKind): TileLoot | null {
   switch (kind) {
     case 'glow':
       return { resource: 'glowdust', amount: 2, label: resourceLabel('glowdust') };
+    case 'verdant':
+      return { resource: 'verdiglass', amount: 1, label: resourceLabel('verdiglass') };
     case 'ember':
       return { resource: 'emberglass', amount: 1, label: resourceLabel('emberglass') };
     case 'geode':
@@ -184,6 +202,8 @@ export function lootForTile(kind: TileKind): TileLoot | null {
       return { resource: 'nightiron', amount: 1, label: resourceLabel('nightiron') };
     case 'star':
       return { resource: 'starshard', amount: 1, label: resourceLabel('starshard') };
+    case 'aether':
+      return { resource: 'aetherite', amount: 1, label: resourceLabel('aetherite') };
     case 'stone':
       return null;
     default: {
@@ -207,8 +227,8 @@ export interface DigResult {
   loot: TileLoot | null;
 }
 
-function pickAutoCol(depth: number, faceDamage: number[]): number {
-  // Prefer ordinary stone so rares wait for the player
+/** Prefer ordinary stone so rares wait for the player; leftmost living otherwise. */
+export function pickAutoCol(depth: number, faceDamage: number[]): number {
   let stoneCol = -1;
   let anyCol = -1;
   for (let col = 0; col < SHAFT_COLS; col++) {
@@ -363,6 +383,7 @@ export function findNearestFaceCell(
   return best;
 }
 
+/** Visual twin of pickAutoCol — prefers living stone on the dig face. */
 export function pickLivingFaceCell(cells: ShaftCell[]): ShaftCell | null {
   const living = cells.filter((c) => c.role === 'face' && !c.cleared);
   if (!living.length) return null;

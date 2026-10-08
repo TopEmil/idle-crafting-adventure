@@ -102,16 +102,26 @@ export function getExpeditionRowState(
     };
   }
 
-  const unlocked = state.totalOreProduced >= expedition.unlockAtOreProduced;
-  if (!unlocked) {
+  const oreOk = state.totalOreProduced >= expedition.unlockAtOreProduced;
+  const depthNeed = expedition.unlockAtDepth ?? 0;
+  const depthOk = (state.mineDepth ?? 0) >= depthNeed;
+  if (!oreOk || !depthOk) {
     const have = state.totalOreProduced;
     const need = expedition.unlockAtOreProduced;
-    const progress = need > 0 ? Math.min(1, have / need) : 1;
+    const depthHave = state.mineDepth ?? 0;
+    const oreProgress = need > 0 ? Math.min(1, have / need) : 1;
+    const depthProgress = depthNeed > 0 ? Math.min(1, depthHave / depthNeed) : 1;
+    const progress = Math.min(oreProgress, depthProgress);
+    const parts: string[] = [];
+    if (!oreOk) parts.push(`${formatNumber(have)} / ${formatNumber(need)} lifetime ore`);
+    if (!depthOk) parts.push(`Depth ${depthHave} / ${depthNeed}`);
     return {
       kind: 'locked',
       mode: 'locked',
-      status: `${formatNumber(have)} / ${formatNumber(need)} lifetime ore`,
-      requirements: `Unlock at ${formatNumber(need)} lifetime ore produced`,
+      status: parts.join(' · '),
+      requirements: !oreOk
+        ? `Unlock at ${formatNumber(need)} lifetime ore produced`
+        : `Dig to depth ${depthNeed} to open this route`,
       actionLabel: 'Locked',
       canSend: false,
       blocked: true,

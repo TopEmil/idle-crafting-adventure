@@ -99,6 +99,15 @@ export function nextGoal(state: GameState): GoalInfo {
     const st = state.stations[station.id];
     if (st.unlocked) continue;
     if (station.unlockRequires && !state.stations[station.unlockRequires].unlocked) continue;
+    if (station.unlockAtDepth != null && (state.mineDepth ?? 0) < station.unlockAtDepth) {
+      return {
+        id: `station-depth:${station.id}`,
+        title: `Dig for ${station.name}`,
+        detail: `Depth ${state.mineDepth ?? 0} / ${station.unlockAtDepth}`,
+        progress: Math.min(1, (state.mineDepth ?? 0) / station.unlockAtDepth),
+        ready: false,
+      };
+    }
     let ratio = 1;
     const parts: string[] = [];
     for (const [key, amount] of Object.entries(station.unlockCost)) {
@@ -116,14 +125,23 @@ export function nextGoal(state: GameState): GoalInfo {
     };
   }
 
-  const nextExp = EXPEDITIONS.find((e) => state.totalOreProduced < e.unlockAtOreProduced);
+  const nextExp = EXPEDITIONS.find((e) => {
+    if (state.totalOreProduced < e.unlockAtOreProduced) return true;
+    if (e.unlockAtDepth != null && (state.mineDepth ?? 0) < e.unlockAtDepth) return true;
+    return false;
+  });
   if (nextExp) {
-    const p = Math.min(1, state.totalOreProduced / nextExp.unlockAtOreProduced);
+    const oreP = Math.min(1, state.totalOreProduced / nextExp.unlockAtOreProduced);
+    const depthNeed = nextExp.unlockAtDepth ?? 0;
+    const depthP = depthNeed > 0 ? Math.min(1, (state.mineDepth ?? 0) / depthNeed) : 1;
+    const oreOk = state.totalOreProduced >= nextExp.unlockAtOreProduced;
     return {
       id: `exp:${nextExp.id}`,
       title: `Open ${nextExp.name}`,
-      detail: `${formatNumber(state.totalOreProduced)} / ${formatNumber(nextExp.unlockAtOreProduced)} lifetime ore`,
-      progress: p,
+      detail: !oreOk
+        ? `${formatNumber(state.totalOreProduced)} / ${formatNumber(nextExp.unlockAtOreProduced)} lifetime ore`
+        : `Depth ${state.mineDepth ?? 0} / ${depthNeed}`,
+      progress: Math.min(oreP, depthP),
       ready: false,
     };
   }

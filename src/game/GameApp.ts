@@ -8,6 +8,7 @@ import { ForgeScene } from '../forge/ForgeScene';
 import { createAdGate } from '../platform/ads';
 import { createPlatformBridge } from '../platform/crazygames';
 import { syncAchievements } from '../sim/achievements';
+import { stratumAtDepth } from '../data/strata';
 import {
   applyOfflineProgress,
   applyTimeWarp,
@@ -52,6 +53,7 @@ export class GameApp {
   private saveTimer = 0;
   private running = false;
   private pausedForAd = false;
+  private lastStratumId = '';
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -158,6 +160,7 @@ export class GameApp {
       }
       this.scene.setAutoMineRate(getAutoMineRate(this.state));
       this.scene.sync(this.state);
+      this.announceStratumIfNew();
     }
 
     this.saveTimer += dt;
@@ -282,11 +285,33 @@ export class GameApp {
     if (find) {
       this.hud.toast(`Found ${find.amount} ${find.label}!`, 'gain');
     }
+    this.announceStratumIfNew();
     if (!this.state.onboardingDone && this.state.onboardingStep === 0 && this.state.resources.ore >= 3) {
       this.state.onboardingStep = 1;
       this.hud.showOnboarding(1);
     }
     this.refreshHudLight();
+  }
+
+  /** Toast when the dig face enters a new stratum (depth milestones). */
+  private announceStratumIfNew() {
+    const stratum = stratumAtDepth(this.state.mineDepth ?? 0);
+    if (!this.lastStratumId) {
+      this.lastStratumId = stratum.id;
+      return;
+    }
+    if (this.lastStratumId === stratum.id) return;
+    this.lastStratumId = stratum.id;
+    const bonus = stratum.discoveryBonus;
+    const bonusBits = bonus
+      ? Object.entries(bonus)
+          .map(([k, v]) => `+${v} ${k}`)
+          .join(', ')
+      : '';
+    this.hud.toast(
+      bonusBits ? `Reached ${stratum.name} · ${bonusBits}` : `Reached ${stratum.name}`,
+      'gain',
+    );
   }
 
   private handleCraftQuick() {

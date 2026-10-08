@@ -72,14 +72,24 @@ describe('mine shaft', () => {
     expect(kinds.has('stone')).toBe(true);
     expect(kinds.has('glow')).toBe(true);
     expect(lootForTile('glow')?.resource).toBe('glowdust');
+    expect(lootForTile('verdant')?.resource).toBe('verdiglass');
     expect(lootForTile('ember')?.resource).toBe('emberglass');
     expect(lootForTile('geode')?.resource).toBe('alloy');
     expect(lootForTile('night')?.resource).toBe('nightiron');
     expect(lootForTile('star')?.resource).toBe('starshard');
+    expect(lootForTile('aether')?.resource).toBe('aetherite');
     expect(lootForTile('stone')).toBeNull();
   });
 
-  it('spawns late-game Nightiron and Starshard pockets at depth', () => {
+  it('spawns mid and late ore pockets at the right depths', () => {
+    const midKinds = new Set<string>();
+    for (let row = 6; row < 40; row++) {
+      for (let col = 0; col < SHAFT_COLS; col++) {
+        midKinds.add(tileKindAt(row, col));
+      }
+    }
+    expect(midKinds.has('verdant')).toBe(true);
+
     const deepKinds = new Set<string>();
     for (let row = 55; row < 120; row++) {
       for (let col = 0; col < SHAFT_COLS; col++) {
@@ -88,6 +98,14 @@ describe('mine shaft', () => {
     }
     expect(deepKinds.has('night')).toBe(true);
     expect(deepKinds.has('star')).toBe(true);
+
+    const coreKinds = new Set<string>();
+    for (let row = 175; row < 220; row++) {
+      for (let col = 0; col < SHAFT_COLS; col++) {
+        coreKinds.add(tileKindAt(row, col));
+      }
+    }
+    expect(coreKinds.has('aether')).toBe(true);
   });
 
   it('player shatter of rare tile grants loot; auto does not', () => {

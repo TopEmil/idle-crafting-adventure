@@ -30,7 +30,8 @@ import {
 /** Timber-framed dig shaft + forge workshop hall */
 const MINE_BG_URL = `${import.meta.env.BASE_URL}art/mine-cavern-bg.jpg`;
 const FORGE_BG_URL = `${import.meta.env.BASE_URL}art/forge-hall-bg.jpg`;
-const STATION_ART: Record<StationId, string> = {
+/** Painted station art when available; others use procedural drawStationBody. */
+const STATION_ART: Partial<Record<StationId, string>> = {
   smelter: `${import.meta.env.BASE_URL}art/stations/smelter.png`,
   anvil: `${import.meta.env.BASE_URL}art/stations/anvil.png`,
   enchanter: `${import.meta.env.BASE_URL}art/stations/enchanter.png`,
@@ -142,6 +143,10 @@ export class ForgeScene {
   private lastHitCellKey: string | null = null;
   private stratumFlash = 0;
   private lastStratumId = '';
+  /** Smoothed dwarf world position (follows the block being mined). */
+  private dwarfWorld = { x: 0, y: 0 };
+  private dwarfFacing = 1;
+  private dwarfInitialized = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.app = new Application();
@@ -498,22 +503,28 @@ export class ForgeScene {
   }
 
   private stationLayout(): { id: StationId; x: number; y: number }[] {
-    const ids = Object.keys(FORGE_STATION_UV) as StationId[];
+    const ids = STATIONS.map((s) => s.id);
     const portrait = this.height > this.width * 1.05;
 
-    // Portrait: keep a readable 3-up row in the play band (cover-crop hides side pedestals).
+    // Portrait: two rows of three so six stations stay readable.
     if (portrait) {
       const insets = playSafeInsets(this.width, this.height);
       const bandTop = this.height * insets.top;
       const bandBottom = this.height * (1 - insets.bottom);
-      const y = bandTop + (bandBottom - bandTop) * 0.62;
+      const bandH = bandBottom - bandTop;
       const pad = Math.min(28, this.width * 0.07);
       const usable = this.width - pad * 2;
-      return ids.map((id, i) => ({
-        id,
-        x: pad + usable * ((i + 0.5) / ids.length),
-        y,
-      }));
+      const cols = 3;
+      return ids.map((id, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const rows = Math.ceil(ids.length / cols);
+        return {
+          id,
+          x: pad + usable * ((col + 0.5) / cols),
+          y: bandTop + bandH * (0.42 + (row + 0.5) * (0.42 / Math.max(1, rows))),
+        };
+      });
     }
 
     return ids.map((id) => {
@@ -529,11 +540,65 @@ export class ForgeScene {
     });
   }
 
+  /** Fallback stand point left of the dig face when no living cell exists. */
   private dwarfPoint() {
     const { x, y } = this.veinPoint();
     const short = Math.min(this.width, this.height);
     const offset = Math.min(110, Math.max(72, short * 0.14));
     return { x: x - offset, y: y + 10 };
+  }
+
+  /** Resolve the block the dwarf should mine (matches sim auto-dig preference). */
+  private resolveDwarfTargetCell(): ShaftCell | null {
+    this.refreshShaftFromState();
+    const preferCol = this.state?.lastMineHitCol;
+    if (preferCol != null) {
+      const preferred = this.shaftCells.find(
+        (c) => c.role === 'face' && !c.cleared && c.col === preferCol,
+      );
+      if (preferred) return preferred;
+    }
+    return pickLivingFaceCell(this.shaftCells);
+  }
+
+  /** Stand beside the target block, facing it. */
+  private dwarfStandBeside(cell: ShaftCell, cx: number): { x: number; y: number; facing: number } {
+    const pos = this.cellPositions.get(cellKey(cell.row, cell.col));
+    if (!pos) {
+      const fallback = this.dwarfPoint();
+      return { x: fallback.x, y: fallback.y, facing: 1 };
+    }
+    const standX = this.cellSize.w * 0.62;
+    // Prefer the side toward shaft center so the dwarf stays on-screen.
+    const standLeft = pos.x >= cx;
+    const facing = standLeft ? 1 : -1;
+    return {
+      x: pos.x + (standLeft ? -standX : standX),
+      y: pos.y + this.cellSize.h * 0.28,
+      facing,
+    };
+  }
+
+  private updateDwarfFollow(dt: number) {
+    const { x: cx, y: cy } = this.veinPoint();
+    this.layoutShaftCells(cx, cy);
+    const cell = this.resolveDwarfTargetCell();
+    const target = cell
+      ? this.dwarfStandBeside(cell, cx)
+      : { ...this.dwarfPoint(), facing: 1 as number };
+
+    if (!this.dwarfInitialized) {
+      this.dwarfWorld.x = target.x;
+      this.dwarfWorld.y = target.y;
+      this.dwarfFacing = target.facing;
+      this.dwarfInitialized = true;
+      return;
+    }
+
+    const follow = Math.min(1, dt * 7.5);
+    this.dwarfWorld.x += (target.x - this.dwarfWorld.x) * follow;
+    this.dwarfWorld.y += (target.y - this.dwarfWorld.y) * follow;
+    if (target.facing !== 0) this.dwarfFacing = target.facing;
   }
 
   private handlePointer(px: number, py: number) {
@@ -676,6 +741,7 @@ export class ForgeScene {
     }
 
     if (this.view === 'mine' && this.autoMineRate > 0) {
+      this.updateDwarfFollow(dt);
       this.dwarfTimer += dt;
       this.dwarfSwingT = this.dwarfTimer / this.dwarfPeriod;
       if (this.dwarfTimer >= this.dwarfPeriod) {
@@ -686,9 +752,11 @@ export class ForgeScene {
       this.dwarfGfx.clear();
       if (this.dwarfSprite) this.dwarfSprite.visible = false;
       this.dwarfLabel.visible = false;
+      this.dwarfInitialized = false;
     } else {
       this.dwarfTimer = 0;
       this.dwarfSwingT = 0;
+      this.dwarfInitialized = false;
     }
 
     if (this.shakeT > 0) {
@@ -785,14 +853,13 @@ export class ForgeScene {
 
   private performDwarfStrike() {
     const { x: cx, y: cy } = this.veinPoint();
-    this.refreshShaftFromState();
     this.layoutShaftCells(cx, cy);
-    const cell = pickLivingFaceCell(this.shaftCells);
+    const cell = this.resolveDwarfTargetCell();
     const pos = cell
       ? (this.cellPositions.get(cellKey(cell.row, cell.col)) ?? { x: cx, y: cy })
       : { x: cx, y: cy };
     if (cell) this.lastHitCellKey = cellKey(cell.row, cell.col);
-    // Dig is applied in the sim tick; VFX only cracks whatever is on the face now.
+    // Dig is applied in the sim tick; VFX cracks the same column the sim prefers.
     const shattered = Boolean(cell && cell.hp <= cell.maxHp * 0.35);
     this.hitFlash = Math.max(this.hitFlash, 0.14);
     this.spawnRockDebris(pos.x, pos.y, shattered ? 10 : 5, 2);
@@ -1016,7 +1083,8 @@ export class ForgeScene {
       return;
     }
 
-    const { x, y } = this.dwarfPoint();
+    if (!this.dwarfInitialized) this.updateDwarfFollow(1);
+    const { x, y } = this.dwarfWorld;
     const swing = Math.sin(this.dwarfSwingT * Math.PI * 2);
     const bob = Math.abs(swing) * 2;
     const frame = Math.min(
@@ -1025,6 +1093,7 @@ export class ForgeScene {
     );
     const short = Math.min(this.width, this.height);
     const scale = Math.min(0.55, Math.max(0.28, short / 1200));
+    const face = this.dwarfFacing >= 0 ? 1 : -1;
 
     // Contact shadow (shared by sprite + procedural)
     g.ellipse(x, y + 10, 22 * (scale / 0.3), 7 * (scale / 0.3));
@@ -1037,15 +1106,16 @@ export class ForgeScene {
       this.dwarfSprite.visible = true;
       this.dwarfSprite.x = x;
       this.dwarfSprite.y = y - bob;
-      this.dwarfSprite.scale.set(scale);
+      this.dwarfSprite.scale.set(scale * face, scale);
       this.dwarfSprite.rotation = 0;
       this.dwarfSprite.alpha = 1;
     } else {
-      this.drawDwarfProcedural(g, x, y, swing, bob);
+      this.drawDwarfProcedural(g, x, y, swing * face, bob);
     }
 
+    const cell = this.resolveDwarfTargetCell();
     this.dwarfLabel.visible = true;
-    this.dwarfLabel.text = 'Mining…';
+    this.dwarfLabel.text = cell ? `Mining col ${cell.col + 1}` : 'Mining…';
     this.dwarfLabel.x = x;
     this.dwarfLabel.y = y + 14;
   }
@@ -1106,8 +1176,10 @@ export class ForgeScene {
 
   private async loadStationArt() {
     for (const def of STATIONS) {
+      const url = STATION_ART[def.id];
+      if (!url) continue;
       try {
-        const texture = await Assets.load(STATION_ART[def.id]);
+        const texture = await Assets.load(url);
         const sprite = new Sprite(texture);
         sprite.anchor.set(0.5, 0.98);
         sprite.visible = false;
@@ -1217,7 +1289,7 @@ export class ForgeScene {
       const workPulse = running ? 1 + Math.sin(this.pulse * 5 + st.level) * 0.04 : 1;
       const scale = baseScale * spawnScale * workPulse;
 
-      const poolColor = slot.id === 'enchanter' ? COLORS.cyan : COLORS.ember;
+      const poolColor = getStation(slot.id).visualTint;
       g.circle(slot.x, slot.y - 10, 26 * scale);
       g.fill({ color: poolColor, alpha: running ? 0.14 : powered ? 0.06 : 0.03 });
 
@@ -1252,7 +1324,7 @@ export class ForgeScene {
           const py = slot.y - 36 * scale - ((t * 28 + i * 10) % 42);
           g.circle(px, py, 2);
           g.fill({
-            color: slot.id === 'enchanter' ? COLORS.cyan : COLORS.amber,
+            color: getStation(slot.id).visualTint,
             alpha: 0.65,
           });
         }
@@ -1270,37 +1342,91 @@ export class ForgeScene {
     scale: number,
   ) {
     const s = 22 * scale;
-    const accent = id === 'enchanter' ? COLORS.cyan : id === 'anvil' ? COLORS.amber : COLORS.ember;
+    const accent = getStation(id).visualTint;
 
     g.roundRect(x - s * 1.1, y + s * 0.2, s * 2.2, s * 0.45, 6);
     g.fill({ color: COLORS.stone, alpha: 0.85 * alpha });
 
-    if (id === 'smelter') {
-      g.roundRect(x - s * 0.85, y - s * 1.05, s * 1.7, s * 1.4, 8);
-      g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
-      g.roundRect(x - s * 0.45, y - s * 0.7, s * 0.9, s * 0.7, 5);
-      g.fill({ color: running ? COLORS.ember : COLORS.void, alpha: (running ? 0.95 : 0.5) * alpha });
-      if (running) {
-        g.circle(x, y - s * 0.35, s * 0.28);
-        g.fill({ color: COLORS.amber, alpha: 0.85 * alpha });
+    switch (id) {
+      case 'smelter': {
+        g.roundRect(x - s * 0.85, y - s * 1.05, s * 1.7, s * 1.4, 8);
+        g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+        g.roundRect(x - s * 0.45, y - s * 0.7, s * 0.9, s * 0.7, 5);
+        g.fill({
+          color: running ? COLORS.ember : COLORS.void,
+          alpha: (running ? 0.95 : 0.5) * alpha,
+        });
+        if (running) {
+          g.circle(x, y - s * 0.35, s * 0.28);
+          g.fill({ color: COLORS.amber, alpha: 0.85 * alpha });
+        }
+        break;
       }
-    } else if (id === 'anvil') {
-      g.roundRect(x - s * 0.9, y - s * 0.25, s * 1.8, s * 0.55, 4);
-      g.fill({ color: COLORS.slate, alpha: 0.95 * alpha });
-      g.roundRect(x - s * 0.35, y + s * 0.1, s * 0.7, s * 0.45, 3);
-      g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
-      if (running) {
-        g.circle(x + s * 0.55, y - s * 0.45, 3 + Math.sin(this.pulse * 8) * 1.5);
-        g.fill({ color: COLORS.amber, alpha: 0.9 * alpha });
+      case 'anvil': {
+        g.roundRect(x - s * 0.9, y - s * 0.25, s * 1.8, s * 0.55, 4);
+        g.fill({ color: COLORS.slate, alpha: 0.95 * alpha });
+        g.roundRect(x - s * 0.35, y + s * 0.1, s * 0.7, s * 0.45, 3);
+        g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+        if (running) {
+          g.circle(x + s * 0.55, y - s * 0.45, 3 + Math.sin(this.pulse * 8) * 1.5);
+          g.fill({ color: COLORS.amber, alpha: 0.9 * alpha });
+        }
+        break;
       }
-    } else {
-      g.moveTo(x, y - s * 1.1);
-      g.lineTo(x + s * 0.7, y + s * 0.15);
-      g.lineTo(x - s * 0.7, y + s * 0.15);
-      g.closePath();
-      g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
-      g.circle(x, y - s * 0.45, s * 0.28);
-      g.fill({ color: running ? COLORS.cyan : COLORS.slate, alpha: (running ? 0.95 : 0.45) * alpha });
+      case 'enchanter': {
+        g.moveTo(x, y - s * 1.1);
+        g.lineTo(x + s * 0.7, y + s * 0.15);
+        g.lineTo(x - s * 0.7, y + s * 0.15);
+        g.closePath();
+        g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+        g.circle(x, y - s * 0.45, s * 0.28);
+        g.fill({
+          color: running ? COLORS.cyan : COLORS.slate,
+          alpha: (running ? 0.95 : 0.45) * alpha,
+        });
+        break;
+      }
+      case 'crucible': {
+        g.ellipse(x, y - s * 0.15, s * 0.95, s * 0.55);
+        g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+        g.ellipse(x, y - s * 0.35, s * 0.55, s * 0.28);
+        g.fill({
+          color: running ? 0x6bbf59 : COLORS.void,
+          alpha: (running ? 0.9 : 0.45) * alpha,
+        });
+        break;
+      }
+      case 'gemcutter': {
+        g.roundRect(x - s * 0.75, y - s * 0.7, s * 1.5, s * 1.05, 5);
+        g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+        g.moveTo(x, y - s * 0.95);
+        g.lineTo(x + s * 0.4, y - s * 0.35);
+        g.lineTo(x - s * 0.4, y - s * 0.35);
+        g.closePath();
+        g.fill({
+          color: running ? 0x7b8cde : COLORS.slate,
+          alpha: (running ? 0.95 : 0.5) * alpha,
+        });
+        break;
+      }
+      case 'aetherforge': {
+        g.roundRect(x - s * 0.9, y - s * 1.0, s * 1.8, s * 1.35, 10);
+        g.fill({ color: COLORS.tealLight, alpha: 0.9 * alpha });
+        g.circle(x, y - s * 0.4, s * 0.42);
+        g.fill({
+          color: running ? 0x9ed8e0 : COLORS.slate,
+          alpha: (running ? 0.95 : 0.45) * alpha,
+        });
+        if (running) {
+          g.star(x, y - s * 0.4, 6, s * 0.35, s * 0.16, this.pulse);
+          g.fill({ color: COLORS.mist, alpha: 0.55 * alpha });
+        }
+        break;
+      }
+      default: {
+        const _exhaustive: never = id;
+        return _exhaustive;
+      }
     }
 
     g.circle(x, y - s * 1.25, running ? 4 : 2.5);

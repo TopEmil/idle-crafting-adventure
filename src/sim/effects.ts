@@ -10,6 +10,10 @@ export interface AggregatedEffects {
   offlineRate: number;
   /** Summed fraction of click power → ore/sec for the dwarf miner. */
   autoMine: number;
+  /** Multiplier on expedition duration (< 1 = faster). */
+  expeditionDuration: number;
+  /** Multiplier on Relics gained from Reforge. */
+  relicGain: number;
 }
 
 export function aggregateEffects(
@@ -22,6 +26,8 @@ export function aggregateEffects(
   let expeditionLoot = 1;
   let offlineRate = 1;
   let autoMine = 0;
+  let expeditionSpeed = 0;
+  let relicGain = 1;
 
   for (const id of ownedRecipes) {
     const effects = getRecipe(id).effects;
@@ -40,6 +46,9 @@ export function aggregateEffects(
     if (e.stationOutputPerLevel) stationOutput *= 1 + e.stationOutputPerLevel * level;
     if (e.expeditionLootPerLevel) expeditionLoot *= 1 + e.expeditionLootPerLevel * level;
     if (e.offlineRatePerLevel) offlineRate *= 1 + e.offlineRatePerLevel * level;
+    if (e.autoMinePerLevel) autoMine += e.autoMinePerLevel * level;
+    if (e.expeditionSpeedPerLevel) expeditionSpeed += e.expeditionSpeedPerLevel * level;
+    if (e.relicGainPerLevel) relicGain *= 1 + e.relicGainPerLevel * level;
   }
 
   const achievement = aggregateAchievementRewards(unlockedAchievements);
@@ -47,5 +56,15 @@ export function aggregateEffects(
   stationOutput *= achievement.stationOutput;
   autoMine += achievement.autoMine;
 
-  return { clickPower, stationOutput, expeditionLoot, offlineRate, autoMine };
+  const expeditionDuration = Math.max(0.45, 1 - Math.min(0.5, expeditionSpeed));
+
+  return {
+    clickPower,
+    stationOutput,
+    expeditionLoot,
+    offlineRate,
+    autoMine,
+    expeditionDuration,
+    relicGain,
+  };
 }

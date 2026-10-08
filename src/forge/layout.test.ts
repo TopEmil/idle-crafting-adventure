@@ -25,9 +25,11 @@ describe('playSafeInsets', () => {
 
 describe('art anchors', () => {
   it('keeps forge stations spaced across the hall', () => {
-    const xs = Object.values(FORGE_STATION_UV).map((p) => p.x);
-    expect(xs[0]).toBeLessThan(xs[1]);
-    expect(xs[1]).toBeLessThan(xs[2]);
+    expect(FORGE_STATION_UV.smelter.x).toBeLessThan(FORGE_STATION_UV.anvil.x);
+    expect(FORGE_STATION_UV.anvil.x).toBeLessThan(FORGE_STATION_UV.enchanter.x);
+    expect(FORGE_STATION_UV.enchanter.x).toBeLessThan(FORGE_STATION_UV.crucible.x);
+    expect(FORGE_STATION_UV.crucible.x).toBeLessThan(FORGE_STATION_UV.gemcutter.x);
+    expect(Object.keys(FORGE_STATION_UV)).toHaveLength(6);
   });
 
   it('places the dig face in the timber-framed shaft opening', () => {

@@ -4,7 +4,11 @@ export type TalentId =
   | 'vein_attunement'
   | 'hearth_kindling'
   | 'scout_instinct'
-  | 'deep_slumber';
+  | 'deep_slumber'
+  | 'pick_mastery'
+  | 'seam_sense'
+  | 'caravan_pact'
+  | 'relic_lore';
 
 export interface TalentDef {
   id: TalentId;
@@ -19,6 +23,12 @@ export interface TalentDef {
     stationOutputPerLevel?: number;
     expeditionLootPerLevel?: number;
     offlineRatePerLevel?: number;
+    /** Additive dwarf autoMine fraction of tap power → ore/sec per level. */
+    autoMinePerLevel?: number;
+    /** Fraction shorter expedition duration per level (0.05 = 5% faster). */
+    expeditionSpeedPerLevel?: number;
+    /** Extra Relics fraction from Reforge per level. */
+    relicGainPerLevel?: number;
   };
 }
 
@@ -59,6 +69,42 @@ export const TALENTS: TalentDef[] = [
     costGrowth: 1.4,
     effects: { offlineRatePerLevel: 0.1 },
   },
+  {
+    id: 'pick_mastery',
+    name: 'Pick Mastery',
+    description: 'Your dwarf strikes harder between taps.',
+    maxLevel: 15,
+    baseCost: 2,
+    costGrowth: 1.4,
+    effects: { autoMinePerLevel: 0.04 },
+  },
+  {
+    id: 'seam_sense',
+    name: 'Seam Sense',
+    description: 'Reads deeper seams for stronger taps.',
+    maxLevel: 15,
+    baseCost: 2,
+    costGrowth: 1.4,
+    effects: { clickPowerPerLevel: 0.06, offlineRatePerLevel: 0.04 },
+  },
+  {
+    id: 'caravan_pact',
+    name: 'Caravan Pact',
+    description: 'Scout parties march home sooner.',
+    maxLevel: 12,
+    baseCost: 2,
+    costGrowth: 1.45,
+    effects: { expeditionSpeedPerLevel: 0.04, expeditionLootPerLevel: 0.03 },
+  },
+  {
+    id: 'relic_lore',
+    name: 'Relic Lore',
+    description: 'Reforge yields more permanent Relics.',
+    maxLevel: 10,
+    baseCost: 3,
+    costGrowth: 1.5,
+    effects: { relicGainPerLevel: 0.08 },
+  },
 ];
 
 export function getTalent(id: TalentId): TalentDef {
@@ -75,6 +121,10 @@ export function emptyTalents(): Record<TalentId, number> {
     hearth_kindling: 0,
     scout_instinct: 0,
     deep_slumber: 0,
+    pick_mastery: 0,
+    seam_sense: 0,
+    caravan_pact: 0,
+    relic_lore: 0,
   };
 }
 

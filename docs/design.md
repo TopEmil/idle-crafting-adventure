@@ -54,13 +54,15 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 
 ## Systems summary
 
-1. **Resources:** Ore, Emberglass, Glowdust, Alloy, Relics (prestige currency).
-2. **Stations:** Smelter → Anvil → Enchanter — each unlocks auto-production and changes forge look.
-3. **Recipes:** Tools and gear that boost click power / station output.
-4. **Expeditions:** Timed scout runs; return modal is primary midgame-ad hook.
-5. **Offline:** Simulated ticks up to cap; summary lists gains.
-6. **Reforge:** Reset production progress for Relics (10 min cooldown). Spend Relics on Talents for permanent bonuses.
-7. **Leaderboard:** Weekly CrazyGames board for most ore mined (`seasonOre`). See `docs/leaderboard.md`.
+1. **Resources:** Ore, Emberglass, Glowdust, Alloy, Verdiglass, Nightiron, Starshard, Aetherite, Relics (prestige currency). Mid/late ores hide until found.
+2. **Mine shaft:** Ten strata from Glow Shallows → Aether Core. New depths flash a discovery toast and grant a small bonus; rare tiles (glow, verdant, ember, geode, night, star, aether) only burst loot on player digs. The dwarf auto-miner follows the live dig column.
+3. **Stations:** Smelter → Anvil → Enchanter, then Verdant Crucible (depth 6+), Gemcutter (55+), Aetherforge (175+) — ores and depth unlock later machines.
+4. **Recipes:** Tools and gear that boost click power / station output / dwarf auto-mine (28 crafts).
+5. **Expeditions:** Ten timed scout routes; several also need dig depth. Return modal is the primary midgame-ad hook.
+6. **Talents:** Eight Relic trees (tap, stations, loot, offline, dwarf, seam sense, caravan speed, Relic lore).
+7. **Offline:** Simulated ticks up to cap; summary lists gains.
+8. **Reforge:** Reset production progress for Relics (10 min cooldown). Spend Relics on Talents for permanent bonuses.
+9. **Leaderboard:** Weekly CrazyGames board for most ore mined (`seasonOre`). See `docs/leaderboard.md`.
 
 ## HUD wireframes (notes)
 
@@ -102,7 +104,7 @@ Equal-weight “No thanks”; coin alternative when available; no reward on `adE
 └────────────────────────────┘
 ```
 
-Talents (own sheet): Vein Attunement, Hearth Kindling, Scout Instinct, Deep Slumber — spend Relics; levels persist across Reforge.
+Talents (own sheet): Vein Attunement, Hearth Kindling, Scout Instinct, Deep Slumber, Pick Mastery, Seam Sense, Caravan Pact, Relic Lore — spend Relics; levels persist across Reforge.
 
 Midgame ad may fire **after** confirm modal closes — never mid-animation freeze without SDK callbacks.
 
