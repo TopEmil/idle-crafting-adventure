@@ -26,6 +26,15 @@ describe('resourceOffer', () => {
     expect(offer!.amount).toBeLessThanOrEqual(offer!.shortfall);
   });
 
+  it('prefers the next recipe over a station with a worse ore shortfall', () => {
+    const state = createInitialState();
+    state.resources.ore = 5;
+    const offer = nextResourceOffer(state);
+    expect(offer).not.toBeNull();
+    expect(offer!.resource).toBe('ore');
+    expect(offer!.reason).toContain('Copper Pick');
+  });
+
   it('returns null when goals are already affordable', () => {
     const state = createInitialState();
     for (const id of RESOURCE_IDS) {

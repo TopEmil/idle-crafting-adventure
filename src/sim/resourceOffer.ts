@@ -31,6 +31,8 @@ interface NeedCandidate {
   shortfall: number;
   ratio: number;
   reason: string;
+  /** Lower = more aligned with the live goal strip (recipes first). */
+  priority: number;
 }
 
 function pushNeeds(
@@ -38,6 +40,7 @@ function pushNeeds(
   cost: Partial<Record<ResourceId, number>>,
   owned: Record<ResourceId, number>,
   reason: string,
+  priority: number,
 ) {
   for (const [key, raw] of Object.entries(cost) as [ResourceId, number][]) {
     if (!OFFERABLE.has(key)) continue;
@@ -52,6 +55,7 @@ function pushNeeds(
       shortfall: needed - have,
       ratio: have / needed,
       reason,
+      priority,
     });
   }
 }
@@ -62,7 +66,7 @@ export function collectResourceNeeds(state: GameState): NeedCandidate[] {
 
   const nextRecipe = availableRecipes(state)[0];
   if (nextRecipe) {
-    pushNeeds(needs, nextRecipe.cost, state.resources, `craft ${nextRecipe.name}`);
+    pushNeeds(needs, nextRecipe.cost, state.resources, `craft ${nextRecipe.name}`, 0);
   }
 
   for (const station of STATIONS) {
@@ -70,12 +74,12 @@ export function collectResourceNeeds(state: GameState): NeedCandidate[] {
     if (!st.unlocked) {
       if (station.unlockRequires && !state.stations[station.unlockRequires].unlocked) continue;
       if (station.unlockAtDepth !== undefined && state.mineDepth < station.unlockAtDepth) continue;
-      pushNeeds(needs, station.unlockCost, state.resources, `unlock ${station.name}`);
+      pushNeeds(needs, station.unlockCost, state.resources, `unlock ${station.name}`, 1);
       break;
     }
     if (st.level > 0 && st.level < BALANCE.stationLevelCap) {
       const cost = stationUpgradeCostMap(station.id, st.level);
-      pushNeeds(needs, cost, state.resources, `upgrade ${station.name}`);
+      pushNeeds(needs, cost, state.resources, `upgrade ${station.name}`, 2);
     }
   }
 
@@ -111,7 +115,9 @@ export function nextResourceOffer(state: GameState): ResourceOffer | null {
   const needs = collectResourceNeeds(state);
   if (needs.length === 0) return null;
 
-  needs.sort((a, b) => a.ratio - b.ratio || b.shortfall - a.shortfall);
+  needs.sort(
+    (a, b) => a.priority - b.priority || a.ratio - b.ratio || b.shortfall - a.shortfall,
+  );
   const top = needs[0];
   const amount = progressiveOfferAmount(
     top.shortfall,
