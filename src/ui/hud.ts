@@ -1,4 +1,9 @@
-import { ACHIEVEMENTS } from '../data/achievements';
+import {
+  ACHIEVEMENTS,
+  claimedAchievementTierCount,
+  totalAchievementTiers,
+  type AchievementId,
+} from '../data/achievements';
 import { BALANCE, relicsFromReforge } from '../data/balance';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
@@ -6,7 +11,14 @@ import { RESOURCES, resourceIconSrc, type ResourceId } from '../data/resources';
 import { STATIONS, type StationId } from '../data/stations';
 import { TALENTS, talentUpgradeCost, type TalentId } from '../data/talents';
 import { STRATA, stratumAtDepth } from '../data/strata';
-import { achievementProgress } from '../sim/achievements';
+import {
+  achievementProgress,
+  activeTier,
+  claimedLevel,
+  isAchievementFullyClaimed,
+  listReadyAchievements,
+  nextClaimableTier,
+} from '../sim/achievements';
 import {
   activeSquadCount,
   canAfford,
@@ -45,7 +57,15 @@ import type { SceneView } from '../forge/sceneView';
 import { leaderboardScore, msUntilSeasonEnd } from '../sim/oreScore';
 import { sheetScrollAfterRebuild } from './sheetScroll';
 
-export type PanelId = 'recipes' | 'expeditions' | 'forge' | 'talents' | 'reforge' | 'ledger' | null;
+export type PanelId =
+  | 'recipes'
+  | 'expeditions'
+  | 'forge'
+  | 'talents'
+  | 'reforge'
+  | 'achievements'
+  | 'ledger'
+  | null;
 
 export interface HudActions {
   onClickVein: () => void;
@@ -63,6 +83,7 @@ export interface HudActions {
   onBuySquadSlot: () => void;
   onRevealExpeditionLoot: () => void;
   onClaimExpedition: (mode: 'normal' | 'ad' | 'coin') => void;
+  onClaimAchievement: (id: AchievementId) => void;
   onPrestige: () => void;
   onBuyTalent: (id: TalentId) => void;
   onResourceOffer: (mode: 'ad' | 'dismiss') => void;
@@ -79,6 +100,8 @@ export class Hud {
   private actions: HudActions;
   private lastResources: Partial<Record<ResourceId, number>> = {};
   private floatRoot: HTMLElement | null = null;
+  /** Signature of claimable achievement tiers while the Awards sheet is open. */
+  private lastAchieveReadyKey = '';
   /** Panel currently shown in the overlay sheet — used to keep scroll on refresh. */
   private renderedSheetPanel: PanelId = null;
 
@@ -130,6 +153,9 @@ export class Hud {
           <button class="nav-btn" data-panel="forge" type="button">Stations</button>
           <button class="nav-btn" data-panel="talents" type="button">Talents</button>
           <button class="nav-btn" data-panel="reforge" type="button">Reforge</button>
+          <button class="nav-btn" data-panel="achievements" type="button" id="nav-achievements">
+            Awards<span class="nav-badge" id="achieve-badge" hidden></span>
+          </button>
           <button class="nav-btn" data-panel="ledger" type="button">Ledger</button>
         </div>
       </div>
@@ -186,6 +212,7 @@ export class Hud {
     this.renderDepth(state);
     this.renderGoal(state);
     this.renderCraftQuick(state);
+    this.renderAchievementBadge(state);
     this.setView(this.view);
     const veinBtn = this.root.querySelector('#btn-vein') as HTMLButtonElement | null;
     if (veinBtn) {
@@ -239,6 +266,24 @@ export class Hud {
       return;
     }
     this.patchExpeditionRows(state);
+  }
+
+  /**
+   * Rebuild Achievements sheet only when the claimable set changes.
+   * Avoids per-frame innerHTML thrash that steals Claim taps.
+   */
+  syncAchievementsProgress(state: GameState) {
+    if (this.panel !== 'achievements') return;
+    if (!this.overlay.querySelector('[data-achievements-sheet]')) {
+      this.renderAchievements(state);
+      return;
+    }
+    const readyKey = listReadyAchievements(state)
+      .map((r) => `${r.def.id}:${r.tier.level}`)
+      .join('|');
+    if (readyKey === this.lastAchieveReadyKey) return;
+    this.lastAchieveReadyKey = readyKey;
+    this.renderAchievements(state);
   }
 
   /** Short HUD toast — e.g. craft / unlock feedback */
@@ -506,6 +551,19 @@ export class Hud {
     this.lastResources = { ...state.resources };
   }
 
+  private renderAchievementBadge(state: GameState) {
+    const badge = this.root.querySelector('#achieve-badge') as HTMLElement | null;
+    if (!badge) return;
+    const ready = listReadyAchievements(state).length;
+    if (ready <= 0) {
+      badge.hidden = true;
+      badge.textContent = '';
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = ready > 9 ? '9+' : String(ready);
+  }
+
   private renderPanel(state: GameState, notice?: string) {
     switch (this.panel) {
       case 'recipes':
@@ -522,6 +580,9 @@ export class Hud {
         return;
       case 'reforge':
         this.renderReforge(state, notice);
+        return;
+      case 'achievements':
+        this.renderAchievements(state, notice);
         return;
       case 'ledger':
         this.renderLedger(state, notice);
@@ -988,31 +1049,80 @@ export class Hud {
     });
   }
 
-  private renderLedger(state: GameState, notice?: string) {
-    const talentLevels = TALENTS.reduce((sum, t) => sum + (state.talents[t.id] ?? 0), 0);
-    const unlockedSet = new Set(state.unlockedAchievements ?? []);
-    const unlockedCount = unlockedSet.size;
-    const weekScore = leaderboardScore(state);
-    const seasonLeft = formatDuration(msUntilSeasonEnd() / 1000);
-    const achievementRows = ACHIEVEMENTS.map((def) => {
-      const done = unlockedSet.has(def.id);
-      const progress = achievementProgress(state, def.condition);
+  private renderAchievements(state: GameState, notice?: string) {
+    const claimedCount = claimedAchievementTierCount(state.claimedAchievements);
+    const totalTiers = totalAchievementTiers();
+    const readyCount = listReadyAchievements(state).length;
+
+    const rows = ACHIEVEMENTS.map((def) => {
+      const claimed = claimedLevel(state, def.id);
+      const fullyDone = isAchievementFullyClaimed(state, def.id);
+      const claimable = nextClaimableTier(state, def.id);
+      const tier = claimable ?? activeTier(state, def.id);
+      const progress = achievementProgress(state, tier.condition);
       const ratio = progress.target > 0 ? Math.min(1, progress.current / progress.target) : 0;
-      const progressLabel = done
+      const tierLabel =
+        def.tiers.length > 1
+          ? `Tier ${Math.min(claimed + 1, def.tiers.length)}/${def.tiers.length}`
+          : '';
+      const progressLabel = fullyDone
         ? 'Complete'
-        : `${formatNumber(Math.min(progress.current, progress.target))} / ${formatNumber(progress.target)}`;
+        : claimable
+          ? 'Ready to claim'
+          : `${formatNumber(Math.min(progress.current, progress.target))} / ${formatNumber(progress.target)}`;
+      const action = claimable
+        ? `<button class="btn btn-primary" data-claim-ach="${def.id}" type="button">Claim</button>`
+        : fullyDone
+          ? `<span class="muted">Done</span>`
+          : `<span class="muted">${tierLabel || 'In progress'}</span>`;
+
       return `
-        <div class="row-item${done ? ' row-item-done' : ''}">
+        <div class="row-item${fullyDone ? ' row-item-done' : ''}${claimable ? ' row-item-ready' : ''}">
           <div>
-            <h3>${def.name}${done ? ' ✓' : ''}</h3>
-            <div class="cost">${progressLabel}</div>
+            <h3>${tier.name}${fullyDone ? ' ✓' : ''}</h3>
+            <div class="cost">${def.name}${tierLabel ? ` · ${tierLabel}` : ''} · ${progressLabel}</div>
             <div class="req-meter" aria-hidden="true"><span style="width:${Math.round(ratio * 100)}%"></span></div>
-            <div class="effect-line">${formatAchievementRewardLineHtml(def)}</div>
+            <div class="effect-line">${formatAchievementRewardLineHtml(tier)}</div>
+            <p>${tier.description}</p>
           </div>
-          <p>${def.description}</p>
+          <div>${action}</div>
         </div>
       `;
     }).join('');
+
+    this.overlay.innerHTML = `
+      <div class="sheet" data-achievements-sheet>
+        <div class="sheet-header">
+          <h2>Achievements</h2>
+          <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <p class="sheet-intro">Complete goals, then claim rewards. Permanent bonuses survive Reforge. Station paths climb through levels.</p>
+        <div class="list">
+          <div class="row-item"><div><h3>Claimed tiers</h3></div><div>${claimedCount}/${totalTiers}</div></div>
+          <div class="row-item"><div><h3>Ready to claim</h3></div><div>${readyCount}</div></div>
+        </div>
+        <h3 class="sheet-section">Progress</h3>
+        <div class="list">${rows}</div>
+        ${notice ? `<p class="notice">${notice}</p>` : ''}
+      </div>
+    `;
+    this.lastAchieveReadyKey = listReadyAchievements(state)
+      .map((r) => `${r.def.id}:${r.tier.level}`)
+      .join('|');
+    this.bindSheet();
+    this.overlay.querySelectorAll('[data-claim-ach]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = (btn as HTMLElement).dataset.claimAch as AchievementId;
+        this.actions.onClaimAchievement(id);
+      });
+    });
+  }
+
+  private renderLedger(state: GameState, notice?: string) {
+    const talentLevels = TALENTS.reduce((sum, t) => sum + (state.talents[t.id] ?? 0), 0);
+    const claimedCount = claimedAchievementTierCount(state.claimedAchievements);
+    const weekScore = leaderboardScore(state);
+    const seasonLeft = formatDuration(msUntilSeasonEnd() / 1000);
 
     this.overlay.innerHTML = `
       <div class="sheet">
@@ -1035,13 +1145,10 @@ export class Hud {
           <div class="row-item"><div><h3>Relics earned</h3></div><div>${formatNumber(state.totalRelicsEarned)}</div></div>
           <div class="row-item"><div><h3>Talent levels</h3></div><div>${talentLevels}</div></div>
           <div class="row-item"><div><h3>Recipes owned</h3></div><div>${state.ownedRecipes.length}/${RECIPES.length}</div></div>
-          <div class="row-item"><div><h3>Achievements</h3></div><div>${unlockedCount}/${ACHIEVEMENTS.length}</div></div>
+          <div class="row-item"><div><h3>Achievement tiers</h3></div><div>${claimedCount}/${totalAchievementTiers()}</div></div>
         </div>
-        <h3 class="sheet-section">Achievements</h3>
-        <p class="sheet-intro">Temporary resource packs and permanent tap / dwarf / station bonuses. Permanent rewards survive Reforge.</p>
-        <div class="list">${achievementRows}</div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
-        <p class="muted" style="margin-top:12px">Collection banner slot reserved — shown only when this panel stays open.</p>
+        <p class="muted" style="margin-top:12px">Open Awards to claim rewards and track multi-level station paths.</p>
       </div>
     `;
     this.bindSheet();

@@ -1,4 +1,4 @@
-import { emptyUnlockedAchievements } from '../data/achievements';
+import { emptyClaimedAchievements } from '../data/achievements';
 import { emptyWallet } from '../data/resources';
 import { emptyStations } from '../data/stations';
 import { emptyTalents } from '../data/talents';
@@ -12,7 +12,7 @@ export function createInitialState(now = Date.now()): GameState {
     stations: emptyStations(),
     ownedRecipes: [],
     talents: emptyTalents(),
-    unlockedAchievements: emptyUnlockedAchievements(),
+    claimedAchievements: emptyClaimedAchievements(),
     lifetimeClicks: 0,
     activeExpeditions: [],
     extraSquadSlots: 0,

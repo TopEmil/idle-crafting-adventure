@@ -1,4 +1,8 @@
-import type { AchievementDef, AchievementRewards } from '../data/achievements';
+import type {
+  AchievementDef,
+  AchievementRewards,
+  AchievementTier,
+} from '../data/achievements';
 import type { RecipeDef } from '../data/recipes';
 import { resourceLabel, type ResourceId } from '../data/resources';
 import type { StationDef } from '../data/stations';
@@ -29,8 +33,9 @@ export function formatAchievementRewards(rewards: AchievementRewards): string {
   return parts.join(' · ') || '—';
 }
 
-export function formatAchievementRewardLine(def: AchievementDef): string {
-  return formatAchievementRewards(def.rewards);
+export function formatAchievementRewardLine(tier: AchievementTier | AchievementDef): string {
+  const rewards = 'tiers' in tier ? tier.tiers[0]?.rewards : tier.rewards;
+  return rewards ? formatAchievementRewards(rewards) : '—';
 }
 
 /** Sheet line with ore icons instead of resource names. */
@@ -53,8 +58,11 @@ export function formatAchievementRewardsHtml(rewards: AchievementRewards): strin
   return parts.join('<span class="res-sep"> · </span>') || '—';
 }
 
-export function formatAchievementRewardLineHtml(def: AchievementDef): string {
-  return formatAchievementRewardsHtml(def.rewards);
+export function formatAchievementRewardLineHtml(
+  tier: AchievementTier | AchievementDef,
+): string {
+  const rewards = 'tiers' in tier ? tier.tiers[0]?.rewards : tier.rewards;
+  return rewards ? formatAchievementRewardsHtml(rewards) : '—';
 }
 
 export function formatRecipeEffects(recipe: RecipeDef): string {

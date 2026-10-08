@@ -19,7 +19,6 @@ import {
   type TalentId,
 } from '../data/talents';
 import { depthOreMult, stratumAtDepth, STRATA, type StratumId } from '../data/strata';
-import { syncAchievements } from './achievements';
 import {
   digShaft,
   emptyFaceDamage,
@@ -41,7 +40,7 @@ function effectsFor(state: GameState) {
   return aggregateEffects(
     state.ownedRecipes,
     state.talents,
-    state.unlockedAchievements ?? [],
+    state.claimedAchievements ?? {},
   );
 }
 
@@ -672,7 +671,7 @@ export function prestige(
   next.lastPrestigeAt = now;
   next.talents = structuredClone(state.talents);
   next.extraSquadSlots = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
-  next.unlockedAchievements = [...(state.unlockedAchievements ?? [])];
+  next.claimedAchievements = { ...(state.claimedAchievements ?? {}) };
   next.lifetimeClicks = state.lifetimeClicks ?? 0;
   next.allTimeOre = state.allTimeOre ?? 0;
   next.seasonOre = state.seasonOre ?? 0;
@@ -688,12 +687,11 @@ export function prestige(
   next.ads = state.ads;
   next.playTimeSec = state.playTimeSec;
 
-  // First Reforge (and similar) can unlock on the post-prestige snapshot.
-  const synced = syncAchievements(next);
+  // First Reforge becomes claimable after prestige — rewards stay until the player claims.
 
   return {
     ok: true,
-    state: synced.state,
+    state: next,
     event: { type: 'prestige' },
     relics,
   };

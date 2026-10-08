@@ -8,7 +8,11 @@ import { AudioBus } from '../audio/audio';
 import { ForgeScene } from '../forge/ForgeScene';
 import { createAdGate } from '../platform/ads';
 import { createPlatformBridge } from '../platform/crazygames';
-import { syncAchievements } from '../sim/achievements';
+import {
+  claimAchievement,
+  listReadyAchievements,
+} from '../sim/achievements';
+import type { AchievementId } from '../data/achievements';
 import { stratumAtDepth } from '../data/strata';
 import {
   applyOfflineProgress,
@@ -72,6 +76,8 @@ export class GameApp {
   private pausedForAd = false;
   private lastStratumId = '';
   private pendingResourceOffer: ResourceOffer | null = null;
+  /** Keys `${id}:${level}` already toasted as ready-to-claim. */
+  private notifiedReadyAchievements = new Set<string>();
   /** Fractional leftovers until a whole-unit +N floater can fire. */
   private stationGainPending: Partial<
     Record<StationId, Partial<Record<ResourceId, number>>>
@@ -102,6 +108,7 @@ export class GameApp {
       onClaimExpedition: (mode) => void this.handleClaim(mode),
       onPrestige: () => void this.handlePrestige(),
       onBuyTalent: (id) => this.handleBuyTalent(id),
+      onClaimAchievement: (id) => this.handleClaimAchievement(id),
       onResourceOffer: (mode) => void this.handleResourceOffer(mode),
       onSkipOnboarding: () => this.finishOnboarding(),
       onAdvanceOnboarding: () => this.advanceOnboarding(),
@@ -202,6 +209,8 @@ export class GameApp {
       this.refreshHudChrome();
       if (this.panel === 'expeditions') {
         this.hud.syncExpeditionProgress(this.state);
+      } else if (this.panel === 'achievements') {
+        this.hud.syncAchievementsProgress(this.state);
       }
     } else if (this.overlayMode === 'none' && !this.panel) {
       this.refreshHudLight();
@@ -735,18 +744,37 @@ export class GameApp {
     void this.persist();
   }
 
-  /** Unlock newly met achievements and optionally toast rewards. */
+  /** Notify when achievements become claimable — never auto-grants rewards. */
   private applyAchievements(toast: boolean) {
-    const { state, unlocked } = syncAchievements(this.state);
-    this.state = state;
-    if (!toast || unlocked.length === 0) return;
-    for (const def of unlocked) {
-      this.hud.toast(
-        `${def.name}: ${formatAchievementRewardLine(def)}`,
-        'gain',
-      );
-      this.scene.setAutoMineRate(getAutoMineRate(this.state));
+    const ready = listReadyAchievements(this.state);
+    if (!toast || ready.length === 0) return;
+    for (const { tier, def } of ready) {
+      const key = `${def.id}:${tier.level}`;
+      if (this.notifiedReadyAchievements.has(key)) continue;
+      this.notifiedReadyAchievements.add(key);
+      this.hud.toast(`${tier.name} ready — claim in Awards`, 'gain');
     }
+  }
+
+  private handleClaimAchievement(id: AchievementId) {
+    const result = claimAchievement(this.state, id);
+    if (!result.ok) {
+      this.notice = result.reason;
+      this.refreshHud();
+      return;
+    }
+    this.state = result.state;
+    this.notifiedReadyAchievements.delete(`${id}:${result.tier.level}`);
+    this.audio.claim();
+    this.hud.toast(
+      `${result.tier.name}: ${formatAchievementRewardLine(result.tier)}`,
+      'gain',
+    );
+    this.scene.setAutoMineRate(getAutoMineRate(this.state));
+    this.scene.sync(this.state);
+    this.notice = '';
+    this.refreshHud();
+    void this.persist();
   }
 
   private advanceOnboarding() {
