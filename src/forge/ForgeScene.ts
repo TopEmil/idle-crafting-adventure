@@ -107,8 +107,6 @@ export class ForgeScene {
   private scout = new Graphics();
   private floatLayer = new Container();
   private brand!: Text;
-  private comboLabel!: Text;
-  private dwarfLabel!: Text;
   private labelByStation = new Map<StationId, Text>();
   private spriteByStation = new Map<StationId, Sprite>();
   private sparkTimer = 0;
@@ -243,33 +241,6 @@ export class ForgeScene {
     this.brand.x = 22;
     this.brand.y = 16;
     this.root.addChild(this.brand);
-
-    this.comboLabel = new Text({
-      text: '',
-      style: {
-        fontFamily: 'DM Sans, sans-serif',
-        fontSize: 13,
-        fontWeight: '700',
-        fill: COLORS.amber,
-      },
-    });
-    this.comboLabel.anchor.set(0.5);
-    this.comboLabel.visible = false;
-    this.root.addChild(this.comboLabel);
-
-    this.dwarfLabel = new Text({
-      text: 'Dwarf mining',
-      style: {
-        fontFamily: 'DM Sans, sans-serif',
-        fontSize: 11,
-        fontWeight: '600',
-        fill: COLORS.cyan,
-        dropShadow: { color: 0x0b1c22, blur: 3, distance: 1, alpha: 0.8 },
-      },
-    });
-    this.dwarfLabel.anchor.set(0.5, 0);
-    this.dwarfLabel.visible = false;
-    this.root.addChild(this.dwarfLabel);
 
     this.app.stage.eventMode = 'static';
     this.app.stage.hitArea = this.app.screen;
@@ -779,7 +750,6 @@ export class ForgeScene {
     } else if (this.view !== 'mine') {
       this.dwarfGfx.clear();
       if (this.dwarfSprite) this.dwarfSprite.visible = false;
-      this.dwarfLabel.visible = false;
       this.dwarfInitialized = false;
     } else {
       this.dwarfTimer = 0;
@@ -840,7 +810,6 @@ export class ForgeScene {
       this.dwarfGfx.clear();
       if (this.dwarfSprite) this.dwarfSprite.visible = false;
       for (const sprite of this.rockSprites) sprite.visible = false;
-      this.dwarfLabel.visible = false;
     }
     this.redrawStations();
     this.redrawParticles();
@@ -1107,7 +1076,6 @@ export class ForgeScene {
     g.clear();
     if (this.autoMineRate <= 0) {
       if (this.dwarfSprite) this.dwarfSprite.visible = false;
-      this.dwarfLabel.visible = false;
       return;
     }
 
@@ -1140,12 +1108,6 @@ export class ForgeScene {
     } else {
       this.drawDwarfProcedural(g, x, y, swing * face, bob);
     }
-
-    const cell = this.resolveDwarfTargetCell();
-    this.dwarfLabel.visible = true;
-    this.dwarfLabel.text = cell ? `Mining col ${cell.col + 1}` : 'Mining…';
-    this.dwarfLabel.x = x;
-    this.dwarfLabel.y = y + 14;
   }
 
   private drawDwarfProcedural(g: Graphics, x: number, y: number, swing: number, bob: number) {
@@ -1501,16 +1463,6 @@ export class ForgeScene {
       const p = 1 - this.hitFlash / 0.28;
       g.circle(x, y, 20 + p * 55);
       g.stroke({ width: 3, color: COLORS.mist, alpha: 0.55 * (1 - p) });
-    }
-
-    if (this.view === 'mine' && this.combo >= 3) {
-      const { x, y } = this.veinPoint();
-      this.comboLabel.visible = true;
-      this.comboLabel.text = `×${this.combo}`;
-      this.comboLabel.x = x + 52;
-      this.comboLabel.y = y - 36;
-    } else {
-      this.comboLabel.visible = false;
     }
   }
 
