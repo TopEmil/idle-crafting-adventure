@@ -285,11 +285,9 @@ body {
 
 .scout-strip {
   pointer-events: auto;
-  /* Pin to the right cavern wall (torch side), clear of the dig shaft. */
-  position: absolute;
-  top: clamp(132px, 22vh, 210px);
-  right: 0;
-  width: min(260px, 42%);
+  /* Sit under inventory on the right (torch wall), clear of the dig shaft. */
+  width: min(46vw, 196px);
+  max-width: 100%;
   margin: 0;
   padding: 9px 12px 10px;
   border-radius: 14px;
@@ -302,7 +300,6 @@ body {
   text-align: left;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  z-index: 2;
 }
 
 .scout-strip:hover {
@@ -310,8 +307,6 @@ body {
 }
 
 .hud.view-forge .scout-strip {
-  top: clamp(120px, 20vh, 190px);
-  width: min(240px, 40%);
   padding: 8px 10px;
 }
 
@@ -1192,13 +1187,12 @@ body {
   }
 
   .depth-strip {
-    width: min(220px, 54%);
+    width: min(200px, 48%);
     padding: 6px 10px;
   }
 
   .scout-strip {
-    top: clamp(148px, 26vh, 230px);
-    width: min(200px, 46%);
+    width: min(48vw, 168px);
     padding: 7px 10px 8px;
   }
 
@@ -1230,12 +1224,10 @@ body {
   }
 
   .scout-strip {
-    top: clamp(96px, 18vh, 160px);
-    width: min(220px, 36%);
     padding: 6px 9px 7px;
   }
 
   .depth-strip {
-    width: min(240px, 40%);
+    width: min(220px, 36%);
   }
 }
