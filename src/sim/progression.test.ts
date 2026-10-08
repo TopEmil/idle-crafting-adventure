@@ -36,7 +36,7 @@ describe('progression walkthrough (sim)', () => {
     if (!smelter.ok) return;
     state = smelter.state;
     expect(state.stations.smelter.unlocked).toBe(true);
-    expect(formatStationIO(getStation('smelter'), 1)).toMatch(/Ore.*Glass|Glass.*Ore/);
+    expect(formatStationIO(getStation('smelter'), 1)).toMatch(/Ore.*Emberglass|Emberglass.*Ore/);
 
     // Smelter produces while fueled
     state.resources.ore = 50;
