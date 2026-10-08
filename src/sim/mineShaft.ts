@@ -161,13 +161,13 @@ export function faceCellHp(depth: number, faceDamage: number[], col: number): nu
 
 /**
  * Fixed ore payout when a face cell shatters.
- * Uses stratum veinOre × depth flavor — not dig damage or raw hardness.
+ * Scales with hardness (doubling ladder) × depth — not dig damage.
  */
 export function oreYieldAtDepth(depth: number): number {
   const stratum = stratumAtDepth(depth);
   return Math.max(
     1,
-    Math.round(BALANCE.baseVeinOre * stratum.veinOre * depthOreMult(depth)),
+    Math.round(BALANCE.baseVeinOre * stratum.hardness * depthOreMult(depth)),
   );
 }
 

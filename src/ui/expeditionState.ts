@@ -5,6 +5,7 @@ import {
   canAfford,
   expeditionSlotCount,
 } from '../sim/economy';
+import { expeditionCost, expeditionOreGate } from '../sim/pricing';
 import type { GameState } from '../sim/types';
 import { formatCostProgress } from './craftState';
 import { formatCost, formatCostHtml, formatDuration, formatNumber } from './format';
@@ -107,21 +108,21 @@ export function getExpeditionRowState(
     };
   }
 
-  const oreOk = state.totalOreProduced >= expedition.unlockAtOreProduced;
+  const oreNeed = expeditionOreGate(expedition);
+  const oreOk = state.totalOreProduced >= oreNeed;
   const depthNeed = expedition.unlockAtDepth ?? 0;
   const depthOk = (state.mineDepth ?? 0) >= depthNeed;
   if (!oreOk || !depthOk) {
     const have = state.totalOreProduced;
-    const need = expedition.unlockAtOreProduced;
     const depthHave = state.mineDepth ?? 0;
-    const oreProgress = need > 0 ? Math.min(1, have / need) : 1;
+    const oreProgress = oreNeed > 0 ? Math.min(1, have / oreNeed) : 1;
     const depthProgress = depthNeed > 0 ? Math.min(1, depthHave / depthNeed) : 1;
     const progress = Math.min(oreProgress, depthProgress);
     const parts: string[] = [];
-    if (!oreOk) parts.push(`${formatNumber(have)} / ${formatNumber(need)} lifetime ore`);
+    if (!oreOk) parts.push(`${formatNumber(have)} / ${formatNumber(oreNeed)} lifetime ore`);
     if (!depthOk) parts.push(`Depth ${depthHave} / ${depthNeed}`);
     const requirements = !oreOk
-      ? `Unlock at ${formatNumber(need)} lifetime ore produced`
+      ? `Unlock at ${formatNumber(oreNeed)} lifetime ore produced`
       : `Dig to depth ${depthNeed} to open this route`;
     return {
       kind: 'locked',
@@ -138,8 +139,9 @@ export function getExpeditionRowState(
     };
   }
 
-  const costPlain = formatCost(expedition.cost);
-  const costHtml = formatCostHtml(expedition.cost);
+  const priced = expeditionCost(expedition);
+  const costPlain = formatCost(priced);
+  const costHtml = formatCostHtml(priced);
   const duration = formatDuration(expedition.durationSec);
 
   if (state.pendingLoot) {
@@ -180,8 +182,8 @@ export function getExpeditionRowState(
     };
   }
 
-  const costProgress = formatCostProgress(expedition.cost, state.resources);
-  const affordable = canAfford(state.resources, expedition.cost);
+  const costProgress = formatCostProgress(priced, state.resources);
+  const affordable = canAfford(state.resources, priced);
   if (!affordable) {
     return {
       kind: 'need_cost',

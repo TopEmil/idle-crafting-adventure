@@ -37,6 +37,7 @@ import {
   upgradeStation,
 } from '../sim/economy';
 import { maybeSubmitLeaderboardScore } from '../sim/leaderboardSync';
+import { recipeCost } from '../sim/pricing';
 import {
   applyResourceOffer,
   canSuggestResourceOffer,
@@ -373,7 +374,7 @@ export class GameApp {
   private handleCraftQuick() {
     const next = availableRecipes(this.state)[0];
     if (!next) return;
-    if (!canAfford(this.state.resources, next.cost)) {
+    if (!canAfford(this.state.resources, recipeCost(next))) {
       this.hud.toast('Not enough resources', 'info');
       this.refreshHudLight();
       return;

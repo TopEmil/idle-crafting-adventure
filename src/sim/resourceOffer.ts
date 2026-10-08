@@ -2,6 +2,7 @@ import { BALANCE } from '../data/balance';
 import { RESOURCES, type ResourceId } from '../data/resources';
 import { STATIONS } from '../data/stations';
 import { availableRecipes, stationUpgradeCostMap } from './economy';
+import { recipeCost, stationUnlockCost } from './pricing';
 import type { GameState } from './types';
 
 /** Resources that can appear in progressive ad offers (not prestige Relics). */
@@ -66,7 +67,7 @@ export function collectResourceNeeds(state: GameState): NeedCandidate[] {
 
   const nextRecipe = availableRecipes(state)[0];
   if (nextRecipe) {
-    pushNeeds(needs, nextRecipe.cost, state.resources, `craft ${nextRecipe.name}`, 0);
+    pushNeeds(needs, recipeCost(nextRecipe), state.resources, `craft ${nextRecipe.name}`, 0);
   }
 
   for (const station of STATIONS) {
@@ -74,7 +75,7 @@ export function collectResourceNeeds(state: GameState): NeedCandidate[] {
     if (!st.unlocked) {
       if (station.unlockRequires && !state.stations[station.unlockRequires].unlocked) continue;
       if (station.unlockAtDepth !== undefined && state.mineDepth < station.unlockAtDepth) continue;
-      pushNeeds(needs, station.unlockCost, state.resources, `unlock ${station.name}`, 1);
+      pushNeeds(needs, stationUnlockCost(station), state.resources, `unlock ${station.name}`, 1);
       break;
     }
     if (st.level > 0 && st.level < BALANCE.stationLevelCap) {

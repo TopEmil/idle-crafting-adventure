@@ -49,9 +49,9 @@ describe('getExpeditionRowState', () => {
 
   it('blocks other destinations while all squad slots are full', () => {
     const state = createInitialState();
-    state.totalOreProduced = 250;
-    state.resources.ore = 100;
-    state.resources.glowdust = 50;
+    state.totalOreProduced = 1_000;
+    state.resources.ore = 500;
+    state.resources.glowdust = 200;
     state.activeExpeditions = [
       {
         id: 'glow_shalllows',
@@ -71,9 +71,9 @@ describe('getExpeditionRowState', () => {
 
   it('allows a second send when an extra squad slot is owned', () => {
     const state = createInitialState();
-    state.totalOreProduced = 250;
-    state.resources.ore = 100;
-    state.resources.glowdust = 50;
+    state.totalOreProduced = 1_000;
+    state.resources.ore = 500;
+    state.resources.glowdust = 200;
     state.extraSquadSlots = 1;
     state.activeExpeditions = [
       {
@@ -148,7 +148,8 @@ describe('getExpeditionRowState', () => {
       },
     ];
     const crystal = getExpedition('crystal_fault');
-    state.totalOreProduced = 200;
+    state.totalOreProduced = 1_000;
+    state.resources.glowdust = 200;
     const row = getExpeditionRowState(state, crystal);
     expect(row.kind).toBe('claim_first');
     expect(row.mode).toBe('claim_first');

@@ -21,7 +21,6 @@ describe('strata', () => {
     expect(STRATA[STRATA.length - 1]!.hardness).toBe(1024);
     for (let i = 1; i < STRATA.length; i++) {
       expect(STRATA[i]!.hardness).toBe(STRATA[i - 1]!.hardness * 2);
-      expect(STRATA[i]!.veinOre).toBeGreaterThanOrEqual(STRATA[i - 1]!.veinOre);
     }
   });
 

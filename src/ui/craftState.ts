@@ -1,6 +1,7 @@
 import type { ResourceId } from '../data/resources';
 import type { RecipeDef } from '../data/recipes';
 import { availableRecipes, canAfford } from '../sim/economy';
+import { recipeCost } from '../sim/pricing';
 import type { GameState } from '../sim/types';
 import { formatNumber, formatResourceInline } from './format';
 
@@ -45,7 +46,10 @@ export function getCraftQuickState(state: GameState): CraftQuickState {
       progress: 1,
     };
   }
-  const { detail, progress, affordable } = formatCostProgress(recipe.cost, state.resources);
+  const { detail, progress, affordable } = formatCostProgress(
+    recipeCost(recipe),
+    state.resources,
+  );
   return {
     recipe,
     affordable,

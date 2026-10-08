@@ -332,9 +332,10 @@ describe('expeditions', () => {
 
   it('buys an extra squad slot for Relics and allows parallel sends', () => {
     let state = createInitialState();
-    state.totalOreProduced = 250;
-    state.resources.ore = 200;
-    state.resources.glowdust = 50;
+    // crystal_fault ore gate scales with costHardness 8 → 800
+    state.totalOreProduced = 1_000;
+    state.resources.ore = 500;
+    state.resources.glowdust = 200;
     state.resources.relics = BALANCE.extraSquadRelicCost;
     expect(expeditionSlotCount(state)).toBe(BALANCE.baseExpeditionSlots);
 

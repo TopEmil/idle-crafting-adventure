@@ -13,6 +13,11 @@ export interface StationDef {
   name: string;
   description: string;
   unlockCost: Partial<Record<ResourceId, number>>;
+  /**
+   * Economy tier hardness for unlock/upgrade cost scaling
+   * (authored costs × costHardness / 2).
+   */
+  costHardness?: number;
   unlockRequires?: StationId;
   /** Optional dig-depth gate before the station can be unlocked. */
   unlockAtDepth?: number;
@@ -31,6 +36,7 @@ export const STATIONS: StationDef[] = [
     name: 'Smelter',
     description: 'Melts Vein Ore into Emberglass.',
     unlockCost: { ore: 25 },
+    costHardness: 2,
     outputs: { emberglass: 0.35 },
     inputs: { ore: 0.6 },
     baseCost: { ore: 40 },
@@ -42,6 +48,7 @@ export const STATIONS: StationDef[] = [
     name: 'Anvil',
     description: 'Forges Emberglass into Deep Alloy.',
     unlockCost: { emberglass: 40, ore: 80 },
+    costHardness: 4,
     unlockRequires: 'smelter',
     outputs: { alloy: 0.18 },
     inputs: { emberglass: 0.4 },
@@ -54,6 +61,7 @@ export const STATIONS: StationDef[] = [
     name: 'Enchanter',
     description: 'Infuses Alloy with Glowdust for ritual power.',
     unlockCost: { alloy: 30, glowdust: 50 },
+    costHardness: 8,
     unlockRequires: 'anvil',
     outputs: { glowdust: 0.25, emberglass: 0.1 },
     inputs: { alloy: 0.12 },
@@ -66,6 +74,7 @@ export const STATIONS: StationDef[] = [
     name: 'Verdant Crucible',
     description: 'Cooks Glowdust and Ore into Verdiglass — opens Moss & Slag routes.',
     unlockCost: { verdiglass: 8, glowdust: 40, ore: 120 },
+    costHardness: 4,
     unlockRequires: 'anvil',
     unlockAtDepth: 6,
     outputs: { verdiglass: 0.22 },
@@ -79,6 +88,7 @@ export const STATIONS: StationDef[] = [
     name: 'Gemcutter',
     description: 'Facet Nightiron into Starshards for deep expeditions.',
     unlockCost: { nightiron: 10, alloy: 50, glowdust: 60 },
+    costHardness: 128,
     unlockRequires: 'enchanter',
     unlockAtDepth: 55,
     outputs: { starshard: 0.08, nightiron: 0.05 },
@@ -92,6 +102,7 @@ export const STATIONS: StationDef[] = [
     name: 'Aetherforge',
     description: 'Binds Aetherite into living metal — the deepest forge rite.',
     unlockCost: { aetherite: 6, starshard: 20, nightiron: 25 },
+    costHardness: 1024,
     unlockRequires: 'gemcutter',
     unlockAtDepth: 175,
     outputs: { aetherite: 0.04, alloy: 0.2, glowdust: 0.15 },
