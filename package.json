@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false",
+    "record:tutorial": "node scripts/record-tutorial.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.6.6"
