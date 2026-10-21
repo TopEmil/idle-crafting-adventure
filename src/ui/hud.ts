@@ -54,6 +54,13 @@ import {
   formatTalentPerLevel,
 } from './effectsText';
 import type { SceneView } from '../forge/sceneView';
+import {
+  ONBOARDING_LAST_STEP,
+  ONBOARDING_STEPS,
+  coachPresentation,
+  onboardingDigProgress,
+  type OnboardingHighlight,
+} from '../sim/onboarding';
 import { leaderboardScore, msUntilSeasonEnd } from '../sim/oreScore';
 import { formatScoutTimeLeft, getScoutPartyRows } from './scoutStatus';
 import { sheetScrollAfterRebuild } from './sheetScroll';
@@ -89,7 +96,6 @@ export interface HudActions {
   onBuyTalent: (id: TalentId) => void;
   onResourceOffer: (mode: 'ad' | 'dismiss') => void;
   onSkipOnboarding: () => void;
-  onAdvanceOnboarding: () => void;
   onToggleMute: () => void;
 }
 
@@ -246,8 +252,8 @@ export class Hud {
       }
     } else {
       this.renderedSheetPanel = null;
-      if (!this.overlay.querySelector('.modal') && !this.overlay.querySelector('.onboarding')) {
-        // keep overlay empty unless modal/onboarding managed elsewhere
+      if (!this.overlay.querySelector('.modal')) {
+        // keep overlay empty unless modal managed elsewhere
       }
     }
   }
@@ -351,35 +357,76 @@ export class Hud {
       .join('');
   }
 
-  showOnboarding(step: number) {
-    const copy = [
-      {
-        title: 'Dig the shaft',
-        body: 'Tap blocks on the dig face to descend. Glow pockets and rare seams only burst for you — keep digging actively.',
-      },
-      {
-        title: 'Craft your first tool',
-        body: 'Spend ore on a Copper Pick. A forge dwarf joins in and keeps mining while you craft.',
-      },
-      {
-        title: 'Light the stations',
-        body: 'Switch to the Forge view and unlock the Smelter — machines sit on the hall pedestals and keep producing.',
-      },
-    ];
-    const item = copy[Math.min(step, copy.length - 1)];
-    this.overlay.innerHTML = `
-      <div class="onboarding">
+  /**
+   * Visual-first coach: docked tip + highlight on the next control.
+   * Lives on the HUD so sheets/modals can still open during the guided run.
+   */
+  showOnboarding(step: number, state?: GameState) {
+    const index = Math.max(0, Math.min(ONBOARDING_LAST_STEP, Math.floor(step)));
+    const item = state
+      ? coachPresentation(state)
+      : {
+          stepLabel: `Step ${index + 1}`,
+          title: ONBOARDING_STEPS[index]!.title,
+          body: ONBOARDING_STEPS[index]!.body,
+          action: ONBOARDING_STEPS[index]!.action,
+          highlight: ONBOARDING_STEPS[index]!.highlight,
+        };
+    const dots = ONBOARDING_STEPS.map((_, i) => {
+      const cls = i === index ? 'is-current' : i < index ? 'is-done' : '';
+      return `<span class="onboarding-dot ${cls}" aria-hidden="true"></span>`;
+    }).join('');
+    const digProgress = state ? onboardingDigProgress(state) : null;
+    const progressHtml = digProgress
+      ? `<div class="onboarding-goal" aria-live="polite">${digProgress}</div>`
+      : '';
+
+    // Mount on #app (above overlay sheets) so the tip stays readable during Stations/Reforge.
+    const host = this.root.parentElement ?? this.root;
+    let coach = host.querySelector(':scope > .onboarding-coach') as HTMLElement | null;
+    if (!coach) {
+      coach = document.createElement('div');
+      coach.className = 'onboarding-coach';
+      host.appendChild(coach);
+    }
+    coach.innerHTML = `
+      <div class="onboarding-coach-card">
+        <div class="onboarding-progress" aria-label="Tutorial step ${index + 1} of ${ONBOARDING_STEPS.length}">
+          ${dots}
+          <span class="onboarding-progress-label">${item.stepLabel}</span>
+        </div>
         <h2>${item.title}</h2>
         <p>${item.body}</p>
-        <div class="modal-actions">
-          <button class="btn btn-primary" id="ob-next" type="button">${step >= 2 ? 'Begin' : 'Next'}</button>
-          <button class="btn btn-ghost" id="ob-skip" type="button">Skip</button>
+        ${progressHtml}
+        <div class="onboarding-action" role="status">${item.action}</div>
+        <div class="onboarding-actions">
+          <button class="btn btn-ghost" id="ob-skip" type="button">Skip tutorial</button>
         </div>
       </div>
     `;
-    this.markOverlayOpen();
-    this.overlay.querySelector('#ob-next')?.addEventListener('click', () => this.actions.onAdvanceOnboarding());
-    this.overlay.querySelector('#ob-skip')?.addEventListener('click', () => this.actions.onSkipOnboarding());
+    coach.hidden = false;
+    coach.querySelector('#ob-skip')?.addEventListener('click', () => this.actions.onSkipOnboarding());
+    this.setCoachHighlight(item.highlight);
+  }
+
+  clearOnboarding() {
+    const host = this.root.parentElement ?? this.root;
+    host.querySelector(':scope > .onboarding-coach')?.remove();
+    this.root.querySelector('.onboarding-coach')?.remove();
+    this.setCoachHighlight('none');
+  }
+
+  private setCoachHighlight(target: OnboardingHighlight) {
+    const map: Record<Exclude<OnboardingHighlight, 'none'>, string> = {
+      vein: '#btn-vein',
+      craft: '#btn-craft',
+      stations: '.nav-btn[data-panel="forge"]',
+      reforge: '.nav-btn[data-panel="reforge"]',
+    };
+    this.root.querySelectorAll('.coach-target').forEach((el) => el.classList.remove('coach-target'));
+    if (target === 'none') return;
+    const sel = map[target];
+    this.root.querySelector(sel)?.classList.add('coach-target');
   }
 
   showOfflineSummary(seconds: number, gains: Partial<Record<ResourceId, number>>) {

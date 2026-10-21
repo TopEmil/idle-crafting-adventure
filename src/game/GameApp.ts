@@ -46,6 +46,11 @@ import {
   resourceLabel,
   type ResourceOffer,
 } from '../sim/resourceOffer';
+import {
+  coachPresentation,
+  resolveOnboardingStep,
+  shouldFinishOnboarding,
+} from '../sim/onboarding';
 import { deserializeState, loadLocalState, SAVE_KEY, saveLocalState, serializeState } from '../sim/save';
 import type { GameState } from '../sim/types';
 import { Hud, type PanelId } from '../ui/hud';
@@ -112,7 +117,6 @@ export class GameApp {
       onClaimAchievement: (id) => this.handleClaimAchievement(id),
       onResourceOffer: (mode) => void this.handleResourceOffer(mode),
       onSkipOnboarding: () => this.finishOnboarding(),
-      onAdvanceOnboarding: () => this.advanceOnboarding(),
       onToggleMute: () => {
         const muted = this.audio.toggleMute();
         this.hud.setMuted(muted);
@@ -155,8 +159,7 @@ export class GameApp {
       this.platform.gameplayStop();
       this.hud.showOfflineSummary(offline.event.seconds, offline.event.gains);
     } else if (!this.state.onboardingDone) {
-      this.overlayMode = 'onboarding';
-      this.hud.showOnboarding(this.state.onboardingStep);
+      this.syncOnboarding(true);
     }
 
     this.refreshHud();
@@ -268,6 +271,7 @@ export class GameApp {
       this.overlayMode === 'loot' ||
       this.overlayMode === 'offline' ||
       this.overlayMode === 'prestige' ||
+      this.overlayMode === 'milestone' ||
       this.overlayMode === 'resource_offer'
     ) {
       return;
@@ -277,7 +281,14 @@ export class GameApp {
       this.panel = null;
       this.hud.clearOverlay();
       this.hud.setPanel(null);
-      this.platform.gameplayStart();
+      if (!this.state.onboardingDone) {
+        this.overlayMode = 'onboarding';
+        this.hud.showOnboarding(this.state.onboardingStep, this.state);
+        this.platform.gameplayStart();
+      } else {
+        this.overlayMode = 'none';
+        this.platform.gameplayStart();
+      }
       return;
     }
     if (panel === 'forge') {
@@ -285,21 +296,28 @@ export class GameApp {
     }
     this.panel = panel;
     this.notice = '';
-    this.overlayMode = 'none';
+    this.overlayMode = this.state.onboardingDone ? 'none' : 'onboarding';
     this.platform.gameplayStop();
     this.refreshHud();
+    if (!this.state.onboardingDone) {
+      this.hud.showOnboarding(this.state.onboardingStep, this.state);
+    }
   }
 
   private closeOverlay() {
     const was = this.overlayMode;
-    this.overlayMode = 'none';
+    const tutoring = !this.state.onboardingDone;
     // Always dismiss sheets/modals fully. Re-rendering an open panel here made the
     // sheet ✕ button appear to do nothing (clear → immediately reopen).
     this.panel = null;
     this.hud.clearOverlay();
     this.hud.setPanel(null);
+    this.overlayMode = tutoring ? 'onboarding' : 'none';
     this.platform.gameplayStart();
     this.refreshHudLight();
+    if (tutoring) {
+      this.hud.showOnboarding(this.state.onboardingStep, this.state);
+    }
 
     if (was === 'loot' || was === 'prestige' || was === 'milestone') {
       void this.maybeMidgame(was === 'loot' ? 'expedition_claim' : was === 'prestige' ? 'prestige' : 'milestone');
@@ -321,9 +339,10 @@ export class GameApp {
 
   private handleClickVein(col?: number) {
     void this.audio.unlock();
-    if (this.overlayMode === 'onboarding' && this.state.onboardingStep === 0) {
-      // allow click during first step
-    } else if (this.overlayMode !== 'none' && this.overlayMode !== 'onboarding') {
+    if (this.overlayMode !== 'none' && this.overlayMode !== 'onboarding') {
+      return;
+    }
+    if (this.panel) {
       return;
     }
     if (this.scene.getView() !== 'mine') {
@@ -343,10 +362,7 @@ export class GameApp {
       this.hud.toast(`Found ${find.amount} ${find.label}!`, 'gain');
     }
     this.announceStratumIfNew();
-    if (!this.state.onboardingDone && this.state.onboardingStep === 0 && this.state.resources.ore >= 3) {
-      this.state.onboardingStep = 1;
-      this.hud.showOnboarding(1);
-    }
+    this.syncOnboarding();
     this.refreshHudLight();
   }
 
@@ -395,12 +411,7 @@ export class GameApp {
     this.scene.triggerCraftBurst();
     this.scene.setAutoMineRate(getAutoMineRate(this.state));
     this.hud.toast(`${getRecipe(id).name}: ${formatRecipeEffects(getRecipe(id))}`, 'gain');
-    if (!this.state.onboardingDone && this.state.onboardingStep <= 1) {
-      this.state.onboardingStep = 2;
-      this.overlayMode = 'onboarding';
-      this.setSceneView('forge');
-      this.hud.showOnboarding(2);
-    }
+    this.syncOnboarding(true);
     this.refreshHud();
     void this.persist();
   }
@@ -420,7 +431,8 @@ export class GameApp {
     this.scene.sync(this.state);
     const pretty = id.charAt(0).toUpperCase() + id.slice(1);
     this.hud.toast(`${pretty} built in the forge`, 'gain');
-    if (id === 'smelter' && this.state.milestones.firstStation) {
+    const tutoring = !this.state.onboardingDone;
+    if (id === 'smelter' && this.state.milestones.firstStation && !tutoring) {
       this.overlayMode = 'milestone';
       this.panel = null;
       this.hud.setPanel(null);
@@ -430,6 +442,7 @@ export class GameApp {
       );
       this.platform.gameplayStop();
     } else {
+      this.syncOnboarding(true);
       this.refreshHud();
     }
     void this.persist();
@@ -642,6 +655,7 @@ export class GameApp {
   }
 
   private async handlePrestige() {
+    const tutorialReforge = !this.state.onboardingDone;
     const result = prestige(this.state);
     if (!result.ok) {
       this.notice = result.reason;
@@ -654,11 +668,22 @@ export class GameApp {
     this.audio.prestige();
     this.scene.triggerCraftBurst();
     this.scene.sync(this.state);
+    this.hud.clearOnboarding();
+    this.panel = null;
+    this.hud.setPanel(null);
     this.overlayMode = 'prestige';
-    this.hud.showMilestone(
-      'Forge Reforged',
-      `You gained ${result.relics} Relics. Spend them on the Talents page — next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
-    );
+    this.platform.gameplayStop();
+    if (tutorialReforge) {
+      this.hud.showMilestone(
+        'First Reforge',
+        `Tutorial complete — you earned ${result.relics} Relic${result.relics === 1 ? '' : 's'}. Spend them on Talents for permanent power. Next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
+      );
+    } else {
+      this.hud.showMilestone(
+        'Forge Reforged',
+        `You gained ${result.relics} Relics. Spend them on the Talents page — next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
+      );
+    }
     void this.persist();
   }
 
@@ -781,22 +806,68 @@ export class GameApp {
     void this.persist();
   }
 
-  private advanceOnboarding() {
-    if (this.state.onboardingStep >= 2) {
+  /**
+   * Keep the guided step in sync with progress. When `steer` is true, also
+   * open the preferred view/panel for the current beat (smelter / reforge).
+   */
+  private syncOnboarding(steer = false) {
+    if (this.state.onboardingDone) return;
+
+    if (shouldFinishOnboarding(this.state)) {
       this.finishOnboarding();
       return;
     }
-    this.state.onboardingStep += 1;
-    if (this.state.onboardingStep >= 2) {
+
+    const nextStep = resolveOnboardingStep(this.state);
+    const stepped = nextStep !== this.state.onboardingStep;
+    this.state.onboardingStep = nextStep;
+    this.overlayMode = 'onboarding';
+    const def = coachPresentation(this.state);
+    this.hud.showOnboarding(nextStep, this.state);
+
+    if (steer || stepped) {
+      this.setSceneView(def.preferredView);
+      if (def.preferredPanel) {
+        this.panel = def.preferredPanel;
+        this.hud.setPanel(def.preferredPanel);
+        this.platform.gameplayStop();
+        this.refreshHud();
+        this.hud.showOnboarding(nextStep, this.state);
+      } else if (this.panel && nextStep === 2) {
+        // Still gathering for Smelter — keep dig face clear.
+        this.panel = null;
+        this.hud.clearOverlay();
+        this.hud.setPanel(null);
+        this.platform.gameplayStart();
+        this.refreshHudLight();
+        this.hud.showOnboarding(nextStep, this.state);
+      }
+    } else if (
+      nextStep === 2 &&
+      def.preferredPanel === 'forge' &&
+      this.panel !== 'forge' &&
+      !this.state.stations.smelter.unlocked
+    ) {
+      // Smelter just became affordable while digging — open Stations.
       this.setSceneView('forge');
+      this.panel = 'forge';
+      this.hud.setPanel('forge');
+      this.platform.gameplayStop();
+      this.refreshHud();
+      this.hud.showOnboarding(nextStep, this.state);
     }
-    this.hud.showOnboarding(this.state.onboardingStep);
   }
 
   private finishOnboarding() {
+    const wasTutoring = this.overlayMode === 'onboarding';
     this.state.onboardingDone = true;
-    this.overlayMode = 'none';
-    this.hud.clearOverlay();
+    this.hud.clearOnboarding();
+    if (wasTutoring) {
+      this.overlayMode = 'none';
+      if (!this.panel) {
+        this.hud.clearOverlay();
+      }
+    }
     this.platform.gameplayStart();
     this.refreshHudLight();
     void this.persist();
