@@ -1,7 +1,8 @@
 /** Guided first-run loop: dig → craft → smelter → first Reforge (rebirth). */
 
 import { getRecipe } from '../data/recipes';
-import { recipeCost } from './pricing';
+import { getStation } from '../data/stations';
+import { recipeCost, stationUnlockCost } from './pricing';
 import type { GameState } from './types';
 
 export type OnboardingHighlight =
@@ -50,7 +51,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
     id: 'smelter',
     stepLabel: 'Step 3 · Stations',
     title: 'Light the Smelter',
-    body: 'Unlock the Smelter so the forge converts Ore into Emberglass automatically.',
+    body: 'Gather ore, then unlock the Smelter so the forge converts Ore into Emberglass.',
     action: 'Unlock Smelter on the Stations sheet',
     highlight: 'stations',
     preferredView: 'forge',
@@ -81,6 +82,22 @@ export function onboardingCraftOreGate(): number {
   return Math.max(1, Math.ceil(cost.ore ?? 15));
 }
 
+/** Ore needed to unlock the Smelter during Step 3. */
+export function onboardingSmelterOreGate(): number {
+  const cost = stationUnlockCost(getStation('smelter'));
+  return Math.max(1, Math.ceil(cost.ore ?? 25));
+}
+
+export function onboardingCanAffordSmelter(state: GameState): boolean {
+  const cost = stationUnlockCost(getStation('smelter'));
+  for (const [id, amount] of Object.entries(cost)) {
+    if ((state.resources[id as keyof typeof state.resources] ?? 0) < (amount ?? 0)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Resolve the highest step the player has earned.
  * Steps are sticky forward — never regress mid-run.
@@ -103,15 +120,46 @@ export function resolveOnboardingStep(state: GameState): number {
   return Math.min(ONBOARDING_LAST_STEP, step);
 }
 
+/**
+ * Live coach copy for the current step. Step 3 stays on Mine until Smelter
+ * is affordable, then opens Stations — avoids a dead unlock button.
+ */
+export function coachPresentation(state: GameState): OnboardingStepDef {
+  const step = resolveOnboardingStep(state);
+  const base = getOnboardingStep(step);
+  if (step !== 2 || state.stations.smelter.unlocked || onboardingCanAffordSmelter(state)) {
+    return base;
+  }
+  const need = onboardingSmelterOreGate();
+  return {
+    ...base,
+    title: 'Stock ore for the Smelter',
+    body: `The Smelter costs ${need} ore. Keep mining, then unlock it on Stations.`,
+    action: 'Tap Mine until you can afford the Smelter',
+    highlight: 'vein',
+    preferredView: 'mine',
+    preferredPanel: null,
+  };
+}
+
 /** True when the guided run should finish (first Reforge completed). */
 export function shouldFinishOnboarding(state: GameState): boolean {
   return state.prestigeCount > 0;
 }
 
-/** Progress line for the dig beat — e.g. "Ore 4 / 15 toward Copper Pick". */
+/** Progress line for dig beats — Copper Pick or Smelter ore gates. */
 export function onboardingDigProgress(state: GameState): string | null {
-  if (state.onboardingDone || resolveOnboardingStep(state) !== 0) return null;
-  const need = onboardingCraftOreGate();
-  const have = Math.min(need, Math.floor(state.resources.ore));
-  return `Ore ${have} / ${need} toward Copper Pick`;
+  if (state.onboardingDone) return null;
+  const step = resolveOnboardingStep(state);
+  if (step === 0) {
+    const need = onboardingCraftOreGate();
+    const have = Math.min(need, Math.floor(state.resources.ore));
+    return `Ore ${have} / ${need} toward Copper Pick`;
+  }
+  if (step === 2 && !state.stations.smelter.unlocked && !onboardingCanAffordSmelter(state)) {
+    const need = onboardingSmelterOreGate();
+    const have = Math.min(need, Math.floor(state.resources.ore));
+    return `Ore ${have} / ${need} toward Smelter`;
+  }
+  return null;
 }

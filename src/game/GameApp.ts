@@ -47,7 +47,7 @@ import {
   type ResourceOffer,
 } from '../sim/resourceOffer';
 import {
-  getOnboardingStep,
+  coachPresentation,
   resolveOnboardingStep,
   shouldFinishOnboarding,
 } from '../sim/onboarding';
@@ -822,10 +822,10 @@ export class GameApp {
     const stepped = nextStep !== this.state.onboardingStep;
     this.state.onboardingStep = nextStep;
     this.overlayMode = 'onboarding';
+    const def = coachPresentation(this.state);
     this.hud.showOnboarding(nextStep, this.state);
 
     if (steer || stepped) {
-      const def = getOnboardingStep(nextStep);
       this.setSceneView(def.preferredView);
       if (def.preferredPanel) {
         this.panel = def.preferredPanel;
@@ -833,7 +833,28 @@ export class GameApp {
         this.platform.gameplayStop();
         this.refreshHud();
         this.hud.showOnboarding(nextStep, this.state);
+      } else if (this.panel && nextStep === 2) {
+        // Still gathering for Smelter — keep dig face clear.
+        this.panel = null;
+        this.hud.clearOverlay();
+        this.hud.setPanel(null);
+        this.platform.gameplayStart();
+        this.refreshHudLight();
+        this.hud.showOnboarding(nextStep, this.state);
       }
+    } else if (
+      nextStep === 2 &&
+      def.preferredPanel === 'forge' &&
+      this.panel !== 'forge' &&
+      !this.state.stations.smelter.unlocked
+    ) {
+      // Smelter just became affordable while digging — open Stations.
+      this.setSceneView('forge');
+      this.panel = 'forge';
+      this.hud.setPanel('forge');
+      this.platform.gameplayStop();
+      this.refreshHud();
+      this.hud.showOnboarding(nextStep, this.state);
     }
   }
 

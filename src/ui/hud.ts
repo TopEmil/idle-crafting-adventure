@@ -57,7 +57,7 @@ import type { SceneView } from '../forge/sceneView';
 import {
   ONBOARDING_LAST_STEP,
   ONBOARDING_STEPS,
-  getOnboardingStep,
+  coachPresentation,
   onboardingDigProgress,
   type OnboardingHighlight,
 } from '../sim/onboarding';
@@ -362,8 +362,16 @@ export class Hud {
    * Lives on the HUD so sheets/modals can still open during the guided run.
    */
   showOnboarding(step: number, state?: GameState) {
-    const item = getOnboardingStep(step);
     const index = Math.max(0, Math.min(ONBOARDING_LAST_STEP, Math.floor(step)));
+    const item = state
+      ? coachPresentation(state)
+      : {
+          stepLabel: `Step ${index + 1}`,
+          title: ONBOARDING_STEPS[index]!.title,
+          body: ONBOARDING_STEPS[index]!.body,
+          action: ONBOARDING_STEPS[index]!.action,
+          highlight: ONBOARDING_STEPS[index]!.highlight,
+        };
     const dots = ONBOARDING_STEPS.map((_, i) => {
       const cls = i === index ? 'is-current' : i < index ? 'is-done' : '';
       return `<span class="onboarding-dot ${cls}" aria-hidden="true"></span>`;

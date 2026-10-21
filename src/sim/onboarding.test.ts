@@ -3,9 +3,11 @@ import { createInitialState } from './createState';
 import {
   ONBOARDING_LAST_STEP,
   ONBOARDING_STEPS,
+  coachPresentation,
   getOnboardingStep,
   onboardingCraftOreGate,
   onboardingDigProgress,
+  onboardingSmelterOreGate,
   resolveOnboardingStep,
   shouldFinishOnboarding,
 } from './onboarding';
@@ -32,6 +34,22 @@ describe('onboarding', () => {
     );
     state.resources.ore = onboardingCraftOreGate();
     expect(onboardingDigProgress(state)).toBeNull();
+  });
+
+  it('keeps Step 3 on Mine until Smelter is affordable', () => {
+    const state = createInitialState();
+    state.ownedRecipes.push('copper_pick');
+    state.resources.ore = 5;
+    const gathering = coachPresentation(state);
+    expect(gathering.preferredPanel).toBeNull();
+    expect(gathering.highlight).toBe('vein');
+    expect(onboardingDigProgress(state)).toContain('toward Smelter');
+
+    state.resources.ore = onboardingSmelterOreGate();
+    const ready = coachPresentation(state);
+    expect(ready.preferredPanel).toBe('forge');
+    expect(ready.highlight).toBe('stations');
+    expect(ready.action).toMatch(/Unlock Smelter/i);
   });
 
   it('advances dig → craft when ore covers the Copper Pick', () => {
