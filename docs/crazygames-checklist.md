@@ -54,7 +54,7 @@ Use with the [CrazyGames Developer Portal](https://developer.crazygames.com/) QA
 
 - [ ] Recipes, stations, expeditions, prestige (Reforge) playable
 - [ ] Audio bed + SFX at consistent levels
-- [ ] Onboarding skippable and visual-first
+- [ ] Onboarding skippable and visual-first (coach + highlights; ends on first Reforge)
 
 ## Store assets
 

@@ -40,7 +40,8 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 | --- | --- |
 | First purchase / tool | < 30 seconds |
 | First real expedition claim | ~3–5 minutes |
-| First prestige (Reforge) | ~45–90 minutes of engaged play |
+| Guided tutorial climax | First Reforge (rebirth) after Smelter unlock |
+| First prestige (Reforge) outside tutorial | ~45–90 minutes of engaged play |
 | Offline catch-up | Capped (default 8h); always show summary modal |
 
 ## Economy targets
@@ -107,6 +108,17 @@ Equal-weight “No thanks”; coin alternative when available; no reward on `adE
 Talents (own sheet): Vein Attunement, Hearth Kindling, Scout Instinct, Deep Slumber, Pick Mastery, Seam Sense, Caravan Pact, Relic Lore — spend Relics; levels persist across Reforge.
 
 Midgame ad may fire **after** confirm modal closes — never mid-animation freeze without SDK callbacks.
+
+## Onboarding (first run)
+
+Skippable, visual-first coach (no full-screen dim). Four action-gated beats:
+
+1. **Dig** — highlight Mine / dig face until Copper Pick is affordable  
+2. **Craft** — highlight Craft → Copper Pick (dwarf joins)  
+3. **Smelter** — open Stations, unlock Smelter (also unlocks Reforge)  
+4. **Reforge** — open Reforge, complete the first rebirth for Relics → tutorial ends  
+
+Progress dots show step N/4. Mid-tutorial Smelter milestone is suppressed so the rebirth remains the climax.
 
 ## Ad flow (policy)
 

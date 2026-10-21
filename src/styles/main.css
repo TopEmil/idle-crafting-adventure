@@ -475,6 +475,8 @@ body {
 }
 
 .bottom-dock {
+  position: relative;
+  z-index: 6;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -770,8 +772,7 @@ body {
 
 .overlay-root.is-open,
 .overlay-root:has(.sheet),
-.overlay-root:has(.modal),
-.overlay-root:has(.onboarding) {
+.overlay-root:has(.modal) {
   pointer-events: auto;
   background: color-mix(in srgb, var(--void) 42%, transparent);
   backdrop-filter: blur(2px);
@@ -1040,32 +1041,109 @@ body {
   border-bottom: 1px solid color-mix(in srgb, var(--slate) 18%, transparent);
 }
 
-.onboarding {
+/* Visual-first coach — sibling of HUD/overlay so sheet opens do not cover the tip. */
+.onboarding-coach {
   position: absolute;
   left: 50%;
-  bottom: 28%;
+  top: calc(72px + env(safe-area-inset-top, 0px));
   transform: translateX(-50%);
-  width: min(92vw, 360px);
-  background: color-mix(in srgb, var(--void) 78%, transparent);
-  border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
-  border-radius: 18px;
-  padding: 16px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 16px 40px color-mix(in srgb, var(--void) 50%, transparent);
+  width: min(92vw, 380px);
+  z-index: 12;
+  pointer-events: none;
   animation: modal-in 0.3s ease;
 }
 
-.onboarding h2 {
-  margin: 0 0 6px;
-  font-family: var(--font-display);
-  font-size: 1.3rem;
+.onboarding-coach-card {
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--void) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cyan) 42%, transparent);
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--void) 45%, transparent);
 }
 
-.onboarding p {
-  margin: 0 0 12px;
+.onboarding-coach h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--mist);
+}
+
+.onboarding-coach p {
+  margin: 0 0 10px;
   color: var(--slate);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   line-height: 1.4;
+}
+
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.onboarding-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--slate) 45%, transparent);
+}
+
+.onboarding-dot.is-done {
+  background: var(--cyan);
+}
+
+.onboarding-dot.is-current {
+  background: var(--ember);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ember) 28%, transparent);
+}
+
+.onboarding-progress-label {
+  margin-left: auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--slate);
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.onboarding-actions .btn {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+}
+
+/* Pulse the next control the tutorial wants the player to use. */
+.coach-target {
+  position: relative;
+  z-index: 9;
+  animation: coach-pulse 1.25s ease-in-out infinite;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--ember) 75%, transparent),
+    0 0 18px color-mix(in srgb, var(--amber) 35%, transparent);
+}
+
+@keyframes coach-pulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    filter: brightness(1);
+  }
+  50% {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+  }
+}
+
+@media (max-width: 520px) {
+  .onboarding-coach {
+    top: calc(88px + env(safe-area-inset-top, 0px));
+  }
 }
 
 .notice {
