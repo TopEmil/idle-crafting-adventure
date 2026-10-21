@@ -5,12 +5,13 @@ import {
   ONBOARDING_STEPS,
   getOnboardingStep,
   onboardingCraftOreGate,
+  onboardingDigProgress,
   resolveOnboardingStep,
   shouldFinishOnboarding,
 } from './onboarding';
 
 describe('onboarding', () => {
-  it('defines dig → craft → smelter → reforge', () => {
+  it('defines dig → craft → smelter → reforge with clear first-step copy', () => {
     expect(ONBOARDING_STEPS.map((s) => s.id)).toEqual([
       'dig',
       'craft',
@@ -19,6 +20,18 @@ describe('onboarding', () => {
     ]);
     expect(ONBOARDING_LAST_STEP).toBe(3);
     expect(getOnboardingStep(99).id).toBe('reforge');
+    expect(getOnboardingStep(0).stepLabel).toMatch(/Step 1/i);
+    expect(getOnboardingStep(0).action).toMatch(/Mine/i);
+  });
+
+  it('shows dig ore progress toward the Copper Pick', () => {
+    const state = createInitialState();
+    state.resources.ore = 4;
+    expect(onboardingDigProgress(state)).toBe(
+      `Ore 4 / ${onboardingCraftOreGate()} toward Copper Pick`,
+    );
+    state.resources.ore = onboardingCraftOreGate();
+    expect(onboardingDigProgress(state)).toBeNull();
   });
 
   it('advances dig → craft when ore covers the Copper Pick', () => {

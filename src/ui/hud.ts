@@ -58,6 +58,7 @@ import {
   ONBOARDING_LAST_STEP,
   ONBOARDING_STEPS,
   getOnboardingStep,
+  onboardingDigProgress,
   type OnboardingHighlight,
 } from '../sim/onboarding';
 import { leaderboardScore, msUntilSeasonEnd } from '../sim/oreScore';
@@ -360,13 +361,17 @@ export class Hud {
    * Visual-first coach: docked tip + highlight on the next control.
    * Lives on the HUD so sheets/modals can still open during the guided run.
    */
-  showOnboarding(step: number) {
+  showOnboarding(step: number, state?: GameState) {
     const item = getOnboardingStep(step);
     const index = Math.max(0, Math.min(ONBOARDING_LAST_STEP, Math.floor(step)));
     const dots = ONBOARDING_STEPS.map((_, i) => {
       const cls = i === index ? 'is-current' : i < index ? 'is-done' : '';
       return `<span class="onboarding-dot ${cls}" aria-hidden="true"></span>`;
     }).join('');
+    const digProgress = state ? onboardingDigProgress(state) : null;
+    const progressHtml = digProgress
+      ? `<div class="onboarding-goal" aria-live="polite">${digProgress}</div>`
+      : '';
 
     // Mount on #app (above overlay sheets) so the tip stays readable during Stations/Reforge.
     const host = this.root.parentElement ?? this.root;
@@ -380,10 +385,12 @@ export class Hud {
       <div class="onboarding-coach-card">
         <div class="onboarding-progress" aria-label="Tutorial step ${index + 1} of ${ONBOARDING_STEPS.length}">
           ${dots}
-          <span class="onboarding-progress-label">${index + 1}/${ONBOARDING_STEPS.length}</span>
+          <span class="onboarding-progress-label">${item.stepLabel}</span>
         </div>
         <h2>${item.title}</h2>
         <p>${item.body}</p>
+        ${progressHtml}
+        <div class="onboarding-action" role="status">${item.action}</div>
         <div class="onboarding-actions">
           <button class="btn btn-ghost" id="ob-skip" type="button">Skip tutorial</button>
         </div>

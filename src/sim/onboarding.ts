@@ -13,8 +13,12 @@ export type OnboardingHighlight =
 
 export interface OnboardingStepDef {
   id: string;
+  /** Short step label shown above the title, e.g. "Step 1 · Dig". */
+  stepLabel: string;
   title: string;
   body: string;
+  /** One-line action the player should take right now. */
+  action: string;
   highlight: OnboardingHighlight;
   preferredView: 'mine' | 'forge';
   preferredPanel: 'forge' | 'reforge' | null;
@@ -24,32 +28,40 @@ export interface OnboardingStepDef {
 export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   {
     id: 'dig',
-    title: 'Dig the shaft',
-    body: 'Tap the dig face or Mine to gather Vein Ore. Fill enough for a Copper Pick.',
+    stepLabel: 'Step 1 · Dig',
+    title: 'Gather Vein Ore',
+    body: 'Your first goal is a Copper Pick. Keep tapping until you have enough ore.',
+    action: 'Tap the glowing Mine button (or the dig face)',
     highlight: 'vein',
     preferredView: 'mine',
     preferredPanel: null,
   },
   {
     id: 'craft',
-    title: 'Craft your first tool',
-    body: 'Spend ore on a Copper Pick. A forge dwarf joins and keeps mining while you craft.',
+    stepLabel: 'Step 2 · Craft',
+    title: 'Craft a Copper Pick',
+    body: 'Spend your ore on a Copper Pick. A forge dwarf joins and keeps mining for you.',
+    action: 'Tap Craft Copper Pick',
     highlight: 'craft',
     preferredView: 'mine',
     preferredPanel: null,
   },
   {
     id: 'smelter',
+    stepLabel: 'Step 3 · Stations',
     title: 'Light the Smelter',
-    body: 'Open Stations and unlock the Smelter — machines sit on the hall pedestals and keep producing.',
+    body: 'Unlock the Smelter so the forge converts Ore into Emberglass automatically.',
+    action: 'Unlock Smelter on the Stations sheet',
     highlight: 'stations',
     preferredView: 'forge',
     preferredPanel: 'forge',
   },
   {
     id: 'reforge',
-    title: 'Reforge the forge',
-    body: 'Open Reforge and rebirth the forge for Relics. Spend them on Talents for permanent power.',
+    stepLabel: 'Step 4 · Reforge',
+    title: 'Your first rebirth',
+    body: 'Reforge resets this run for Relics — permanent power you spend on Talents.',
+    action: 'Tap Reforge, then confirm',
     highlight: 'reforge',
     preferredView: 'forge',
     preferredPanel: 'reforge',
@@ -94,4 +106,12 @@ export function resolveOnboardingStep(state: GameState): number {
 /** True when the guided run should finish (first Reforge completed). */
 export function shouldFinishOnboarding(state: GameState): boolean {
   return state.prestigeCount > 0;
+}
+
+/** Progress line for the dig beat — e.g. "Ore 4 / 15 toward Copper Pick". */
+export function onboardingDigProgress(state: GameState): string | null {
+  if (state.onboardingDone || resolveOnboardingStep(state) !== 0) return null;
+  const need = onboardingCraftOreGate();
+  const have = Math.min(need, Math.floor(state.resources.ore));
+  return `Ore ${have} / ${need} toward Copper Pick`;
 }

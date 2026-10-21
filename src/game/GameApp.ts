@@ -283,7 +283,7 @@ export class GameApp {
       this.hud.setPanel(null);
       if (!this.state.onboardingDone) {
         this.overlayMode = 'onboarding';
-        this.hud.showOnboarding(this.state.onboardingStep);
+        this.hud.showOnboarding(this.state.onboardingStep, this.state);
         this.platform.gameplayStart();
       } else {
         this.overlayMode = 'none';
@@ -300,7 +300,7 @@ export class GameApp {
     this.platform.gameplayStop();
     this.refreshHud();
     if (!this.state.onboardingDone) {
-      this.hud.showOnboarding(this.state.onboardingStep);
+      this.hud.showOnboarding(this.state.onboardingStep, this.state);
     }
   }
 
@@ -316,7 +316,7 @@ export class GameApp {
     this.platform.gameplayStart();
     this.refreshHudLight();
     if (tutoring) {
-      this.hud.showOnboarding(this.state.onboardingStep);
+      this.hud.showOnboarding(this.state.onboardingStep, this.state);
     }
 
     if (was === 'loot' || was === 'prestige' || was === 'milestone') {
@@ -822,7 +822,7 @@ export class GameApp {
     const stepped = nextStep !== this.state.onboardingStep;
     this.state.onboardingStep = nextStep;
     this.overlayMode = 'onboarding';
-    this.hud.showOnboarding(nextStep);
+    this.hud.showOnboarding(nextStep, this.state);
 
     if (steer || stepped) {
       const def = getOnboardingStep(nextStep);
@@ -832,7 +832,7 @@ export class GameApp {
         this.hud.setPanel(def.preferredPanel);
         this.platform.gameplayStop();
         this.refreshHud();
-        this.hud.showOnboarding(nextStep);
+        this.hud.showOnboarding(nextStep, this.state);
       }
     }
   }
