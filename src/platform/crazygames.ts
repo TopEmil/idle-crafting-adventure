@@ -25,6 +25,12 @@ export interface PlatformBridge {
   loadCloud(key: string): Promise<string | null>;
   /** Submit weekly ore score to CrazyGames leaderboard (no-op outside iframe). */
   submitLeaderboardScore(score: number): Promise<SubmitScoreResult>;
+  /**
+   * Subscribe to CrazyGames `settings.muteAudio`.
+   * Invokes immediately with the current value when the SDK is present.
+   * No-op (never calls) when running outside the CrazyGames iframe.
+   */
+  onMuteAudioChange(listener: (muteAudio: boolean) => void): void;
 }
 
 function getSdk(): CrazyGamesSDK | null {
@@ -44,6 +50,29 @@ export function createPlatformBridge(): PlatformBridge {
   let adsEnabled = true;
   let adblock = false;
   let gameplayActive = false;
+  let muteAudio = false;
+  let muteListenerAttached = false;
+  const muteListeners = new Set<(muteAudio: boolean) => void>();
+
+  const emitMuteAudio = (next: boolean) => {
+    muteAudio = next;
+    for (const listener of muteListeners) {
+      listener(next);
+    }
+  };
+
+  const syncMuteFromSettings = (settings: CrazyGamesGameSettings | undefined) => {
+    emitMuteAudio(Boolean(settings?.muteAudio));
+  };
+
+  const ensureMuteListener = (sdk: CrazyGamesSDK) => {
+    if (muteListenerAttached) return;
+    muteListenerAttached = true;
+    syncMuteFromSettings(sdk.game.settings);
+    sdk.game.addSettingsChangeListener?.((settings) => {
+      syncMuteFromSettings(settings);
+    });
+  };
 
   return {
     get ready() {
@@ -72,6 +101,7 @@ export function createPlatformBridge(): PlatformBridge {
           }),
         ]);
         ready = true;
+        ensureMuteListener(sdk);
         if (sdk.ad.hasAdblock) {
           try {
             adblock = await Promise.race([
@@ -182,6 +212,14 @@ export function createPlatformBridge(): PlatformBridge {
     async submitLeaderboardScore(score: number) {
       const sdk = getSdk();
       return submitEncryptedScore(sdk?.user ?? null, score);
+    },
+
+    onMuteAudioChange(listener: (muteAudio: boolean) => void) {
+      const sdk = getSdk();
+      if (!sdk) return;
+      ensureMuteListener(sdk);
+      muteListeners.add(listener);
+      listener(muteAudio);
     },
   };
 }

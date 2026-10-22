@@ -14,6 +14,10 @@ interface CrazyGamesAdCallbacks {
   adStarted?: () => void;
 }
 
+interface CrazyGamesGameSettings {
+  muteAudio?: boolean;
+}
+
 interface CrazyGamesSDK {
   init: () => Promise<void>;
   game: {
@@ -22,6 +26,10 @@ interface CrazyGamesSDK {
     gameplayStart: () => void;
     gameplayStop: () => void;
     happytime?: () => void;
+    /** Current portal settings (muteAudio, etc.). */
+    settings?: CrazyGamesGameSettings;
+    /** Fires when CrazyGames updates game settings (e.g. host mute). */
+    addSettingsChangeListener?: (listener: (settings: CrazyGamesGameSettings) => void) => void;
   };
   ad: {
     requestAd: (type: 'midgame' | 'rewarded', callbacks: CrazyGamesAdCallbacks) => void;

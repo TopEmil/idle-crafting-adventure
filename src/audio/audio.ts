@@ -5,13 +5,21 @@ const BED_URL = `${import.meta.env.BASE_URL}audio/embervein-mine-bed.ogg`;
 export class AudioBus {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
-  private muted = false;
+  /** Player preference from the in-game mute toggle. */
+  private userMuted = false;
+  /** Host / CrazyGames `settings.muteAudio` — always silences output when true. */
+  private sdkMuted = false;
   private unlocked = false;
   private bed: HTMLAudioElement | null = null;
   private bedStarted = false;
 
+  /** True when output should be silent (user preference or host mute). */
   get isMuted() {
-    return this.muted;
+    return this.userMuted || this.sdkMuted;
+  }
+
+  get isSdkMuted() {
+    return this.sdkMuted;
   }
 
   async unlock() {
@@ -25,19 +33,24 @@ export class AudioBus {
   }
 
   setMuted(muted: boolean) {
-    this.muted = muted;
-    if (this.master) {
-      this.master.gain.value = muted ? 0 : 0.55;
-    }
-    if (this.bed) {
-      this.bed.muted = muted;
-      this.bed.volume = muted ? 0 : 0.28;
-    }
+    this.userMuted = muted;
+    this.applyMute();
   }
 
+  /** CrazyGames (or other host) mute — overrides user unmute until cleared. */
+  setSdkMuted(muted: boolean) {
+    this.sdkMuted = muted;
+    this.applyMute();
+  }
+
+  /**
+   * Flip the player's mute preference from the current effective state.
+   * Returns whether output is still muted (may stay true under SDK mute).
+   */
   toggleMute() {
-    this.setMuted(!this.muted);
-    return this.muted;
+    this.userMuted = !this.isMuted;
+    this.applyMute();
+    return this.isMuted;
   }
 
   startBed() {
@@ -47,8 +60,8 @@ export class AudioBus {
   stopBed() {
     if (this.bed) {
       this.bed.pause();
-      this.bedStarted = false;
     }
+    this.bedStarted = false;
   }
 
   click(combo = 1) {
@@ -82,8 +95,19 @@ export class AudioBus {
   }
 
   resumeAfterAd() {
-    if (this.master) this.master.gain.value = this.muted ? 0 : 0.55;
+    this.applyMute();
     this.startBed();
+  }
+
+  private applyMute() {
+    const muted = this.isMuted;
+    if (this.master) {
+      this.master.gain.value = muted ? 0 : 0.55;
+    }
+    if (this.bed) {
+      this.bed.muted = muted;
+      this.bed.volume = muted ? 0 : 0.28;
+    }
   }
 
   private ensureBed(): HTMLAudioElement {
@@ -91,8 +115,8 @@ export class AudioBus {
       const el = new Audio(BED_URL);
       el.loop = true;
       el.preload = 'auto';
-      el.volume = this.muted ? 0 : 0.28;
-      el.muted = this.muted;
+      el.volume = this.isMuted ? 0 : 0.28;
+      el.muted = this.isMuted;
       this.bed = el;
     }
     return this.bed;
@@ -100,8 +124,8 @@ export class AudioBus {
 
   private async playBed() {
     const el = this.ensureBed();
-    el.muted = this.muted;
-    el.volume = this.muted ? 0 : 0.28;
+    el.muted = this.isMuted;
+    el.volume = this.isMuted ? 0 : 0.28;
     if (this.bedStarted && !el.paused) return;
     try {
       await el.play();
@@ -116,7 +140,7 @@ export class AudioBus {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.55;
+      this.master.gain.value = this.isMuted ? 0 : 0.55;
       this.master.connect(this.ctx.destination);
     }
     return this.ctx;
@@ -128,7 +152,7 @@ export class AudioBus {
     type: OscillatorType,
     gainValue: number,
   ) {
-    if (this.muted) return;
+    if (this.isMuted) return;
     const ctx = this.ensure();
     if (!this.master) return;
     const osc = ctx.createOscillator();

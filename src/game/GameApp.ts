@@ -147,6 +147,11 @@ export class GameApp {
 
   async start() {
     await this.platform.init();
+    // Re-bind after init so the first settings.muteAudio value is applied.
+    this.platform.onMuteAudioChange((muteAudio) => {
+      this.audio.setSdkMuted(muteAudio);
+      this.hud.setMuted(this.audio.isMuted);
+    });
     this.platform.loadingStart();
     await this.scene.ready();
 
