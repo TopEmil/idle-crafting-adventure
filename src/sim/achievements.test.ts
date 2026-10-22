@@ -148,6 +148,7 @@ describe('achievements', () => {
     state.stations.smelter.level = 1;
     state.stations.smelter.runLevel = 1;
     state.lastPrestigeAt = 0;
+    state.playTimeSec = 600;
 
     const result = prestige(state, Date.now() + 1);
     expect(result.ok).toBe(true);

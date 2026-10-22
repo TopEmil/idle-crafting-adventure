@@ -10,6 +10,14 @@ async function boot() {
   }
 
   const app = new GameApp(canvas, hud, overlay);
+  // Tutorial recording / QA scripts (see scripts/record-tutorial.mjs).
+  (
+    window as unknown as {
+      __emberveinQa?: { advancePlayTime: (sec: number) => void };
+    }
+  ).__emberveinQa = {
+    advancePlayTime: (sec) => app.qaAdvancePlayTime(sec),
+  };
   await app.start();
 }
 

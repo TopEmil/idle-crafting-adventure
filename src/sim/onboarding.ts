@@ -1,7 +1,9 @@
 /** Guided first-run loop: dig → craft → smelter → first Reforge (rebirth). */
 
+import { BALANCE } from '../data/balance';
 import { getRecipe } from '../data/recipes';
 import { getStation } from '../data/stations';
+import { canPrestige, prestigeMinPlayRemaining } from './economy';
 import { recipeCost, stationUnlockCost } from './pricing';
 import type { GameState } from './types';
 
@@ -120,26 +122,54 @@ export function resolveOnboardingStep(state: GameState): number {
   return Math.min(ONBOARDING_LAST_STEP, step);
 }
 
+/** Format a short M:SS / Mm SSs countdown for coach copy. */
+export function formatOnboardingCountdown(sec: number): string {
+  const s = Math.max(0, Math.ceil(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  if (m <= 0) return `${r}s`;
+  return `${m}m ${r.toString().padStart(2, '0')}s`;
+}
+
 /**
  * Live coach copy for the current step. Step 3 stays on Mine until Smelter
  * is affordable, then opens Stations — avoids a dead unlock button.
+ * Step 4 waits on playtime before steering to Reforge.
  */
 export function coachPresentation(state: GameState): OnboardingStepDef {
   const step = resolveOnboardingStep(state);
   const base = getOnboardingStep(step);
-  if (step !== 2 || state.stations.smelter.unlocked || onboardingCanAffordSmelter(state)) {
-    return base;
+  if (step === 2 && !state.stations.smelter.unlocked && !onboardingCanAffordSmelter(state)) {
+    const need = onboardingSmelterOreGate();
+    return {
+      ...base,
+      title: 'Stock ore for the Smelter',
+      body: `The Smelter costs ${need} ore. Keep mining, then unlock it on Stations.`,
+      action: 'Tap Mine until you can afford the Smelter',
+      highlight: 'vein',
+      preferredView: 'mine',
+      preferredPanel: null,
+    };
   }
-  const need = onboardingSmelterOreGate();
-  return {
-    ...base,
-    title: 'Stock ore for the Smelter',
-    body: `The Smelter costs ${need} ore. Keep mining, then unlock it on Stations.`,
-    action: 'Tap Mine until you can afford the Smelter',
-    highlight: 'vein',
-    preferredView: 'mine',
-    preferredPanel: null,
-  };
+  if (step === 3 && !canPrestige(state)) {
+    const playLeft = prestigeMinPlayRemaining(state);
+    if (playLeft > 0) {
+      const tip =
+        (state.totalOreProduced ?? 0) >= 50
+          ? 'Send a Glow Shallows expedition, craft tools, or keep mining.'
+          : 'Keep mining and let the Smelter run while you wait.';
+      return {
+        ...base,
+        title: 'Forge until Reforge opens',
+        body: `First Reforge opens after ${BALANCE.prestigeMinPlaySec / 60} min of play. ${tip}`,
+        action: `Keep forging — Reforge in ${formatOnboardingCountdown(playLeft)}`,
+        highlight: 'vein',
+        preferredView: 'mine',
+        preferredPanel: null,
+      };
+    }
+  }
+  return base;
 }
 
 /** True when the guided run should finish (first Reforge completed). */

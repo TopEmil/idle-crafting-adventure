@@ -80,6 +80,19 @@ async function main() {
   await page.locator('[data-unlock="smelter"]').click({ force: true });
   await waitCoach(page, 'Step 4');
   await page.waitForTimeout(550);
+  // First Reforge waits on ~10 min playtime — capture the waiting coach, then skip the clock.
+  await page.locator('.onboarding-coach-card').filter({ hasText: /Reforge in/i }).waitFor({
+    timeout: 15_000,
+  });
+  await page.screenshot({ path: path.join(OUT, 'tutorial_step4_reforge_wait.png') });
+
+  await page.evaluate(async () => {
+    const qa = window.__emberveinQa;
+    if (!qa?.advancePlayTime) throw new Error('Missing __emberveinQa.advancePlayTime');
+    qa.advancePlayTime(600);
+  });
+  await waitCoach(page, 'Tap Reforge');
+  await page.waitForTimeout(550);
   await page.screenshot({ path: path.join(OUT, 'tutorial_step4_reforge.png') });
 
   await page.locator('#btn-prestige').click({ force: true });

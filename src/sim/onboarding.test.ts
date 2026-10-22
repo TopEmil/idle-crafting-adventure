@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { BALANCE } from '../data/balance';
 import { createInitialState } from './createState';
 import {
   ONBOARDING_LAST_STEP,
   ONBOARDING_STEPS,
   coachPresentation,
+  formatOnboardingCountdown,
   getOnboardingStep,
   onboardingCraftOreGate,
   onboardingDigProgress,
@@ -73,6 +75,37 @@ describe('onboarding', () => {
     state.stations.smelter.level = 1;
     expect(resolveOnboardingStep(state)).toBe(3);
     expect(getOnboardingStep(3).preferredPanel).toBe('reforge');
+  });
+
+  it('keeps Step 4 on Mine with countdown until playtime gate clears', () => {
+    const state = createInitialState();
+    state.ownedRecipes.push('copper_pick');
+    state.stations.smelter.unlocked = true;
+    state.stations.smelter.level = 1;
+    state.playTimeSec = BALANCE.prestigeMinPlaySec - 90;
+    const waiting = coachPresentation(state);
+    expect(waiting.preferredPanel).toBeNull();
+    expect(waiting.highlight).toBe('vein');
+    expect(waiting.action).toContain(
+      `Reforge in ${formatOnboardingCountdown(90)}`,
+    );
+    expect(waiting.body).toMatch(/10 min/i);
+
+    state.playTimeSec = BALANCE.prestigeMinPlaySec;
+    const ready = coachPresentation(state);
+    expect(ready.preferredPanel).toBe('reforge');
+    expect(ready.highlight).toBe('reforge');
+    expect(ready.action).toMatch(/Tap Reforge/i);
+  });
+
+  it('hints at expeditions once Glow Shallows is unlocked during Reforge wait', () => {
+    const state = createInitialState();
+    state.ownedRecipes.push('copper_pick');
+    state.stations.smelter.unlocked = true;
+    state.playTimeSec = 30;
+    state.totalOreProduced = 50;
+    const tip = coachPresentation(state);
+    expect(tip.body).toMatch(/expedition/i);
   });
 
   it('finishes only after the first Reforge', () => {

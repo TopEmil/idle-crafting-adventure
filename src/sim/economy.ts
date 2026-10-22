@@ -670,10 +670,21 @@ export function prestigeCooldownRemaining(state: GameState, now = Date.now()): n
   return Math.max(0, BALANCE.prestigeCooldownSec - elapsed);
 }
 
+/** True when Smelter is lit or lifetime ore covers the ore gate. */
+export function prestigeContentUnlocked(state: GameState): boolean {
+  return (
+    state.lifetimeOre >= BALANCE.prestigeMinLifetimeOre || state.stations.smelter.unlocked
+  );
+}
+
+/** Seconds of playtime still needed before the first Reforge is allowed. */
+export function prestigeMinPlayRemaining(state: GameState): number {
+  return Math.max(0, BALANCE.prestigeMinPlaySec - (state.playTimeSec ?? 0));
+}
+
 export function canPrestige(state: GameState, now = Date.now()): boolean {
-  const unlocked =
-    state.lifetimeOre >= BALANCE.prestigeMinLifetimeOre || state.stations.smelter.unlocked;
-  if (!unlocked) return false;
+  if (!prestigeContentUnlocked(state)) return false;
+  if (prestigeMinPlayRemaining(state) > 0) return false;
   return prestigeCooldownRemaining(state, now) <= 0;
 }
 
@@ -681,10 +692,16 @@ export function prestige(
   state: GameState,
   now = Date.now(),
 ): { ok: true; state: GameState; event: GameEvent; relics: number } | { ok: false; reason: string } {
-  const unlocked =
-    state.lifetimeOre >= BALANCE.prestigeMinLifetimeOre || state.stations.smelter.unlocked;
-  if (!unlocked) {
+  if (!prestigeContentUnlocked(state)) {
     return { ok: false, reason: 'Keep forging a little longer' };
+  }
+  const playLeft = prestigeMinPlayRemaining(state);
+  if (playLeft > 0) {
+    const mins = Math.ceil(playLeft / 60);
+    return {
+      ok: false,
+      reason: `Reforge opens after ${mins} more minute${mins === 1 ? '' : 's'} of forging`,
+    };
   }
   const coolLeft = prestigeCooldownRemaining(state, now);
   if (coolLeft > 0) {

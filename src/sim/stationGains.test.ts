@@ -9,7 +9,7 @@ import {
 describe('station production gain VFX', () => {
   it('reports emberglass gained from a fueled smelter tick', () => {
     let state = createInitialState();
-    state.resources.ore = 100;
+    state.resources.ore = 200;
     const unlocked = unlockStation(state, 'smelter');
     expect(unlocked.ok).toBe(true);
     if (!unlocked.ok) return;

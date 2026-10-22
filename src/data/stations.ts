@@ -35,7 +35,7 @@ export const STATIONS: StationDef[] = [
     id: 'smelter',
     name: 'Smelter',
     description: 'Melts Vein Ore into Emberglass.',
-    unlockCost: { ore: 25 },
+    unlockCost: { ore: 110 },
     costHardness: 2,
     outputs: { emberglass: 0.35 },
     inputs: { ore: 0.6 },

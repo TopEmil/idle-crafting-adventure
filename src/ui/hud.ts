@@ -26,7 +26,9 @@ import {
   canPrestige,
   expeditionSlotCount,
   getDigDamage,
+  prestigeContentUnlocked,
   prestigeCooldownRemaining,
+  prestigeMinPlayRemaining,
   stationRunMult,
   stationUpgradeCostMap,
 } from '../sim/economy';
@@ -986,6 +988,8 @@ export class Hud {
   private renderReforge(state: GameState, notice?: string) {
     const relicsPreview = relicsFromReforge(state.lifetimeOre, state.prestigeCount);
     const coolLeft = prestigeCooldownRemaining(state);
+    const playLeft = prestigeMinPlayRemaining(state);
+    const contentUnlocked = prestigeContentUnlocked(state);
     const prestigeReady = canPrestige(state);
     let prestigeLabel = 'Reforge';
     let prestigeHint = 'Reset this run\'s production. Talents, Relics, and cosmetics stay.';
@@ -994,6 +998,10 @@ export class Hud {
       prestigeLabel = formatDuration(coolLeft);
       prestigeHint = `Reforge cools ${BALANCE.prestigeCooldownSec / 60} min between runs.`;
       statusLine = `Ready in ${formatDuration(coolLeft)}`;
+    } else if (!prestigeReady && contentUnlocked && playLeft > 0) {
+      prestigeLabel = formatDuration(playLeft);
+      prestigeHint = `First Reforge opens after ${BALANCE.prestigeMinPlaySec / 60} min of forging.`;
+      statusLine = `Opens in ${formatDuration(playLeft)}`;
     } else if (!prestigeReady) {
       prestigeLabel = 'Locked';
       prestigeHint = `Need ${formatNumber(BALANCE.prestigeMinLifetimeOre)} lifetime ore, or unlock the Smelter.`;

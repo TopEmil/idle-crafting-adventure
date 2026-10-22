@@ -78,6 +78,8 @@ export class GameApp {
     | 'resource_offer' = 'none';
   private notice = '';
   private saveTimer = 0;
+  /** Throttle coach countdown rebuilds during the Reforge wait. */
+  private onboardingCoachTimer = 0;
   private running = false;
   private pausedForAd = false;
   private lastStratumId = '';
@@ -122,6 +124,25 @@ export class GameApp {
         this.hud.setMuted(muted);
       },
     });
+  }
+
+  /**
+   * QA helper for tutorial recording — advances playtime without wall-clock wait
+   * so the first-Reforge gate can be exercised quickly.
+   */
+  qaAdvancePlayTime(sec: number) {
+    this.state.playTimeSec = Math.max(this.state.playTimeSec, Math.max(0, sec));
+    this.syncOnboarding(true);
+    if (this.panel) {
+      this.refreshHud();
+      this.hud.showOnboarding(this.state.onboardingStep, this.state);
+    } else {
+      this.refreshHudLight();
+      if (!this.state.onboardingDone) {
+        this.hud.showOnboarding(this.state.onboardingStep, this.state);
+      }
+    }
+    void this.persist();
   }
 
   async start() {
@@ -171,7 +192,12 @@ export class GameApp {
     const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
 
-    if (!this.pausedForAd && this.overlayMode === 'none') {
+    // Onboarding coach is non-blocking — keep the sim running so dwarf dig,
+    // stations, playtime, and the first-Reforge gate advance during the tutorial.
+    const simLive =
+      !this.pausedForAd &&
+      (this.overlayMode === 'none' || this.overlayMode === 'onboarding');
+    if (simLive) {
       this.accum += dt;
       while (this.accum >= SIM_DT) {
         const tick = tickProductionDetailed(this.state, SIM_DT);
@@ -201,6 +227,13 @@ export class GameApp {
       this.scene.setAutoMineRate(getAutoMineRate(this.state));
       this.scene.sync(this.state);
       this.announceStratumIfNew();
+      if (this.overlayMode === 'onboarding') {
+        this.onboardingCoachTimer += dt;
+        if (this.onboardingCoachTimer >= 1) {
+          this.onboardingCoachTimer = 0;
+          this.syncOnboarding();
+        }
+      }
     }
 
     this.saveTimer += dt;
@@ -212,14 +245,20 @@ export class GameApp {
     // Keep chrome live while a sheet is open, but never rebuild the Expeditions
     // sheet every frame — full innerHTML replaces steal click/tap events (Send
     // felt broken). Progress bars patch in place instead.
-    if (this.overlayMode === 'none' && this.panel) {
+    if (
+      (this.overlayMode === 'none' || this.overlayMode === 'onboarding') &&
+      this.panel
+    ) {
       this.refreshHudChrome();
       if (this.panel === 'expeditions') {
         this.hud.syncExpeditionProgress(this.state);
       } else if (this.panel === 'achievements') {
         this.hud.syncAchievementsProgress(this.state);
       }
-    } else if (this.overlayMode === 'none' && !this.panel) {
+    } else if (
+      (this.overlayMode === 'none' || this.overlayMode === 'onboarding') &&
+      !this.panel
+    ) {
       this.refreshHudLight();
     }
 
@@ -833,8 +872,8 @@ export class GameApp {
         this.platform.gameplayStop();
         this.refreshHud();
         this.hud.showOnboarding(nextStep, this.state);
-      } else if (this.panel && nextStep === 2) {
-        // Still gathering for Smelter — keep dig face clear.
+      } else if (this.panel && (nextStep === 2 || nextStep === 3)) {
+        // Gathering for Smelter or waiting on Reforge playtime — keep dig clear.
         this.panel = null;
         this.hud.clearOverlay();
         this.hud.setPanel(null);
@@ -852,6 +891,18 @@ export class GameApp {
       this.setSceneView('forge');
       this.panel = 'forge';
       this.hud.setPanel('forge');
+      this.platform.gameplayStop();
+      this.refreshHud();
+      this.hud.showOnboarding(nextStep, this.state);
+    } else if (
+      nextStep === 3 &&
+      def.preferredPanel === 'reforge' &&
+      this.panel !== 'reforge'
+    ) {
+      // First Reforge just became available — open the Reforge sheet.
+      this.setSceneView('forge');
+      this.panel = 'reforge';
+      this.hud.setPanel('reforge');
       this.platform.gameplayStop();
       this.refreshHud();
       this.hud.showOnboarding(nextStep, this.state);

@@ -165,7 +165,7 @@ describe('click & craft', () => {
 describe('stations', () => {
   it('unlocks smelter and produces emberglass', () => {
     let state = createInitialState();
-    state.resources.ore = 100;
+    state.resources.ore = 200;
     const unlocked = unlockStation(state, 'smelter');
     expect(unlocked.ok).toBe(true);
     if (!unlocked.ok) return;
@@ -225,7 +225,7 @@ describe('stations', () => {
 
   it('can turn stations off and on', () => {
     let state = createInitialState();
-    state.resources.ore = 100;
+    state.resources.ore = 200;
     const unlocked = unlockStation(state, 'smelter');
     expect(unlocked.ok).toBe(true);
     if (!unlocked.ok) return;
@@ -362,6 +362,7 @@ describe('expeditions', () => {
   it('keeps bought squad slots across Reforge', () => {
     const state = createInitialState(1_000_000);
     state.lifetimeOre = 2000;
+    state.playTimeSec = BALANCE.prestigeMinPlaySec;
     state.extraSquadSlots = 2;
     state.resources.relics = 1;
     const result = prestige(state, 1_000_000);
@@ -389,6 +390,7 @@ describe('offline & prestige', () => {
   it('prestige resets production but keeps talents, relics, and ore ranks', () => {
     const state = createInitialState(1_000_000);
     state.lifetimeOre = 2000;
+    state.playTimeSec = BALANCE.prestigeMinPlaySec;
     state.allTimeOre = 5000;
     state.seasonOre = 800;
     state.seasonStartedAt = 42;
@@ -419,6 +421,7 @@ describe('offline & prestige', () => {
     const now = 5_000_000;
     const state = createInitialState(now);
     state.lifetimeOre = 2000;
+    state.playTimeSec = BALANCE.prestigeMinPlaySec;
     state.lastPrestigeAt = now - 60_000;
     expect(canPrestige(state, now)).toBe(false);
     expect(prestigeCooldownRemaining(state, now)).toBeGreaterThan(500);
@@ -427,6 +430,18 @@ describe('offline & prestige', () => {
     const readyAt = now + BALANCE.prestigeCooldownSec * 1000;
     expect(canPrestige(state, readyAt)).toBe(true);
     expect(prestige(state, readyAt).ok).toBe(true);
+  });
+
+  it('blocks first Reforge until prestigeMinPlaySec even with Smelter', () => {
+    const state = createInitialState();
+    state.stations.smelter = { unlocked: true, level: 1, runLevel: 1, enabled: true };
+    state.playTimeSec = BALANCE.prestigeMinPlaySec - 1;
+    expect(canPrestige(state)).toBe(false);
+    expect(prestige(state).ok).toBe(false);
+
+    state.playTimeSec = BALANCE.prestigeMinPlaySec;
+    expect(canPrestige(state)).toBe(true);
+    expect(prestige(state).ok).toBe(true);
   });
 });
 

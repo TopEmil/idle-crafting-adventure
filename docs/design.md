@@ -39,8 +39,9 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 | Beat | Target |
 | --- | --- |
 | First purchase / tool | < 30 seconds |
+| Smelter unlock (after Copper Pick) | ~1–2 minutes of mining |
 | First real expedition claim | ~3–5 minutes |
-| Guided tutorial climax | First Reforge (rebirth) after Smelter unlock |
+| Guided tutorial climax | First Reforge after ~10 min playtime (Smelter unlocks the panel earlier) |
 | First prestige (Reforge) outside tutorial | ~45–90 minutes of engaged play |
 | Offline catch-up | Capped (default 8h); always show summary modal |
 
@@ -50,6 +51,7 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 - Soft cost curves (roughly ×1.15–1.22 per level).
 - Always one visible next goal (recipe, station, or expedition).
 - Prestige (Reforge) grants Relics to spend on permanent Talents + cosmetic forge skin unlocks.
+- First Reforge also needs ~10 minutes of playtime (Smelter or 2,000 run ore unlocks the panel).
 - Reforge has a 10-minute cooldown so runs cannot be chained instantly.
 - Data-driven tables in `src/data/` — balance without code rewrites.
 
@@ -115,10 +117,10 @@ Skippable, visual-first coach (no full-screen dim). Four action-gated beats:
 
 1. **Dig** — highlight Mine / dig face until Copper Pick is affordable  
 2. **Craft** — highlight Craft → Copper Pick (dwarf joins)  
-3. **Smelter** — open Stations, unlock Smelter (also unlocks Reforge)  
-4. **Reforge** — open Reforge, complete the first rebirth for Relics → tutorial ends  
+3. **Smelter** — gather ~110 ore, open Stations, unlock Smelter (unlocks Reforge panel)  
+4. **Reforge** — keep forging until ~10 min playtime, then open Reforge and complete the first rebirth for Relics → tutorial ends  
 
-Progress dots show step N/4. Mid-tutorial Smelter milestone is suppressed so the rebirth remains the climax.
+Progress dots show step N/4. Mid-tutorial Smelter milestone is suppressed so the rebirth remains the climax. During the Reforge wait the coach shows a countdown and soft tips (mine / Smelter / expeditions).
 
 ## Ad flow (policy)
 

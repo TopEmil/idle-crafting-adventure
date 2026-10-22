@@ -22,7 +22,7 @@ describe('economy pricing', () => {
   });
 
   it('scales station unlock and expedition gates', () => {
-    expect(stationUnlockCost(getStation('smelter'))).toEqual({ ore: 25 });
+    expect(stationUnlockCost(getStation('smelter'))).toEqual({ ore: 110 });
     expect(stationUnlockCost(getStation('aetherforge')).aetherite).toBe(6 * 512);
     expect(expeditionOreGate(getExpedition('glow_shalllows'))).toBe(50);
     expect(expeditionOreGate(getExpedition('aether_breach'))).toBe(16_000 * 512);

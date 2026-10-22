@@ -21,6 +21,8 @@ export const BALANCE = {
   offlineCapSeconds: 8 * 3600,
   /** Minimum real time between Reforges (seconds) */
   prestigeCooldownSec: 600,
+  /** Playtime before the first Reforge is allowed (seconds) */
+  prestigeMinPlaySec: 600,
   /** Lifetime ore needed to unlock Reforge (or unlock Smelter) */
   prestigeMinLifetimeOre: 2_000,
   /** Base relics from reforge before scaling */
