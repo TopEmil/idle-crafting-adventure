@@ -330,6 +330,41 @@ describe('expeditions', () => {
     expect(ready.state.pendingLoot).not.toBeNull();
   });
 
+  it('Swift finishes sooner with leaner loot; Laden pays more for a heavier haul', () => {
+    const now = 2_000_000;
+    const base = createInitialState();
+    base.totalOreProduced = 100;
+    base.resources.ore = 100;
+
+    const swiftStart = startExpedition(structuredClone(base), 'glow_shalllows', now, 'swift');
+    const ladenStart = startExpedition(structuredClone(base), 'glow_shalllows', now, 'laden');
+    expect(swiftStart.ok && ladenStart.ok).toBe(true);
+    if (!swiftStart.ok || !ladenStart.ok) return;
+
+    const swiftParty = swiftStart.state.activeExpeditions[0]!;
+    const ladenParty = ladenStart.state.activeExpeditions[0]!;
+    expect(swiftParty.contractId).toBe('swift');
+    expect(ladenParty.contractId).toBe('laden');
+    expect(swiftParty.endsAt - swiftParty.startedAt).toBeLessThan(
+      ladenParty.endsAt - ladenParty.startedAt,
+    );
+    // Steady base cost 20; Swift 23; Laden 25
+    expect(swiftStart.state.resources.ore).toBe(100 - 23);
+    expect(ladenStart.state.resources.ore).toBe(100 - 25);
+
+    const swiftReady = structuredClone(swiftStart.state);
+    swiftReady.activeExpeditions[0]!.endsAt = now;
+    const ladenReady = structuredClone(ladenStart.state);
+    ladenReady.activeExpeditions[0]!.endsAt = now;
+    const swiftDone = completeExpeditionIfReady(swiftReady, now, () => 0.99);
+    const ladenDone = completeExpeditionIfReady(ladenReady, now, () => 0.99);
+    expect(swiftDone.state.pendingLoot).not.toBeNull();
+    expect(ladenDone.state.pendingLoot).not.toBeNull();
+    const swiftDust = swiftDone.state.pendingLoot!.glowdust ?? 0;
+    const ladenDust = ladenDone.state.pendingLoot!.glowdust ?? 0;
+    expect(ladenDust).toBeGreaterThan(swiftDust);
+  });
+
   it('buys an extra squad slot for Relics and allows parallel sends', () => {
     let state = createInitialState();
     // crystal_fault ore gate scales with costHardness 8 → 800

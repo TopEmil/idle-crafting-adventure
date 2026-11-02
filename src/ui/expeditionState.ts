@@ -1,11 +1,17 @@
 import { BALANCE } from '../data/balance';
+import {
+  DEFAULT_EXPEDITION_CONTRACT,
+  getExpeditionContract,
+  type ExpeditionContractId,
+} from '../data/expeditionContracts';
 import type { ExpeditionDef } from '../data/expeditions';
 import {
   activeSquadCount,
   canAfford,
   expeditionSlotCount,
+  expeditionTripCost,
 } from '../sim/economy';
-import { expeditionCost, expeditionOreGate } from '../sim/pricing';
+import { expeditionOreGate } from '../sim/pricing';
 import type { GameState } from '../sim/types';
 import { formatCostProgress } from './craftState';
 import { formatCost, formatCostHtml, formatDuration, formatNumber } from './format';
@@ -54,20 +60,24 @@ export function getExpeditionRowState(
   state: GameState,
   expedition: ExpeditionDef,
   now = Date.now(),
+  contractId: ExpeditionContractId = DEFAULT_EXPEDITION_CONTRACT,
 ): ExpeditionRowState {
   const parties = state.activeExpeditions ?? [];
   const active = parties.find((e) => e.id === expedition.id);
+  const selected = getExpeditionContract(contractId);
 
   if (active) {
+    const spanSec = Math.max(1, (active.endsAt - active.startedAt) / 1000);
     const left = Math.max(0, (active.endsAt - now) / 1000);
-    const pct = Math.min(100, ((expedition.durationSec - left) / expedition.durationSec) * 100);
+    const pct = Math.min(100, ((spanSec - left) / spanSec) * 100);
     const thisPending = pendingFor(state, expedition.id);
     const ready = left <= 0 || active.claimed;
+    const stance = getExpeditionContract(active.contractId ?? DEFAULT_EXPEDITION_CONTRACT);
     if (thisPending || (ready && !state.pendingLoot)) {
       return {
         kind: 'returning',
         mode: 'claim',
-        status: 'Loot ready — claim it',
+        status: `Loot ready — ${stance.name} haul`,
         requirements: 'Tap Claim to collect loot',
         actionTitle: 'Tap Claim to collect loot',
         actionLabel: 'Claim',
@@ -96,9 +106,9 @@ export function getExpeditionRowState(
     return {
       kind: 'active',
       mode: 'progress',
-      status: `Returning in ${formatDuration(left)}`,
-      requirements: `Cost paid · ${formatDuration(expedition.durationSec)} run · watch an ad to rush`,
-      actionTitle: `Cost paid · ${formatDuration(expedition.durationSec)} run · watch an ad to rush`,
+      status: `${stance.name} · returning in ${formatDuration(left)}`,
+      requirements: `${stance.name} stance · watch an ad to rush`,
+      actionTitle: `${stance.name} stance · watch an ad to rush`,
       actionLabel: 'En route',
       canSend: false,
       blocked: false,
@@ -139,16 +149,17 @@ export function getExpeditionRowState(
     };
   }
 
-  const priced = expeditionCost(expedition);
+  const priced = expeditionTripCost(expedition.id, contractId);
   const costPlain = formatCost(priced);
   const costHtml = formatCostHtml(priced);
-  const duration = formatDuration(expedition.durationSec);
+  const durationSec = expedition.durationSec * selected.durationMult;
+  const duration = formatDuration(durationSec);
 
   if (state.pendingLoot) {
     return {
       kind: 'claim_first',
       mode: 'claim_first',
-      status: `${costHtml}<span class="res-sep"> · </span>${duration}`,
+      status: `${selected.name} · ${costHtml}<span class="res-sep"> · </span>${duration}`,
       requirements: 'Claim pending loot before sending again',
       actionTitle: 'Claim pending loot before sending again',
       actionLabel: 'Claim first',
@@ -170,7 +181,7 @@ export function getExpeditionRowState(
     return {
       kind: 'busy',
       mode: 'busy',
-      status: `${costHtml}<span class="res-sep"> · </span>${duration}`,
+      status: `${selected.name} · ${costHtml}<span class="res-sep"> · </span>${duration}`,
       requirements,
       actionTitle: requirements,
       actionLabel: 'Squads busy',
@@ -189,8 +200,8 @@ export function getExpeditionRowState(
       kind: 'need_cost',
       mode: 'need_cost',
       status: costProgress.detail,
-      requirements: `Needs ${costHtml} to send · ${duration}`,
-      actionTitle: `Needs ${costPlain} to send · ${duration}`,
+      requirements: `${selected.name}: needs ${costHtml} · ${duration}`,
+      actionTitle: `${selected.name}: needs ${costPlain} · ${duration}`,
       actionLabel: 'Need more',
       canSend: false,
       blocked: true,
@@ -203,10 +214,10 @@ export function getExpeditionRowState(
   return {
     kind: 'ready',
     mode: 'send',
-    status: `Ready · ${costProgress.detail} · ${duration}`,
-    requirements: `Spend ${costHtml} · returns in ${duration}`,
-    actionTitle: `Spend ${costPlain} · returns in ${duration}`,
-    actionLabel: 'Send',
+    status: `${selected.name} · ${costProgress.detail} · ${duration}`,
+    requirements: `${selected.blurb} Spend ${costHtml} · returns in ${duration}`,
+    actionTitle: `${selected.name}: spend ${costPlain} · returns in ${duration}`,
+    actionLabel: `Send ${selected.name}`,
     canSend: true,
     blocked: false,
     progress: 1,

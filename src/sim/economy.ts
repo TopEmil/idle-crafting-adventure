@@ -19,6 +19,11 @@ import {
   type CosmeticId,
 } from '../data/cosmetics';
 import {
+  DEFAULT_EXPEDITION_CONTRACT,
+  getExpeditionContract,
+  type ExpeditionContractId,
+} from '../data/expeditionContracts';
+import {
   EXPEDITIONS,
   expeditionUnlocked,
   getExpedition,
@@ -136,6 +141,26 @@ function scaleLoot(
     out[key] = Math.floor(amount * mult);
   }
   return out;
+}
+
+function scaleCost(
+  cost: Partial<Record<ResourceId, number>>,
+  mult: number,
+): Partial<Record<ResourceId, number>> {
+  const out: Partial<Record<ResourceId, number>> = {};
+  for (const [key, amount] of Object.entries(cost) as [ResourceId, number][]) {
+    out[key] = Math.max(1, Math.ceil(amount * mult));
+  }
+  return out;
+}
+
+/** Destination cost after the chosen send-time stance. */
+export function expeditionTripCost(
+  expeditionId: ExpeditionId,
+  contractId: ExpeditionContractId = DEFAULT_EXPEDITION_CONTRACT,
+): Partial<Record<ResourceId, number>> {
+  const contract = getExpeditionContract(contractId);
+  return scaleCost(expeditionCost(getExpedition(expeditionId)), contract.costMult);
 }
 
 /** Dig damage per strike from recipes / talents / achievements. */
@@ -352,6 +377,7 @@ export function startExpedition(
   state: GameState,
   expeditionId: ExpeditionId,
   now = Date.now(),
+  contractId: ExpeditionContractId = DEFAULT_EXPEDITION_CONTRACT,
 ): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
   const active = state.activeExpeditions ?? [];
   if (active.some((e) => e.id === expeditionId && !e.claimed)) {
@@ -377,13 +403,15 @@ export function startExpedition(
       reason: `Dig to depth ${def.unlockAtDepth} first`,
     };
   }
-  const tripCost = expeditionCost(def);
+  const contract = getExpeditionContract(contractId);
+  const tripCost = expeditionTripCost(expeditionId, contractId);
   if (!canAfford(state.resources, tripCost)) {
     return { ok: false, reason: 'Not enough resources for this expedition' };
   }
   const next = structuredClone(state);
   pay(next.resources, tripCost);
-  const durationSec = def.durationSec * effectsFor(next).expeditionDuration;
+  const durationSec =
+    def.durationSec * contract.durationMult * effectsFor(next).expeditionDuration;
   next.activeExpeditions = [
     ...(next.activeExpeditions ?? []),
     {
@@ -392,9 +420,14 @@ export function startExpedition(
       endsAt: now + durationSec * 1000,
       claimed: false,
       doublePending: false,
+      contractId,
     },
   ];
-  return { ok: true, state: next, event: { type: 'start_expedition', expeditionId } };
+  return {
+    ok: true,
+    state: next,
+    event: { type: 'start_expedition', expeditionId, contractId },
+  };
 }
 
 /** Instantly finish a running expedition timer (rewarded-ad rush). */
@@ -422,18 +455,21 @@ export function rollExpeditionLoot(
   state: GameState,
   expeditionId: ExpeditionId,
   rng: () => number = Math.random,
+  contractId: ExpeditionContractId = DEFAULT_EXPEDITION_CONTRACT,
 ): Partial<Record<ResourceId, number>> {
   const def = getExpedition(expeditionId);
+  const contract = getExpeditionContract(contractId);
   const effects = effectsFor(state);
   const hardness = def.costHardness ?? 2;
   const loot = scaleLoot(
     expeditionLoot(def.baseLoot, hardness),
-    effects.expeditionLoot,
+    effects.expeditionLoot * contract.lootMult,
   );
-  if (rng() < def.bonusChance) {
+  const bonusChance = Math.min(1, Math.max(0, def.bonusChance + contract.bonusChanceDelta));
+  if (rng() < bonusChance) {
     const bonus = scaleLoot(
       expeditionLoot(def.bonusLoot, hardness),
-      effects.expeditionLoot,
+      effects.expeditionLoot * contract.lootMult,
     );
     for (const [key, amount] of Object.entries(bonus) as [ResourceId, number][]) {
       loot[key] = (loot[key] ?? 0) + amount;
@@ -457,7 +493,12 @@ export function completeExpeditionIfReady(
   }
   const ready = active[readyIdx];
   const next = structuredClone(state);
-  next.pendingLoot = rollExpeditionLoot(next, ready.id, rng);
+  next.pendingLoot = rollExpeditionLoot(
+    next,
+    ready.id,
+    rng,
+    ready.contractId ?? DEFAULT_EXPEDITION_CONTRACT,
+  );
   next.pendingLootExpeditionId = ready.id;
   next.activeExpeditions = (next.activeExpeditions ?? []).map((e, i) =>
     i === readyIdx ? { ...e, claimed: true } : e,
