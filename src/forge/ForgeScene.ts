@@ -1,6 +1,7 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { GameState } from '../sim/types';
 import { stationRunMult } from '../sim/economy';
+import { cosmeticVisuals, type CosmeticVisuals } from '../data/cosmetics';
 import { getStation, STATIONS, type StationId } from '../data/stations';
 import { RESOURCES, type ResourceId } from '../data/resources';
 import type { SceneView } from './sceneView';
@@ -99,6 +100,7 @@ export class ForgeScene {
   private dwarfFrames: Texture[] = [];
   private oreSpritesRoot = new Container();
   private rockSprites: Sprite[] = [];
+  private hallGlow = new Graphics();
   private stationsGfx = new Graphics();
   private stationSpritesRoot = new Container();
   private stationLabels = new Container();
@@ -191,6 +193,7 @@ export class ForgeScene {
     this.mineLayer.addChild(this.oreSpritesRoot);
     this.mineLayer.addChild(this.dwarfGfx);
 
+    this.forgeLayer.addChild(this.hallGlow);
     this.forgeLayer.addChild(this.stationsGfx);
     this.forgeLayer.addChild(this.stationSpritesRoot);
     this.forgeLayer.addChild(this.stationLabels);
@@ -810,6 +813,7 @@ export class ForgeScene {
     }
 
     if (this.view === 'mine') {
+      this.hallGlow.clear();
       this.redrawVeinAmbient();
       this.redrawOreFace();
       this.redrawDwarf();
@@ -819,6 +823,7 @@ export class ForgeScene {
       this.dwarfGfx.clear();
       if (this.dwarfSprite) this.dwarfSprite.visible = false;
       for (const sprite of this.rockSprites) sprite.visible = false;
+      this.redrawHallGlow();
     }
     this.redrawStations();
     this.redrawParticles();
@@ -832,6 +837,10 @@ export class ForgeScene {
     }
   }
 
+  private activeVisuals(): CosmeticVisuals {
+    return cosmeticVisuals(this.state?.activeCosmetic ?? 'default');
+  }
+
   /** Soft mineral bloom around the dig face — shaft tunnel, not forge fire. */
   private redrawVeinAmbient() {
     const g = this.hearth;
@@ -842,19 +851,48 @@ export class ForgeScene {
     const { w: cellW, h: cellH } = this.cellSize;
     const shaftW = cellW * SHAFT_COLS + 18;
     const shaftH = cellH * (SHAFT_LOOKAHEAD + SHAFT_LOOKBEHIND + 1.4);
+    const visuals = this.activeVisuals();
 
     // Cool ore wash inside the open shaft (kept subtle so timber bg stays dominant)
     g.rect(x - shaftW * 0.5, y - shaftH * 0.5, shaftW, shaftH);
-    g.fill({ color: COLORS.cyan, alpha: 0.045 * breath * boost });
+    g.fill({ color: visuals.shaft, alpha: visuals.shaftAlpha * breath * boost });
     g.circle(x, y + cellH * 0.2, 56 * breath * boost);
     g.fill({ color: COLORS.tealLight, alpha: 0.08 });
 
-    const cosmetic = this.state?.activeCosmetic ?? 'default';
-    if (cosmetic !== 'default') {
+    if ((this.state?.activeCosmetic ?? 'default') !== 'default') {
       // Soft shaft wash only — no floating badge over the dig face.
-      const tint = cosmetic === 'cyan_hearth' ? COLORS.cyan : COLORS.amber;
-      g.circle(x, y - shaftH * 0.28, 36 * breath);
-      g.fill({ color: tint, alpha: 0.1 });
+      g.circle(x, y - shaftH * 0.28, 40 * breath);
+      g.fill({ color: visuals.accent, alpha: 0.12 * breath });
+      g.circle(x, y + cellH * 0.15, 28 * breath);
+      g.fill({ color: visuals.hearth, alpha: 0.08 * breath });
+    }
+  }
+
+  /** Forge-hall identity wash + breathing hearth glow under the station row. */
+  private redrawHallGlow() {
+    const g = this.hallGlow;
+    g.clear();
+    if (!this.state || this.view !== 'forge') return;
+
+    const visuals = this.activeVisuals();
+    const breath = 1 + Math.sin(this.pulse * (Math.PI * 2) / 1.2) * 0.08;
+    const boost = this.craftBurstT > 0 ? 1.18 : 1;
+    const insets = playSafeInsets(this.width, this.height);
+    const playY = playBandCenterY(insets) * this.height;
+    const cx = this.width * 0.5;
+    const cy = playY + this.height * 0.08;
+
+    g.ellipse(cx, cy, this.width * 0.42, this.height * 0.18);
+    g.fill({ color: visuals.hallWash, alpha: visuals.hallAlpha * breath * boost });
+
+    g.circle(cx, cy + this.height * 0.02, Math.min(this.width, this.height) * 0.12 * breath);
+    g.fill({ color: visuals.hearth, alpha: 0.1 * breath * boost });
+
+    if ((this.state.activeCosmetic ?? 'default') !== 'default') {
+      g.circle(cx - this.width * 0.18, cy - this.height * 0.02, 22 * breath);
+      g.fill({ color: visuals.accent, alpha: 0.08 * breath });
+      g.circle(cx + this.width * 0.18, cy - this.height * 0.02, 22 * breath);
+      g.fill({ color: visuals.accent, alpha: 0.08 * breath });
     }
   }
 

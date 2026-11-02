@@ -50,7 +50,7 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 - Fixed-timestep sim at **10 Hz**; rendering independent.
 - Soft cost curves (roughly ×1.15–1.22 per level).
 - Always one visible next goal (recipe, station, or expedition).
-- Prestige (Reforge) grants Relics to spend on permanent Talents + cosmetic forge skin unlocks.
+- Prestige (Reforge) grants Relics to spend on permanent Talents + cosmetic forge skin unlocks (and Relic-bought hall skins).
 - First Reforge also needs ~10 minutes of playtime (Smelter or 2,000 run ore unlocks the panel).
 - Reforge has a 10-minute cooldown so runs cannot be chained instantly.
 - Data-driven tables in `src/data/` — balance without code rewrites.
@@ -65,7 +65,9 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 6. **Talents:** Eight Relic trees (tap, stations, loot, offline, dwarf, seam sense, caravan speed, Relic lore).
 7. **Offline:** Simulated ticks up to cap; summary lists gains.
 8. **Reforge:** Reset production progress for Relics (10 min cooldown). Spend Relics on Talents for permanent bonuses.
-9. **Leaderboard:** Weekly CrazyGames board for most ore mined (`seasonOre`). See `docs/leaderboard.md`.
+9. **Forge cosmetics:** Prestige unlocks Ember Crest / Cyan Hearth / Abyss Crown; Relics buy Verdant Mantle and Starlit Kiln. Equip from the Talents sheet — active skin tints mine shaft wash and forge-hall glow. Manual equip stops prestige from auto-swapping the equipped skin.
+10. **Awards:** Tiered achievements with claimable permanent power (survives Reforge).
+11. **Leaderboard:** Weekly CrazyGames board for most ore mined (`seasonOre`). See `docs/leaderboard.md`.
 
 ## HUD wireframes (notes)
 
@@ -136,9 +138,12 @@ Pacing: first midgame after ~3–5 min **or** first real expedition claim. Progr
 
 CrazyGames HTML5 SDK v3: loading start/stop, gameplay start/stop, midgame/rewarded, Data module + LocalStorage fallback. No custom fullscreen. Block iframe scroll on Space / arrows.
 
-## Content depth (v1)
+## Content depth (current)
 
-- ≥12 recipes across tools / gear / forge upgrades
-- ≥4 expedition destinations with scaling timers & loot
-- 3 stations + prestige cosmetics
+- ≥28 recipes across tools / gear / forge upgrades
+- ≥10 expedition destinations with scaling timers & loot
+- ≥6 stations (Smelter → Aetherforge) soft-gated by ore and dig depth
+- ≥10 mine strata + rare tile finds
+- ≥8 Relic talent trees
+- Forge cosmetics: 3 prestige unlocks + ≥2 Relic-bought hall skins, with equip UI
 - Audio bed + craft / claim / prestige SFX at consistent levels

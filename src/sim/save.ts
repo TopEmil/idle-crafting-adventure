@@ -4,6 +4,11 @@ import {
   type AchievementId,
 } from '../data/achievements';
 import { BALANCE } from '../data/balance';
+import {
+  cosmeticsForPrestigeCount,
+  isCosmeticId,
+  type CosmeticId,
+} from '../data/cosmetics';
 import { RESOURCE_IDS, emptyWallet } from '../data/resources';
 import { emptyStationProgress, STATIONS } from '../data/stations';
 import { STRATA, type StratumId } from '../data/strata';
@@ -200,6 +205,31 @@ export function migrateState(state: GameState): GameState {
     } else {
       next.ads.resourceOffersClaimed = Math.max(0, Math.floor(next.ads.resourceOffersClaimed));
     }
+  }
+
+  const prestigeCount =
+    typeof next.prestigeCount === 'number' && Number.isFinite(next.prestigeCount)
+      ? Math.max(0, Math.floor(next.prestigeCount))
+      : 0;
+  next.prestigeCount = prestigeCount;
+
+  const unlocked = new Set<CosmeticId>(['default']);
+  if (Array.isArray(next.unlockedCosmetics)) {
+    for (const id of next.unlockedCosmetics) {
+      if (isCosmeticId(id)) unlocked.add(id);
+    }
+  }
+  for (const id of cosmeticsForPrestigeCount(prestigeCount)) {
+    unlocked.add(id);
+  }
+  next.unlockedCosmetics = [...unlocked];
+
+  if (typeof next.cosmeticPicked !== 'boolean') {
+    next.cosmeticPicked = false;
+  }
+
+  if (!isCosmeticId(next.activeCosmetic) || !unlocked.has(next.activeCosmetic)) {
+    next.activeCosmetic = 'default';
   }
 
   return next;

@@ -12,6 +12,13 @@ import {
   stationUnlockCost,
 } from './pricing';
 import {
+  cosmeticGrantedByPrestige,
+  cosmeticsForPrestigeCount,
+  getCosmetic,
+  isCosmeticId,
+  type CosmeticId,
+} from '../data/cosmetics';
+import {
   EXPEDITIONS,
   expeditionUnlocked,
   getExpedition,
@@ -730,8 +737,21 @@ export function prestige(
   next.seasonStartedAt = state.seasonStartedAt ?? 0;
   next.lastLeaderboardScore = state.lastLeaderboardScore ?? 0;
   next.lastLeaderboardSubmitAt = state.lastLeaderboardSubmitAt ?? 0;
-  next.unlockedCosmetics = [...new Set([...state.unlockedCosmetics, cosmeticForPrestige(state.prestigeCount + 1)])];
-  next.activeCosmetic = cosmeticForPrestige(state.prestigeCount + 1);
+  next.cosmeticPicked = Boolean(state.cosmeticPicked);
+  const prestigeCount = state.prestigeCount + 1;
+  const unlocked = mergeCosmetics(state.unlockedCosmetics, [
+    ...cosmeticsForPrestigeCount(prestigeCount),
+    cosmeticGrantedByPrestige(prestigeCount),
+  ]);
+  next.unlockedCosmetics = unlocked;
+  const granted = cosmeticGrantedByPrestige(prestigeCount);
+  if (!state.cosmeticPicked && granted) {
+    next.activeCosmetic = granted;
+  } else if (isCosmeticId(state.activeCosmetic) && unlocked.includes(state.activeCosmetic)) {
+    next.activeCosmetic = state.activeCosmetic;
+  } else {
+    next.activeCosmetic = 'default';
+  }
   next.onboardingDone = true;
   next.milestones.firstPrestige = true;
   next.milestones.firstExpeditionClaimed = state.milestones.firstExpeditionClaimed;
@@ -768,10 +788,66 @@ export function buyTalent(
   return { ok: true, state: next, event: { type: 'buy_talent', talentId } };
 }
 
-function cosmeticForPrestige(count: number): string {
-  if (count >= 3) return 'abyss_crown';
-  if (count >= 2) return 'cyan_hearth';
-  return 'ember_crest';
+function mergeCosmetics(
+  owned: readonly string[],
+  additions: readonly (CosmeticId | null | undefined)[],
+): CosmeticId[] {
+  const set = new Set<CosmeticId>(['default']);
+  for (const id of owned) {
+    if (isCosmeticId(id)) set.add(id);
+  }
+  for (const id of additions) {
+    if (id && isCosmeticId(id)) set.add(id);
+  }
+  return [...set];
+}
+
+export function isCosmeticUnlocked(state: GameState, cosmeticId: CosmeticId): boolean {
+  return state.unlockedCosmetics.includes(cosmeticId) || cosmeticId === 'default';
+}
+
+export function buyCosmetic(
+  state: GameState,
+  cosmeticId: CosmeticId,
+): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
+  const def = getCosmetic(cosmeticId);
+  if (def.id === 'default') {
+    return { ok: false, reason: 'Already owned' };
+  }
+  if (isCosmeticUnlocked(state, def.id)) {
+    return { ok: false, reason: 'Already unlocked' };
+  }
+  if (def.relicCost <= 0) {
+    return { ok: false, reason: 'Earn this skin by Reforging' };
+  }
+  if ((state.resources.relics ?? 0) < def.relicCost) {
+    return { ok: false, reason: 'Not enough Relics' };
+  }
+  const next = structuredClone(state);
+  next.resources.relics -= def.relicCost;
+  next.unlockedCosmetics = mergeCosmetics(state.unlockedCosmetics, [def.id]);
+  next.activeCosmetic = def.id;
+  next.cosmeticPicked = true;
+  return { ok: true, state: next, event: { type: 'buy_cosmetic', cosmeticId: def.id } };
+}
+
+export function equipCosmetic(
+  state: GameState,
+  cosmeticId: CosmeticId,
+): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
+  if (!isCosmeticId(cosmeticId)) {
+    return { ok: false, reason: 'Unknown skin' };
+  }
+  if (!isCosmeticUnlocked(state, cosmeticId)) {
+    return { ok: false, reason: 'Skin locked' };
+  }
+  if (state.activeCosmetic === cosmeticId && state.cosmeticPicked) {
+    return { ok: false, reason: 'Already equipped' };
+  }
+  const next = structuredClone(state);
+  next.activeCosmetic = cosmeticId;
+  next.cosmeticPicked = true;
+  return { ok: true, state: next, event: { type: 'equip_cosmetic', cosmeticId } };
 }
 
 export function availableExpeditions(state: GameState) {

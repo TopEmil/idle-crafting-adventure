@@ -5,6 +5,7 @@ import {
   type AchievementId,
 } from '../data/achievements';
 import { BALANCE, relicsFromReforge } from '../data/balance';
+import { COSMETICS, type CosmeticId } from '../data/cosmetics';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
 import { RESOURCES, resourceIconSrc, resourceLabel, type ResourceId } from '../data/resources';
@@ -96,6 +97,8 @@ export interface HudActions {
   onClaimAchievement: (id: AchievementId) => void;
   onPrestige: () => void;
   onBuyTalent: (id: TalentId) => void;
+  onBuyCosmetic: (id: CosmeticId) => void;
+  onEquipCosmetic: (id: CosmeticId) => void;
   onResourceOffer: (mode: 'ad' | 'dismiss') => void;
   onSkipOnboarding: () => void;
   onToggleMute: () => void;
@@ -960,7 +963,7 @@ export class Hud {
           <h2>Stations</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Machines sit on the Forge hall pedestals · Use −/+ Speed to run slower than owned level · Cosmetic: ${state.activeCosmetic}</p>
+        <p class="muted">Machines sit on the Forge hall pedestals · Use −/+ Speed to run slower than owned level · Skins live on the Talents tab</p>
         <div class="list">${stationRows}</div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
       </div>
@@ -1014,7 +1017,7 @@ export class Hud {
           <h2>Reforge</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="sheet-intro">Reset the forge for Relics, then spend them on the Talents tab for permanent power.</p>
+        <p class="sheet-intro">Reset the forge for Relics, then spend them on the Talents tab for permanent power and forge skins.</p>
         <div class="reforge-reward" aria-live="polite">
           <div class="reforge-reward-label">Reforge points this run</div>
           <div class="reforge-reward-value">${formatNumber(relicsPreview)}</div>
@@ -1080,6 +1083,39 @@ export class Hud {
       `;
     }).join('');
 
+    const skinRows = COSMETICS.map((skin) => {
+      const unlocked = state.unlockedCosmetics.includes(skin.id) || skin.id === 'default';
+      const equipped = state.activeCosmetic === skin.id;
+      const swatch = `#${skin.visuals.hearth.toString(16).padStart(6, '0')}`;
+      let lockHint = '';
+      if (!unlocked && skin.prestigeUnlock > 0) {
+        lockHint = `Unlocks at Reforge ${skin.prestigeUnlock}`;
+      } else if (!unlocked && skin.relicCost > 0) {
+        lockHint = `${skin.relicCost} Relic${skin.relicCost === 1 ? '' : 's'}`;
+      }
+      let action = '';
+      if (equipped) {
+        action = `<span class="muted">Equipped</span>`;
+      } else if (unlocked) {
+        action = `<button class="btn btn-secondary" data-equip-cosmetic="${skin.id}" type="button">Equip</button>`;
+      } else if (skin.relicCost > 0) {
+        const affordable = state.resources.relics >= skin.relicCost;
+        action = `<button class="btn btn-secondary" data-buy-cosmetic="${skin.id}" type="button" ${affordable ? '' : 'disabled'}>${affordable ? `Buy · ${skin.relicCost}` : `Need ${skin.relicCost}`}</button>`;
+      } else {
+        action = `<span class="muted">${lockHint}</span>`;
+      }
+      return `
+        <div class="row-item${!unlocked ? ' row-item-blocked' : ''}${equipped ? ' row-item-ready' : ''}">
+          <div>
+            <h3><span class="cosmetic-swatch" style="background:${swatch}" aria-hidden="true"></span>${skin.name}</h3>
+            <div class="cost">${unlocked ? (equipped ? 'Active hall skin' : 'Owned') : lockHint || 'Locked'}</div>
+          </div>
+          ${action}
+          <p>${skin.blurb}</p>
+        </div>
+      `;
+    }).join('');
+
     this.overlay.innerHTML = `
       <div class="sheet">
         <div class="sheet-header">
@@ -1088,6 +1124,9 @@ export class Hud {
         </div>
         <p class="muted">Permanent bonuses that survive Reforge · Relics ${formatNumber(state.resources.relics)} · Levels ${talentLevels}</p>
         <div class="list">${talentRows}</div>
+        <h3 class="sheet-section-title">Forge skins</h3>
+        <p class="sheet-intro">Prestige unlocks crest skins; spend Relics on extra hall looks. Equip one to tint the forge and mine shaft.</p>
+        <div class="list">${skinRows}</div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
         <p class="muted" style="margin-top:12px">Earn Relics from the Reforge tab.</p>
       </div>
@@ -1095,6 +1134,16 @@ export class Hud {
     this.bindSheet();
     this.overlay.querySelectorAll('[data-talent]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onBuyTalent((btn as HTMLElement).dataset.talent as TalentId));
+    });
+    this.overlay.querySelectorAll('[data-equip-cosmetic]').forEach((btn) => {
+      btn.addEventListener('click', () =>
+        this.actions.onEquipCosmetic((btn as HTMLElement).dataset.equipCosmetic as CosmeticId),
+      );
+    });
+    this.overlay.querySelectorAll('[data-buy-cosmetic]').forEach((btn) => {
+      btn.addEventListener('click', () =>
+        this.actions.onBuyCosmetic((btn as HTMLElement).dataset.buyCosmetic as CosmeticId),
+      );
     });
   }
 
