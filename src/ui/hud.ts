@@ -65,7 +65,7 @@ import {
   type OnboardingHighlight,
 } from '../sim/onboarding';
 import { leaderboardScore, msUntilSeasonEnd } from '../sim/oreScore';
-import { formatScoutTimeLeft, getScoutPartyRows } from './scoutStatus';
+import { formatScoutTimeLeft, getScoutIdleHint, getScoutPartyRows } from './scoutStatus';
 import { sheetScrollAfterRebuild } from './sheetScroll';
 
 export type PanelId =
@@ -349,12 +349,27 @@ export class Hud {
 
   private renderScoutParties(state: GameState) {
     const strip = this.root.querySelector('#scout-strip') as HTMLButtonElement | null;
+    const head = this.root.querySelector('.scout-strip-head') as HTMLElement | null;
     const list = this.root.querySelector('#scout-list');
     if (!strip || !list) return;
 
     const rows = getScoutPartyRows(state);
-    strip.hidden = rows.length === 0;
+    const idle = rows.length === 0 ? getScoutIdleHint(state) : null;
+    strip.hidden = rows.length === 0 && !idle;
     strip.classList.toggle('scout-ready', rows.some((row) => row.ready));
+    strip.classList.toggle('scout-idle', Boolean(idle));
+    if (head) {
+      head.textContent = idle ? 'Expeditions' : 'Scouting parties';
+    }
+
+    if (idle) {
+      list.innerHTML = `<div class="scout-idle-copy" role="listitem">
+        <span class="scout-idle-title">${idle.title}</span>
+        <span class="scout-idle-detail">${idle.detail}</span>
+      </div>`;
+      return;
+    }
+
     list.innerHTML = rows
       .map((row) => {
         const time = formatScoutTimeLeft(row);

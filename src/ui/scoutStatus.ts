@@ -1,4 +1,5 @@
 import { EXPEDITIONS, type ExpeditionId } from '../data/expeditions';
+import { availableExpeditions } from '../sim/economy';
 import type { GameState } from '../sim/types';
 import { formatDuration } from './format';
 
@@ -11,6 +12,12 @@ export interface ScoutPartyRow {
   ready: boolean;
   /** 0..1 journey progress. */
   progress: number;
+}
+
+export interface ScoutIdleHint {
+  title: string;
+  detail: string;
+  expeditionId: ExpeditionId;
 }
 
 /** Active scout parties in send order, for the HUD status strip. */
@@ -36,6 +43,23 @@ export function getScoutPartyRows(state: GameState, now = Date.now()): ScoutPart
       progress,
     };
   });
+}
+
+/**
+ * When expeditions are unlocked but no party is out, nudge the next send.
+ * Keeps post-tutorial pacing from going quiet after the craft loop.
+ */
+export function getScoutIdleHint(state: GameState): ScoutIdleHint | null {
+  if ((state.activeExpeditions?.length ?? 0) > 0) return null;
+  if (state.pendingLoot) return null;
+  const unlocked = availableExpeditions(state);
+  if (unlocked.length === 0) return null;
+  const next = unlocked[0]!;
+  return {
+    title: 'Scouts ready',
+    detail: `Send ${next.name}`,
+    expeditionId: next.id,
+  };
 }
 
 export function formatScoutTimeLeft(row: ScoutPartyRow): string {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState } from '../sim/createState';
-import { formatScoutTimeLeft, getScoutPartyRows } from './scoutStatus';
+import { formatScoutTimeLeft, getScoutIdleHint, getScoutPartyRows } from './scoutStatus';
 
 describe('getScoutPartyRows', () => {
   it('returns empty when no scouts are out', () => {
@@ -65,5 +65,40 @@ describe('getScoutPartyRows', () => {
     expect(rows[0].ready).toBe(true);
     expect(formatScoutTimeLeft(rows[0])).toBe('Ready');
     expect(rows[0].progress).toBe(1);
+  });
+});
+
+describe('getScoutIdleHint', () => {
+  it('is null before expeditions unlock', () => {
+    const state = createInitialState();
+    state.totalOreProduced = 10;
+    expect(getScoutIdleHint(state)).toBeNull();
+  });
+
+  it('nudges the first unlocked route when scouts are idle', () => {
+    const state = createInitialState();
+    state.totalOreProduced = 80;
+    state.activeExpeditions = [];
+    const hint = getScoutIdleHint(state);
+    expect(hint).toMatchObject({
+      title: 'Scouts ready',
+      detail: 'Send Glow Shallows',
+      expeditionId: 'glow_shalllows',
+    });
+  });
+
+  it('stays quiet while a party is already out', () => {
+    const state = createInitialState();
+    state.totalOreProduced = 80;
+    state.activeExpeditions = [
+      {
+        id: 'glow_shalllows',
+        startedAt: 1,
+        endsAt: 99_999,
+        claimed: false,
+        doublePending: false,
+      },
+    ];
+    expect(getScoutIdleHint(state)).toBeNull();
   });
 });
