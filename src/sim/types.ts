@@ -1,5 +1,6 @@
 import type { AchievementId } from '../data/achievements';
 import type { CosmeticId } from '../data/cosmetics';
+import type { ExpeditionContractId } from '../data/expeditionContracts';
 import type { ExpeditionId } from '../data/expeditions';
 import type { RecipeId } from '../data/recipes';
 import type { ResourceId } from '../data/resources';
@@ -13,6 +14,8 @@ export interface ActiveExpedition {
   endsAt: number;
   claimed: boolean;
   doublePending: boolean;
+  /** Send-time stance; missing on legacy saves → treated as Steady. */
+  contractId?: ExpeditionContractId;
 }
 
 /** Per-station progress. `runLevel` throttles rate independently of owned `level`. */
@@ -108,7 +111,11 @@ export type GameEvent =
   | { type: 'craft'; recipeId: RecipeId }
   | { type: 'unlock_station'; stationId: StationId }
   | { type: 'upgrade_station'; stationId: StationId }
-  | { type: 'start_expedition'; expeditionId: ExpeditionId }
+  | {
+      type: 'start_expedition';
+      expeditionId: ExpeditionId;
+      contractId: ExpeditionContractId;
+    }
   | { type: 'expedition_ready'; expeditionId: ExpeditionId }
   | { type: 'rush_expedition'; expeditionId: ExpeditionId }
   | { type: 'claim_expedition'; doubled: boolean }

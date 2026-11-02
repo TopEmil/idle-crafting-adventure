@@ -67,6 +67,7 @@ Use with the [CrazyGames Developer Portal](https://developer.crazygames.com/) QA
 - [ ] Ore icons use distinct silhouettes (boulder / shard / dust / ingot / leaf / blade / star / ring / medallion)
 - [ ] HUD chrome (inventory, dock, craft goal, nav) reads as forge timber panels, not flat web glass
 - [ ] Idle scout teaser appears once expeditions unlock and no party is out
+- [ ] Expedition stance picker (Steady / Swift / Laden) changes cost, duration, and loot before Send
 
 ## Store assets
 

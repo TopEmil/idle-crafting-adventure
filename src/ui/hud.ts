@@ -6,6 +6,12 @@ import {
 } from '../data/achievements';
 import { BALANCE, relicsFromReforge } from '../data/balance';
 import { COSMETICS, type CosmeticId } from '../data/cosmetics';
+import {
+  DEFAULT_EXPEDITION_CONTRACT,
+  EXPEDITION_CONTRACTS,
+  isExpeditionContractId,
+  type ExpeditionContractId,
+} from '../data/expeditionContracts';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
 import { RESOURCES, resourceIconSrc, resourceLabel, type ResourceId } from '../data/resources';
@@ -89,7 +95,7 @@ export interface HudActions {
   onUpgradeStation: (id: StationId) => void;
   onToggleStation: (id: StationId) => void;
   onAdjustStationSpeed: (id: StationId, delta: number) => void;
-  onStartExpedition: (id: string) => void;
+  onStartExpedition: (id: string, contractId: ExpeditionContractId) => void;
   onRushExpedition: (id: string) => void;
   onBuySquadSlot: () => void;
   onRevealExpeditionLoot: () => void;
@@ -116,6 +122,10 @@ export class Hud {
   private lastAchieveReadyKey = '';
   /** Panel currently shown in the overlay sheet — used to keep scroll on refresh. */
   private renderedSheetPanel: PanelId = null;
+  /** Send-time stance for the next expedition dispatch. */
+  private selectedContract: ExpeditionContractId = DEFAULT_EXPEDITION_CONTRACT;
+  /** Last state passed to render/renderChrome — used when switching stances in-sheet. */
+  private lastState: GameState | null = null;
 
   constructor(root: HTMLElement, overlay: HTMLElement, actions: HudActions) {
     this.root = root;
@@ -223,6 +233,7 @@ export class Hud {
 
   /** Top-bar / dock chrome only — safe to call every frame with a sheet open. */
   renderChrome(state: GameState) {
+    this.lastState = state;
     this.renderResources(state);
     this.renderDepth(state);
     this.renderScoutParties(state);
@@ -747,9 +758,15 @@ export class Hud {
       : canBuyMore
         ? `Need ${BALANCE.extraSquadRelicCost} Relics`
         : 'Roster full';
+    const stance = EXPEDITION_CONTRACTS.find((c) => c.id === this.selectedContract)
+      ?? EXPEDITION_CONTRACTS[0]!;
+    const stanceChips = EXPEDITION_CONTRACTS.map((c) => {
+      const active = c.id === this.selectedContract ? ' is-active' : '';
+      return `<button class="stance-chip${active}" type="button" data-exp-stance="${c.id}" title="${c.blurb}">${c.name}</button>`;
+    }).join('');
 
     const rows = EXPEDITIONS.map((e) => {
-      const row = getExpeditionRowState(state, e, now);
+      const row = getExpeditionRowState(state, e, now, this.selectedContract);
       const lootHint = formatLootHtml(e.baseLoot);
       const showMeter = row.kind === 'locked' || row.kind === 'need_cost';
       const meter = showMeter
@@ -788,7 +805,11 @@ export class Hud {
           <h2>Expeditions</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="sheet-intro">Unlock destinations with lifetime ore, spend the listed cost, then wait — or watch an ad to Rush a squad home. Squads ${busy}/${slots}.</p>
+        <p class="sheet-intro">Pick a stance, unlock destinations with lifetime ore, then send — or Rush home with an ad. Squads ${busy}/${slots}.</p>
+        <div class="stance-picker" role="group" aria-label="Expedition stance">
+          <div class="stance-chips">${stanceChips}</div>
+          <p class="stance-blurb" data-stance-blurb>${stance.blurb}</p>
+        </div>
         <div class="row-item" data-squad-buy>
           <div>
             <h3>Extra squad</h3>
@@ -843,7 +864,7 @@ export class Hud {
       const actionEl = rowEl.querySelector('[data-exp-action]') as HTMLElement | null;
       if (!statusEl || !actionEl) continue;
 
-      const row = getExpeditionRowState(state, e, now);
+      const row = getExpeditionRowState(state, e, now, this.selectedContract);
       statusEl.innerHTML = row.status;
       if (reqEl) reqEl.innerHTML = row.requirements;
       rowEl.classList.toggle('row-item-blocked', row.blocked);
@@ -883,12 +904,25 @@ export class Hud {
   }
 
   private bindExpeditionActions() {
+    this.overlay.querySelectorAll('[data-exp-stance]').forEach((btn) => {
+      const el = btn as HTMLElement;
+      if (el.dataset.bound === '1') return;
+      el.dataset.bound = '1';
+      el.addEventListener('click', () => {
+        const id = el.dataset.expStance;
+        if (!isExpeditionContractId(id) || id === this.selectedContract) return;
+        this.selectedContract = id;
+        if (this.panel === 'expeditions' && this.lastState) {
+          this.renderExpeditions(this.lastState);
+        }
+      });
+    });
     this.overlay.querySelectorAll('[data-exp]').forEach((btn) => {
       const el = btn as HTMLElement;
       if (el.dataset.bound === '1') return;
       el.dataset.bound = '1';
       el.addEventListener('click', () => {
-        this.actions.onStartExpedition(el.dataset.exp!);
+        this.actions.onStartExpedition(el.dataset.exp!, this.selectedContract);
       });
     });
     this.overlay.querySelectorAll('[data-exp-rush]').forEach((btn) => {

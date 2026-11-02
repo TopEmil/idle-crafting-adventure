@@ -39,12 +39,25 @@ describe('getExpeditionRowState', () => {
     state.resources.ore = 20;
     const row = getExpeditionRowState(state, glow);
     expect(row.kind).toBe('ready');
-    expect(row.actionLabel).toBe('Send');
+    expect(row.actionLabel).toBe('Send Steady');
     expect(row.canSend).toBe(true);
     expect(row.blocked).toBe(false);
     expect(row.requirements).toMatch(/Spend/i);
     expect(row.requirements).toContain('art/ores/ore.png');
     expect(row.actionTitle).toMatch(/20 Ore/i);
+  });
+
+  it('applies Laden cost and duration when that stance is selected', () => {
+    const state = createInitialState();
+    state.totalOreProduced = 50;
+    state.resources.ore = 25;
+    const row = getExpeditionRowState(state, glow, Date.now(), 'laden');
+    expect(row.kind).toBe('ready');
+    expect(row.actionLabel).toBe('Send Laden');
+    expect(row.status).toMatch(/Laden/i);
+    // 20 ore × 1.25 → 25; 45s × 1.35 → ~61s
+    expect(row.actionTitle).toMatch(/25 Ore/i);
+    expect(row.actionTitle).toMatch(/1m/i);
   });
 
   it('blocks other destinations while all squad slots are full', () => {
@@ -105,7 +118,7 @@ describe('getExpeditionRowState', () => {
     const row = getExpeditionRowState(state, glow, 10_000);
     expect(row.kind).toBe('active');
     expect(row.mode).toBe('progress');
-    expect(row.status).toMatch(/Returning in/);
+    expect(row.status).toMatch(/returning in/i);
     expect(row.activePct).not.toBeNull();
     expect(row.canSend).toBe(false);
     expect(row.canRush).toBe(true);

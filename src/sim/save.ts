@@ -148,6 +148,12 @@ export function migrateState(state: GameState): GameState {
     next.activeExpeditions = legacy.activeExpedition ? [legacy.activeExpedition] : [];
   }
   delete legacy.activeExpedition;
+  next.activeExpeditions = (next.activeExpeditions ?? []).map((party) => {
+    if (party.contractId === 'steady' || party.contractId === 'swift' || party.contractId === 'laden') {
+      return party;
+    }
+    return { ...party, contractId: 'steady' };
+  });
 
   if (typeof next.extraSquadSlots !== 'number' || !Number.isFinite(next.extraSquadSlots)) {
     next.extraSquadSlots = 0;

@@ -1,5 +1,9 @@
 import { SIM_DT, BALANCE } from '../data/balance';
 import type { CosmeticId } from '../data/cosmetics';
+import {
+  getExpeditionContract,
+  type ExpeditionContractId,
+} from '../data/expeditionContracts';
 import type { ExpeditionId } from '../data/expeditions';
 import type { RecipeId } from '../data/recipes';
 import type { ResourceId } from '../data/resources';
@@ -112,7 +116,8 @@ export class GameApp {
       onUpgradeStation: (id) => this.handleUpgrade(id),
       onToggleStation: (id) => this.handleToggleStation(id),
       onAdjustStationSpeed: (id, delta) => this.handleAdjustStationSpeed(id, delta),
-      onStartExpedition: (id) => this.handleStartExpedition(id as ExpeditionId),
+      onStartExpedition: (id, contractId) =>
+        this.handleStartExpedition(id as ExpeditionId, contractId),
       onRushExpedition: (id) => void this.handleRushExpedition(id as ExpeditionId),
       onBuySquadSlot: () => this.handleBuySquadSlot(),
       onRevealExpeditionLoot: () => this.revealExpeditionLoot(),
@@ -546,8 +551,8 @@ export class GameApp {
     void this.persist();
   }
 
-  private handleStartExpedition(id: ExpeditionId) {
-    const result = startExpedition(this.state, id);
+  private handleStartExpedition(id: ExpeditionId, contractId: ExpeditionContractId) {
+    const result = startExpedition(this.state, id, Date.now(), contractId);
     if (!result.ok) {
       this.notice = result.reason;
       this.refreshHud();
@@ -555,7 +560,7 @@ export class GameApp {
     }
     this.state = result.state;
     this.audio.click();
-    this.hud.toast('Scouts dispatched', 'info');
+    this.hud.toast(`${getExpeditionContract(contractId).name} scouts dispatched`, 'info');
     this.refreshHud();
     void this.persist();
   }
