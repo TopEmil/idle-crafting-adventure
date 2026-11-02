@@ -76,6 +76,10 @@ interface BurstParticle {
   max: number;
   size: number;
   color: number;
+  /** Angular rock chip instead of a soft mist dot. */
+  chip?: boolean;
+  /** Expanding ring used for shatter shock flashes. */
+  ring?: boolean;
 }
 
 interface Floater {
@@ -369,7 +373,7 @@ export class ForgeScene {
     this.comboTimer = 0.85;
     this.combo = Math.min(12, this.combo + 1);
 
-    this.spawnRockDebris(hitPos.x, hitPos.y, shattered ? 16 : 8, this.combo);
+    this.spawnRockDebris(hitPos.x, hitPos.y, shattered ? 16 : 8, this.combo, shattered);
     if (amount > 0) {
       this.spawnOreFloater(hitPos.x, hitPos.y, amount, 18 + Math.min(10, this.combo));
     }
@@ -907,7 +911,7 @@ export class ForgeScene {
     // Dig is applied in the sim tick; VFX cracks the same column the sim prefers.
     const shattered = Boolean(cell && cell.hp <= cell.maxHp * 0.35);
     this.hitFlash = Math.max(this.hitFlash, 0.14);
-    this.spawnRockDebris(pos.x, pos.y, shattered ? 10 : 5, 2);
+    this.spawnRockDebris(pos.x, pos.y, shattered ? 10 : 5, 2, shattered);
     const amount = this.pendingAutoOre;
     this.pendingAutoOre = 0;
     if (amount > 0.05) {
@@ -915,19 +919,54 @@ export class ForgeScene {
     }
   }
 
-  private spawnRockDebris(x: number, y: number, count: number, comboBoost: number) {
-    for (let i = 0; i < count; i++) {
+  private spawnRockDebris(
+    x: number,
+    y: number,
+    count: number,
+    comboBoost: number,
+    shattered = false,
+  ) {
+    const n = shattered ? count + 6 : count;
+    for (let i = 0; i < n; i++) {
       const ang = Math.random() * Math.PI * 2;
-      const speed = 35 + Math.random() * 110 + comboBoost * 5;
+      const speed = (shattered ? 55 : 35) + Math.random() * (shattered ? 150 : 110) + comboBoost * 6;
+      const chip = shattered || Math.random() > 0.45;
+      const color = shattered
+        ? Math.random() > 0.45
+          ? COLORS.amber
+          : Math.random() > 0.5
+            ? COLORS.cyan
+            : COLORS.ember
+        : Math.random() > 0.4
+          ? COLORS.cyan
+          : Math.random() > 0.5
+            ? COLORS.slate
+            : COLORS.tealLight;
+      this.bursts.push({
+        x: x + (Math.random() - 0.5) * 8,
+        y: y + (Math.random() - 0.5) * 6,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed - (shattered ? 70 : 50),
+        life: (shattered ? 0.4 : 0.3) + Math.random() * 0.4,
+        max: shattered ? 0.75 : 0.55,
+        size: (chip ? 3.2 : 2) + Math.random() * (shattered ? 5.5 : 3.5),
+        color,
+        chip,
+      });
+    }
+    if (shattered) {
+      // Shock flash ring so shatter reads instantly at iframe sizes.
       this.bursts.push({
         x,
         y,
-        vx: Math.cos(ang) * speed,
-        vy: Math.sin(ang) * speed - 50,
-        life: 0.3 + Math.random() * 0.35,
-        max: 0.55,
-        size: 2 + Math.random() * 3.5,
-        color: Math.random() > 0.4 ? COLORS.cyan : Math.random() > 0.5 ? COLORS.slate : COLORS.tealLight,
+        vx: 0,
+        vy: 0,
+        life: 0.28,
+        max: 0.28,
+        size: 22,
+        color: COLORS.mist,
+        chip: false,
+        ring: true,
       });
     }
   }
@@ -985,6 +1024,7 @@ export class ForgeScene {
     const { w: cellW, h: cellH } = this.cellSize;
     const shaftW = cellW * SHAFT_COLS + 18;
     const shaftH = cellH * (SHAFT_LOOKAHEAD + SHAFT_LOOKBEHIND + 1.4);
+    const usePaintedRocks = this.rockSprites.length > 0;
 
     // Soft tunnel void so painted timber/ore stays visible around the dig tiles
     g.rect(cx - shaftW * 0.5 - 8, cy - shaftH * 0.55, shaftW + 16, shaftH * 1.15);
@@ -1010,6 +1050,7 @@ export class ForgeScene {
       return rank(a) - rank(b) || a.row - b.row || a.col - b.col;
     });
 
+    let rockIdx = 0;
     for (const cell of ordered) {
       const pos = this.cellPositions.get(cellKey(cell.row, cell.col));
       if (!pos) continue;
@@ -1024,7 +1065,13 @@ export class ForgeScene {
         continue;
       }
       const dim = cell.role === 'ahead' ? 0.62 : 1;
-      this.drawBlockTile(g, cell, pos.x, pos.y, cellW, cellH, dim);
+      const sprite = usePaintedRocks ? this.rockSprites[rockIdx++] : undefined;
+      if (sprite) {
+        this.placeRockSprite(sprite, cell, pos.x, pos.y, cellW, cellH, dim);
+        this.drawBlockOverlays(g, cell, pos.x, pos.y, cellW, cellH, dim);
+      } else {
+        this.drawBlockTile(g, cell, pos.x, pos.y, cellW, cellH, dim);
+      }
     }
 
     // Dig-face highlight
@@ -1038,6 +1085,40 @@ export class ForgeScene {
       g.rect(cx - shaftW * 0.5, cy - shaftH * 0.55, shaftW, shaftH * 1.15);
       g.fill({ color: stratum.fleck, alpha: this.stratumFlash * 0.12 });
     }
+  }
+
+  /** Seat a painted ore boulder into a dig-face cell so the shaft matches cavern art. */
+  private placeRockSprite(
+    sprite: Sprite,
+    cell: ShaftCell,
+    x: number,
+    y: number,
+    cellW: number,
+    cellH: number,
+    dim: number,
+  ) {
+    const dmg = 1 - cell.hp / cell.maxHp;
+    const hit =
+      this.hitFlash > 0 && this.lastHitCellKey === cellKey(cell.row, cell.col);
+    const wobble = hit ? Math.sin(this.pulse * 40) * 1.4 : 0;
+    const pulseRare = cell.rare ? 0.06 + Math.sin(this.pulse * 4 + cell.seed) * 0.04 : 0;
+    const tex = sprite.texture;
+    const tw = Math.max(1, tex.width);
+    const th = Math.max(1, tex.height);
+    const fit = Math.min(cellW / tw, cellH / th) * (1.08 - dmg * 0.12);
+    const seedJitter = ((cell.seed % 7) - 3) * 0.012;
+
+    sprite.visible = true;
+    sprite.anchor.set(0.5, 0.55);
+    sprite.x = x + wobble;
+    sprite.y = y + cellH * 0.06;
+    sprite.scale.set(fit * (1 + seedJitter), fit * (1 - seedJitter * 0.5));
+    sprite.rotation = ((cell.seed % 11) - 5) * 0.035;
+    sprite.alpha = (0.78 + pulseRare) * dim * (hit ? 1 : 0.96);
+    // Stratum tint + rare fleck so a single rock PNG doesn't read as a stamped grid.
+    sprite.tint = cell.rare
+      ? blendTint(0xe8f1f2, cell.fleck, 0.4)
+      : blendTint(0xd8e6ea, cell.tint, 0.5);
   }
 
   /** Subtle shoring lines that lock dig tiles into the painted timber frame. */
@@ -1117,6 +1198,51 @@ export class ForgeScene {
         g.lineTo(left + cellW * 0.35, top + cellH * 0.75);
       }
       g.stroke({ width: 2, color: COLORS.void, alpha: (0.75 + dmg * 0.2) * dim });
+    }
+  }
+
+  /** Cracks + rare halo drawn over painted rock sprites (body comes from the PNG). */
+  private drawBlockOverlays(
+    g: Graphics,
+    cell: ShaftCell,
+    x: number,
+    y: number,
+    cellW: number,
+    cellH: number,
+    dim: number,
+  ) {
+    const dmg = 1 - cell.hp / cell.maxHp;
+    const hit =
+      this.hitFlash > 0 && this.lastHitCellKey === cellKey(cell.row, cell.col);
+    const wobble = hit ? Math.sin(this.pulse * 40) * 1.4 : 0;
+    const pulseRare = cell.rare ? 0.08 + Math.sin(this.pulse * 4 + cell.seed) * 0.05 : 0;
+    const left = x - cellW * 0.5 + wobble;
+    const top = y - cellH * 0.5;
+
+    if (cell.rare) {
+      g.circle(x + wobble, y, Math.min(cellW, cellH) * 0.42);
+      g.fill({ color: cell.fleck, alpha: (0.12 + pulseRare) * dim });
+      g.rect(left + 3, top + 3, cellW - 6, cellH - 6);
+      g.stroke({ width: 1.5, color: cell.fleck, alpha: (0.4 + pulseRare) * dim });
+    }
+
+    if (dmg > 0.05) {
+      g.moveTo(left + cellW * 0.18, top + cellH * 0.22);
+      g.lineTo(left + cellW * (0.42 + dmg * 0.28), top + cellH * (0.52 + dmg * 0.22));
+      if (dmg > 0.35) {
+        g.moveTo(left + cellW * 0.72, top + cellH * 0.18);
+        g.lineTo(left + cellW * 0.38, top + cellH * 0.78);
+      }
+      if (dmg > 0.65) {
+        g.moveTo(left + cellW * 0.25, top + cellH * 0.7);
+        g.lineTo(left + cellW * 0.78, top + cellH * 0.42);
+      }
+      g.stroke({ width: 2.2, color: COLORS.void, alpha: (0.8 + dmg * 0.15) * dim });
+    }
+
+    if (hit) {
+      g.circle(x + wobble, y, Math.min(cellW, cellH) * 0.38);
+      g.stroke({ width: 2, color: COLORS.mist, alpha: 0.35 * this.hitFlash * 4 });
     }
   }
 
@@ -1303,16 +1429,16 @@ export class ForgeScene {
           sprite.visible = true;
           sprite.x = slot.x;
           sprite.y = slot.y;
-          sprite.scale.set(baseScale * 0.88);
-          sprite.alpha = 0.4;
-          sprite.tint = 0x9eb8c0;
+          sprite.scale.set(baseScale * 0.9);
+          sprite.alpha = 0.58;
+          sprite.tint = 0xb8cdd4;
         } else {
-          this.drawStationBody(g, slot.id, slot.x, slot.y, 0.35, false, 1);
+          this.drawStationBody(g, slot.id, slot.x, slot.y, 0.42, false, 1);
         }
         if (label) {
           label.visible = true;
-          label.text = `${getStation(slot.id).name}?`;
-          label.alpha = 0.6;
+          label.text = `${getStation(slot.id).name} · locked`;
+          label.alpha = 0.78;
           label.x = slot.x;
           label.y = slot.y + (hasArt ? 18 : 26);
         }
@@ -1355,14 +1481,15 @@ export class ForgeScene {
       }
 
       if (running) {
-        for (let i = 0; i < 3; i++) {
-          const t = this.sparkTimer * 0.9 + i * 0.4 + st.level;
-          const px = slot.x + Math.sin(t * 2) * 14;
-          const py = slot.y - 36 * scale - ((t * 28 + i * 10) % 42);
-          g.circle(px, py, 2);
+        const tint = getStation(slot.id).visualTint;
+        for (let i = 0; i < 5; i++) {
+          const t = this.sparkTimer * 0.9 + i * 0.35 + st.level;
+          const px = slot.x + Math.sin(t * 2.1 + i) * (12 + i);
+          const py = slot.y - 34 * scale - ((t * 30 + i * 12) % 48);
+          g.circle(px, py, 1.6 + (i % 3) * 0.7);
           g.fill({
-            color: getStation(slot.id).visualTint,
-            alpha: 0.65,
+            color: i % 2 ? tint : COLORS.amber,
+            alpha: 0.55 + (i % 2) * 0.2,
           });
         }
       }
@@ -1503,6 +1630,27 @@ export class ForgeScene {
     g.clear();
     for (const p of this.bursts) {
       const a = Math.max(0, p.life / p.max);
+      if (p.ring) {
+        const r = p.size + (1 - a) * 36;
+        g.circle(p.x, p.y, r);
+        g.stroke({ width: 2.5 + a * 2, color: p.color, alpha: a * 0.7 });
+        continue;
+      }
+      if (p.chip) {
+        const s = p.size * a;
+        g.poly([
+          p.x - s * 0.7,
+          p.y - s * 0.35,
+          p.x + s * 0.55,
+          p.y - s * 0.55,
+          p.x + s * 0.7,
+          p.y + s * 0.45,
+          p.x - s * 0.4,
+          p.y + s * 0.6,
+        ]);
+        g.fill({ color: p.color, alpha: a * 0.95 });
+        continue;
+      }
       g.circle(p.x, p.y, p.size * a);
       g.fill({ color: p.color, alpha: a });
     }
@@ -1540,4 +1688,19 @@ function trimAmount(n: number): string {
 function parseCssHex(color?: string): number | null {
   if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return null;
   return Number.parseInt(color.slice(1), 16);
+}
+
+/** Mix two 0xRRGGBB colors; `t` is the weight of `b` (0..1). */
+function blendTint(a: number, b: number, t: number): number {
+  const u = Math.min(1, Math.max(0, t));
+  const ar = (a >> 16) & 0xff;
+  const ag = (a >> 8) & 0xff;
+  const ab = a & 0xff;
+  const br = (b >> 16) & 0xff;
+  const bg = (b >> 8) & 0xff;
+  const bb = b & 0xff;
+  const r = Math.round(ar + (br - ar) * u);
+  const g = Math.round(ag + (bg - ag) * u);
+  const bl = Math.round(ab + (bb - ab) * u);
+  return (r << 16) | (g << 8) | bl;
 }

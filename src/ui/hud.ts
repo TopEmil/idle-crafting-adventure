@@ -148,6 +148,13 @@ export class Hud {
           <button class="view-btn active" data-view="mine" type="button" role="tab" aria-selected="true">Mine</button>
           <button class="view-btn" data-view="forge" type="button" role="tab" aria-selected="false">Forge</button>
         </div>
+        <div class="craft-goal" id="craft-goal" hidden>
+          <div class="craft-goal-copy">
+            <div class="craft-goal-title" id="craft-goal-title">Next craft</div>
+            <div class="craft-goal-detail" id="craft-goal-detail"></div>
+          </div>
+          <div class="craft-goal-meter" aria-hidden="true"><span id="craft-goal-meter"></span></div>
+        </div>
         <div class="cta-row">
           <button class="btn btn-primary" id="btn-vein" type="button">Mine</button>
           <button class="btn btn-secondary" id="btn-craft" type="button">Craft</button>
@@ -561,6 +568,10 @@ export class Hud {
 
   private renderCraftQuick(state: GameState) {
     const craftBtn = this.root.querySelector('#btn-craft') as HTMLButtonElement | null;
+    const goal = this.root.querySelector('#craft-goal') as HTMLElement | null;
+    const goalTitle = this.root.querySelector('#craft-goal-title') as HTMLElement | null;
+    const goalDetail = this.root.querySelector('#craft-goal-detail') as HTMLElement | null;
+    const goalMeter = this.root.querySelector('#craft-goal-meter') as HTMLElement | null;
     if (!craftBtn) return;
 
     const craft = getCraftQuickState(state);
@@ -577,6 +588,20 @@ export class Hud {
       craftBtn.title = formatMissingCost(recipeCost(craft.recipe), state.resources);
     } else {
       craftBtn.title = `Craft ${craft.recipe.name}`;
+    }
+
+    if (goal && goalTitle && goalDetail && goalMeter) {
+      if (!craft.recipe || !craft.needDetail) {
+        goal.hidden = true;
+      } else {
+        goal.hidden = false;
+        goal.classList.toggle('craft-goal-ready', craft.affordable);
+        goalTitle.textContent = craft.affordable
+          ? `Ready · ${craft.recipe.name}`
+          : `Next · ${craft.recipe.name}`;
+        goalDetail.innerHTML = craft.needDetail.replace(/^Ready · /, '');
+        goalMeter.style.width = `${Math.round(craft.progress * 100)}%`;
+      }
     }
   }
 
