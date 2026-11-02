@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:pacing": "vitest run src/sim/pacing.test.ts",
     "typecheck": "tsc -b --pretty false",
     "record:tutorial": "node scripts/record-tutorial.mjs"
   },
