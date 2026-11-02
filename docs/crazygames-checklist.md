@@ -64,6 +64,9 @@ Use with the [CrazyGames Developer Portal](https://developer.crazygames.com/) QA
 - [ ] Craft CTA readable when disabled at iframe sizes / `devicePixelRatio: 1`
 - [ ] Shatter digs show rock chips + shock ring; running stations spark
 - [ ] Style stays coherent: painted cavern / forge hall / stations / ore icons (no mixed resolution jumps)
+- [ ] Ore icons use distinct silhouettes (boulder / shard / dust / ingot / leaf / blade / star / ring / medallion)
+- [ ] HUD chrome (inventory, dock, craft goal, nav) reads as forge timber panels, not flat web glass
+- [ ] Idle scout teaser appears once expeditions unlock and no party is out
 
 ## Store assets
 
