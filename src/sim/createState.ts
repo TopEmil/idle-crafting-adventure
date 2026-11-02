@@ -36,6 +36,7 @@ export function createInitialState(now = Date.now()): GameState {
     lastPrestigeAt: 0,
     unlockedCosmetics: ['default'],
     activeCosmetic: 'default',
+    cosmeticPicked: false,
     onboardingStep: 0,
     onboardingDone: false,
     milestones: {

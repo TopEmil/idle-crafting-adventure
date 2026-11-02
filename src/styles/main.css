@@ -922,6 +922,24 @@ body {
   transition: width 0.18s ease;
 }
 
+.sheet-section-title {
+  margin: 18px 0 4px;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--mist);
+}
+
+.cosmetic-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.45rem;
+  border-radius: 2px;
+  vertical-align: -0.05rem;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--slate) 35%, transparent);
+}
+
 .list {
   display: flex;
   flex-direction: column;
