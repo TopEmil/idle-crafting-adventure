@@ -565,16 +565,97 @@ body {
 }
 
 .btn:disabled {
-  opacity: 0.38;
+  opacity: 0.78;
   cursor: not-allowed;
-  filter: grayscale(0.35) saturate(0.7);
+  filter: grayscale(0.15) saturate(0.85);
   box-shadow: none;
   transform: none;
 }
 
 #btn-craft:disabled {
-  border-color: color-mix(in srgb, var(--slate) 35%, transparent);
-  color: color-mix(in srgb, var(--mist) 55%, var(--slate));
+  opacity: 0.92;
+  background: color-mix(in srgb, var(--teal-light) 55%, var(--void));
+  border-color: color-mix(in srgb, var(--slate) 55%, transparent);
+  color: color-mix(in srgb, var(--mist) 82%, var(--slate));
+}
+
+.craft-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 9px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--void) 62%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cyan) 28%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--void) 35%, transparent);
+}
+
+.craft-goal[hidden] {
+  display: none;
+}
+
+.craft-goal-ready {
+  border-color: color-mix(in srgb, var(--amber) 48%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--amber) 22%, transparent),
+    0 8px 22px color-mix(in srgb, var(--ember) 18%, transparent);
+}
+
+.craft-goal-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.craft-goal-title {
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--mist);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.craft-goal-detail {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.craft-goal-detail .res-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.craft-goal-meter {
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 55%, transparent);
+  overflow: hidden;
+}
+
+.craft-goal-meter > span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cyan), var(--amber));
+  transition: width 0.18s ease;
+}
+
+.craft-goal-ready .craft-goal-meter > span {
+  background: linear-gradient(90deg, var(--amber), var(--ember));
 }
 
 .btn-primary {
@@ -1236,6 +1317,19 @@ body {
 @media (max-width: 520px) {
   :root {
     --hud-pad: 10px;
+  }
+
+  .craft-goal {
+    padding: 7px 10px 8px;
+    border-radius: 12px;
+  }
+
+  .craft-goal-title {
+    font-size: 0.78rem;
+  }
+
+  .craft-goal-detail {
+    font-size: 0.72rem;
   }
 
   .brand-spacer {

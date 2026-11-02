@@ -56,6 +56,15 @@ Use with the [CrazyGames Developer Portal](https://developer.crazygames.com/) QA
 - [ ] Audio bed + SFX at consistent levels
 - [ ] Onboarding skippable and visual-first (coach + highlights; ends on first Reforge)
 
+## Visual quality (CrazyGames aesthetic QA)
+
+- [ ] Dig shaft uses painted ore rocks that match mine cavern art (no flat “spreadsheet” tiles)
+- [ ] Next-craft goal meter visible with cost progress (not only a disabled Craft button)
+- [ ] Locked stations labeled `Name · locked` (no `Name?` debug feel)
+- [ ] Craft CTA readable when disabled at iframe sizes / `devicePixelRatio: 1`
+- [ ] Shatter digs show rock chips + shock ring; running stations spark
+- [ ] Style stays coherent: painted cavern / forge hall / stations / ore icons (no mixed resolution jumps)
+
 ## Store assets
 
 - [ ] Cover 1920×1080 (landscape) — `release/covers/cover-1920x1080.jpg`
