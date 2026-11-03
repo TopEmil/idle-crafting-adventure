@@ -1,5 +1,4 @@
 import { SIM_DT, BALANCE } from '../data/balance';
-import type { CosmeticId } from '../data/cosmetics';
 import {
   getExpeditionContract,
   type ExpeditionContractId,
@@ -22,7 +21,6 @@ import { stratumAtDepth } from '../data/strata';
 import {
   applyOfflineProgress,
   availableRecipes,
-  buyCosmetic,
   buySquadSlot,
   buyTalent,
   canAfford,
@@ -31,7 +29,6 @@ import {
   completeExpeditionIfReady,
   craftRecipe,
   drainStationGainFloaters,
-  equipCosmetic,
   getAutoMineRate,
   prestige,
   rushExpedition,
@@ -124,8 +121,6 @@ export class GameApp {
       onClaimExpedition: (mode) => void this.handleClaim(mode),
       onPrestige: () => void this.handlePrestige(),
       onBuyTalent: (id) => this.handleBuyTalent(id),
-      onBuyCosmetic: (id) => this.handleBuyCosmetic(id),
-      onEquipCosmetic: (id) => this.handleEquipCosmetic(id),
       onClaimAchievement: (id) => this.handleClaimAchievement(id),
       onResourceOffer: (mode) => void this.handleResourceOffer(mode),
       onSkipOnboarding: () => this.finishOnboarding(),
@@ -730,12 +725,12 @@ export class GameApp {
     if (tutorialReforge) {
       this.hud.showMilestone(
         'First Reforge',
-        `Tutorial complete — you earned ${result.relics} Relic${result.relics === 1 ? '' : 's'}. Spend them on Talents and forge skins. Next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
+        `Tutorial complete — you earned ${result.relics} Relic${result.relics === 1 ? '' : 's'}. Spend them on Talents. Next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
       );
     } else {
       this.hud.showMilestone(
         'Forge Reforged',
-        `You gained ${result.relics} Relics. Spend them on Talents and forge skins — next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
+        `You gained ${result.relics} Relics. Spend them on Talents — next Reforge in ${BALANCE.prestigeCooldownSec / 60} min.`,
       );
     }
     void this.persist();
@@ -756,36 +751,6 @@ export class GameApp {
     this.refreshHud();
   }
 
-  private handleBuyCosmetic(id: CosmeticId) {
-    const result = buyCosmetic(this.state, id);
-    if (!result.ok) {
-      this.notice = result.reason;
-      this.refreshHud();
-      return;
-    }
-    this.state = result.state;
-    this.audio.craft();
-    this.scene.triggerCraftBurst();
-    this.scene.sync(this.state);
-    this.notice = '';
-    void this.persist();
-    this.refreshHud();
-  }
-
-  private handleEquipCosmetic(id: CosmeticId) {
-    const result = equipCosmetic(this.state, id);
-    if (!result.ok) {
-      this.notice = result.reason;
-      this.refreshHud();
-      return;
-    }
-    this.state = result.state;
-    this.scene.sync(this.state);
-    this.notice = '';
-    void this.persist();
-    this.refreshHud();
-  }
-
   private maybeShowResourceOffer() {
     if (!this.platform.adsEnabled || this.platform.adblock) return;
     if (!this.ads.canShowRewarded(this.state).ok) return;
@@ -801,7 +766,7 @@ export class GameApp {
     this.hud.setPanel(null);
     this.platform.gameplayStop();
     this.hud.showResourceOffer({
-      resourceName: resourceLabel(offer.resource),
+      resource: offer.resource,
       amount: offer.amount,
       reason: offer.reason,
     });

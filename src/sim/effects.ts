@@ -54,6 +54,7 @@ export function aggregateEffects(
   const achievement = aggregateAchievementRewards(claimedAchievements);
   clickPower *= achievement.clickPower;
   stationOutput *= achievement.stationOutput;
+  expeditionLoot *= achievement.expeditionLoot;
   autoMine += achievement.autoMine;
 
   const expeditionDuration = Math.max(0.45, 1 - Math.min(0.5, expeditionSpeed));

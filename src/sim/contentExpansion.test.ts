@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { COSMETICS } from '../data/cosmetics';
 import { EXPEDITIONS } from '../data/expeditions';
 import { RECIPES } from '../data/recipes';
 import { RESOURCES } from '../data/resources';
@@ -23,8 +22,6 @@ describe('content expansion', () => {
     expect(EXPEDITIONS.length).toBeGreaterThanOrEqual(10);
     expect(TALENTS.length).toBeGreaterThanOrEqual(8);
     expect(RECIPES.length).toBeGreaterThanOrEqual(28);
-    expect(COSMETICS.length).toBeGreaterThanOrEqual(6);
-    expect(COSMETICS.filter((c) => c.relicCost > 0).length).toBeGreaterThanOrEqual(2);
     expect(RESOURCES.some((r) => r.id === 'verdiglass')).toBe(true);
     expect(RESOURCES.some((r) => r.id === 'aetherite')).toBe(true);
   });

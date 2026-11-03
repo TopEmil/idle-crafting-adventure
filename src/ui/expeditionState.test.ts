@@ -15,7 +15,13 @@ describe('getExpeditionRowState', () => {
     expect(row.canSend).toBe(false);
     expect(row.blocked).toBe(true);
     expect(row.status).toContain('20 / 50');
+    expect(row.status).toContain('art/ores/ore.png');
+    expect(row.status).toContain('res-label');
+    expect(row.status).toContain('Ore');
     expect(row.requirements).toContain('50');
+    expect(row.requirements).toContain('art/ores/ore.png');
+    expect(row.requirements).toContain('Ore');
+    expect(row.actionTitle).toMatch(/50 Ore/i);
     expect(row.progress).toBeCloseTo(0.4);
   });
 

@@ -1,5 +1,4 @@
 import type { AchievementId } from '../data/achievements';
-import type { CosmeticId } from '../data/cosmetics';
 import type { ExpeditionContractId } from '../data/expeditionContracts';
 import type { ExpeditionId } from '../data/expeditions';
 import type { RecipeId } from '../data/recipes';
@@ -79,10 +78,6 @@ export interface GameState {
   totalRelicsEarned: number;
   /** Timestamp of last successful Reforge (ms). 0 = never. */
   lastPrestigeAt: number;
-  unlockedCosmetics: CosmeticId[];
-  activeCosmetic: CosmeticId;
-  /** True after the player manually equips a skin — prestige no longer auto-swaps. */
-  cosmeticPicked: boolean;
   onboardingStep: number;
   onboardingDone: boolean;
   milestones: {
@@ -122,8 +117,6 @@ export type GameEvent =
   | { type: 'buy_squad_slot' }
   | { type: 'prestige' }
   | { type: 'buy_talent'; talentId: TalentId }
-  | { type: 'buy_cosmetic'; cosmeticId: CosmeticId }
-  | { type: 'equip_cosmetic'; cosmeticId: CosmeticId }
   | { type: 'offline_summary'; seconds: number; gains: Partial<Record<ResourceId, number>> }
   | { type: 'milestone'; id: string }
   | { type: 'resource_offer'; resource: ResourceId; amount: number }

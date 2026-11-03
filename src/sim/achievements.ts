@@ -145,9 +145,12 @@ function grantResources(
 /** Sum permanent bonuses from all claimed achievement tiers. */
 export function aggregateAchievementRewards(
   claimed: Partial<Record<AchievementId, number>> = {},
-): Required<Pick<AchievementRewards, 'clickPower' | 'stationOutput' | 'autoMine'>> {
+): Required<
+  Pick<AchievementRewards, 'clickPower' | 'stationOutput' | 'expeditionLoot' | 'autoMine'>
+> {
   let clickPower = 1;
   let stationOutput = 1;
+  let expeditionLoot = 1;
   let autoMine = 0;
 
   for (const def of ACHIEVEMENTS) {
@@ -157,10 +160,11 @@ export function aggregateAchievementRewards(
       if (tier.level > level) break;
       if (tier.rewards.clickPower) clickPower *= tier.rewards.clickPower;
       if (tier.rewards.stationOutput) stationOutput *= tier.rewards.stationOutput;
+      if (tier.rewards.expeditionLoot) expeditionLoot *= tier.rewards.expeditionLoot;
       if (tier.rewards.autoMine) autoMine += tier.rewards.autoMine;
     }
   }
-  return { clickPower, stationOutput, autoMine };
+  return { clickPower, stationOutput, expeditionLoot, autoMine };
 }
 
 /**

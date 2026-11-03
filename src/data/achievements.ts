@@ -27,6 +27,8 @@ export interface AchievementRewards {
   clickPower?: number;
   /** Multiplicative station output, e.g. 1.08 = +8%. */
   stationOutput?: number;
+  /** Multiplicative expedition loot, e.g. 1.08 = +8%. */
+  expeditionLoot?: number;
   /** Additive dwarf autoMine fraction of tap power → ore/sec. */
   autoMine?: number;
 }
@@ -156,7 +158,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
         name: "Scout's Return",
         description: 'Claim your first expedition.',
         condition: { type: 'expedition_claimed' },
-        rewards: { resources: { glowdust: 20 } },
+        rewards: { resources: { glowdust: 20 }, expeditionLoot: 1.08 },
       },
     ],
   },
@@ -216,14 +218,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
         name: 'Deep Diggers',
         description: 'Produce 10,000 ore in a run.',
         condition: { type: 'lifetime_ore', amount: 10_000 },
-        rewards: { clickPower: 1.1, autoMine: 0.05 },
+        rewards: { clickPower: 1.1, autoMine: 0.05, expeditionLoot: 1.05 },
       },
       {
         level: 2,
         name: 'Ore Cascade',
         description: 'Produce 100,000 ore in a run.',
         condition: { type: 'lifetime_ore', amount: 100_000 },
-        rewards: { clickPower: 1.08, autoMine: 0.05 },
+        rewards: { clickPower: 1.08, autoMine: 0.05, expeditionLoot: 1.08 },
       },
     ],
   },
@@ -296,7 +298,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
         name: 'Abyss Ready',
         description: 'Produce 2,000 ore to open Abyss Vein.',
         condition: { type: 'total_ore_produced', amount: 2000 },
-        rewards: { resources: { relics: 1 }, stationOutput: 1.12 },
+        rewards: { resources: { relics: 1 }, stationOutput: 1.12, expeditionLoot: 1.1 },
       },
     ],
   },

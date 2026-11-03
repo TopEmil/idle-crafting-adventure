@@ -18,13 +18,21 @@ describe('format resource strings', () => {
     expect(formatLoot({ glowdust: 18, ore: 12 })).toBe('+18 Glowdust · +12 Ore');
   });
 
-  it('embeds ore icons without writing the resource name', () => {
+  it('embeds ore icons without writing the resource name by default', () => {
     const html = formatLootHtml({ emberglass: 8 });
     expect(html).toContain('art/ores/emberglass.png');
     expect(html).toContain('+8');
     expect(html).toContain('title="Emberglass"');
-    expect(html).not.toMatch(/>\s*Emberglass</);
+    expect(html).not.toMatch(/res-label/);
     expect(html).not.toContain('+8 Emberglass');
+  });
+
+  it('can show resource labels next to ore icons', () => {
+    const html = formatLootHtml({ emberglass: 8 }, { showLabel: true });
+    expect(html).toContain('art/ores/emberglass.png');
+    expect(html).toContain('res-label');
+    expect(html).toContain('Emberglass');
+    expect(html).toContain('+8');
   });
 
   it('formats costs as amount + icon', () => {

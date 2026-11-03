@@ -10,11 +10,21 @@ import {
   canAfford,
   expeditionSlotCount,
   expeditionTripCost,
+  expeditionTripDurationSec,
 } from '../sim/economy';
 import { expeditionOreGate } from '../sim/pricing';
 import type { GameState } from '../sim/types';
 import { formatCostProgress } from './craftState';
-import { formatCost, formatCostHtml, formatDuration, formatNumber } from './format';
+import {
+  formatCost,
+  formatCostHtml,
+  formatDuration,
+  formatNumber,
+  formatResourceInline,
+} from './format';
+
+/** Expeditions show ore icons with visible resource names. */
+const EXP_RES = { showLabel: true } as const;
 
 export type ExpeditionRowKind =
   | 'locked'
@@ -129,17 +139,24 @@ export function getExpeditionRowState(
     const depthProgress = depthNeed > 0 ? Math.min(1, depthHave / depthNeed) : 1;
     const progress = Math.min(oreProgress, depthProgress);
     const parts: string[] = [];
-    if (!oreOk) parts.push(`${formatNumber(have)} / ${formatNumber(oreNeed)} lifetime ore`);
+    if (!oreOk) {
+      parts.push(
+        `${formatResourceInline('ore', `${formatNumber(have)} / ${formatNumber(oreNeed)}`, EXP_RES)} lifetime`,
+      );
+    }
     if (!depthOk) parts.push(`Depth ${depthHave} / ${depthNeed}`);
-    const requirements = !oreOk
-      ? `Unlock at ${formatNumber(oreNeed)} lifetime ore produced`
+    const requirementsHtml = !oreOk
+      ? `Unlock at ${formatResourceInline('ore', formatNumber(oreNeed), EXP_RES)} lifetime produced`
+      : `Dig to depth ${depthNeed} to open this route`;
+    const requirementsPlain = !oreOk
+      ? `Unlock at ${formatNumber(oreNeed)} Ore lifetime produced`
       : `Dig to depth ${depthNeed} to open this route`;
     return {
       kind: 'locked',
       mode: 'locked',
-      status: parts.join(' · '),
-      requirements,
-      actionTitle: requirements,
+      status: parts.join('<span class="res-sep"> · </span>'),
+      requirements: requirementsHtml,
+      actionTitle: requirementsPlain,
       actionLabel: 'Locked',
       canSend: false,
       blocked: true,
@@ -151,8 +168,8 @@ export function getExpeditionRowState(
 
   const priced = expeditionTripCost(expedition.id, contractId);
   const costPlain = formatCost(priced);
-  const costHtml = formatCostHtml(priced);
-  const durationSec = expedition.durationSec * selected.durationMult;
+  const costHtml = formatCostHtml(priced, EXP_RES);
+  const durationSec = expeditionTripDurationSec(state, expedition.id, contractId);
   const duration = formatDuration(durationSec);
 
   if (state.pendingLoot) {
@@ -193,7 +210,7 @@ export function getExpeditionRowState(
     };
   }
 
-  const costProgress = formatCostProgress(priced, state.resources);
+  const costProgress = formatCostProgress(priced, state.resources, EXP_RES);
   const affordable = canAfford(state.resources, priced);
   if (!affordable) {
     return {

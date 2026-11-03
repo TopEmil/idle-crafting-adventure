@@ -27,6 +27,9 @@ export function formatAchievementRewards(rewards: AchievementRewards): string {
   if (rewards.stationOutput) {
     parts.push(`+${Math.round((rewards.stationOutput - 1) * 100)}% stations`);
   }
+  if (rewards.expeditionLoot) {
+    parts.push(`+${Math.round((rewards.expeditionLoot - 1) * 100)}% expedition loot`);
+  }
   if (rewards.autoMine) {
     parts.push(`Dwarf dig +${Math.round(rewards.autoMine * 100)}% rate`);
   }
@@ -52,6 +55,9 @@ export function formatAchievementRewardsHtml(rewards: AchievementRewards): strin
   if (rewards.stationOutput) {
     parts.push(`+${Math.round((rewards.stationOutput - 1) * 100)}% stations`);
   }
+  if (rewards.expeditionLoot) {
+    parts.push(`+${Math.round((rewards.expeditionLoot - 1) * 100)}% expedition loot`);
+  }
   if (rewards.autoMine) {
     parts.push(`Dwarf dig +${Math.round(rewards.autoMine * 100)}% rate`);
   }
@@ -73,7 +79,7 @@ export function formatRecipeEffects(recipe: RecipeDef): string {
   if (e.stationOutput) parts.push(`Station output ×${e.stationOutput}`);
   if (e.expeditionLoot) parts.push(`Expedition loot ×${e.expeditionLoot}`);
   if (e.offlineRate) parts.push(`Offline rate ×${e.offlineRate}`);
-  return parts.join(' · ') || 'Cosmetic / story unlock';
+  return parts.join(' · ') || 'Story unlock';
 }
 
 /** Describe the bonus from one talent level (or current total if level > 0). */
@@ -132,17 +138,33 @@ export function formatTalentPerLevel(talent: TalentDef): string {
   return parts.join(' · ');
 }
 
-/** Station input/output rates with ore icons (HTML for sheet rows). */
-export function formatStationIO(station: StationDef, level = 1): string {
+/**
+ * Station input/output rates with ore icons (HTML for sheet rows).
+ * `outputMult` folds recipes / talents / achievements into the shown rates.
+ */
+export function formatStationIO(station: StationDef, level = 1, outputMult = 1): string {
+  const mult = Math.max(0, outputMult);
   const inParts = (Object.entries(station.inputs ?? {}) as [ResourceId, number][]).map(
     ([id, rate]) => formatResourceInline(id, `-${formatNumber(rate * level)}/s`),
   );
   const outParts = (Object.entries(station.outputs) as [ResourceId, number][]).map(
-    ([id, rate]) => formatResourceInline(id, `+${formatNumber(rate * level)}/s`),
+    ([id, rate]) => formatResourceInline(id, `+${formatNumber(rate * level * mult)}/s`),
   );
   const arrow = '<span class="res-sep"> → </span>';
   const flow = [...inParts, ...outParts].join(arrow);
   return `${flow}<span class="res-sep"> · </span>auto while fueled`;
+}
+
+/** Short muted line when global station mult is above baseline. */
+export function formatStationBonusHint(outputMult: number): string {
+  if (!(outputMult > 1.001)) return '';
+  return `Includes ×${outputMult.toFixed(2)} from recipes / talents / awards`;
+}
+
+/** Short muted line when expedition loot mult is above baseline. */
+export function formatExpeditionBonusHint(lootMult: number): string {
+  if (!(lootMult > 1.001)) return '';
+  return `Includes ×${lootMult.toFixed(2)} from recipes / talents / awards / stance`;
 }
 
 export function formatStationUpgradeHint(level: number): string {

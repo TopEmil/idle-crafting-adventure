@@ -50,7 +50,7 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 - Fixed-timestep sim at **10 Hz**; rendering independent.
 - Soft cost curves (roughly ×1.15–1.22 per level).
 - Always one visible next goal (recipe, station, or expedition).
-- Prestige (Reforge) grants Relics to spend on permanent Talents + cosmetic forge skin unlocks (and Relic-bought hall skins).
+- Prestige (Reforge) grants Relics to spend on permanent Talents.
 - First Reforge also needs ~10 minutes of playtime (Smelter or 2,000 run ore unlocks the panel).
 - Reforge has a 10-minute cooldown so runs cannot be chained instantly.
 - Data-driven tables in `src/data/` — balance without code rewrites.
@@ -65,9 +65,8 @@ Gather → Craft → Unlock stations → Expeditions → Recipes/Gear → Reforg
 6. **Talents:** Eight Relic trees (tap, stations, loot, offline, dwarf, seam sense, caravan speed, Relic lore).
 7. **Offline:** Simulated ticks up to cap; summary lists gains.
 8. **Reforge:** Reset production progress for Relics (10 min cooldown). Spend Relics on Talents for permanent bonuses.
-9. **Forge cosmetics:** Prestige unlocks Ember Crest / Cyan Hearth / Abyss Crown; Relics buy Verdant Mantle and Starlit Kiln. Equip from the Talents sheet — active skin tints mine shaft wash and forge-hall glow. Manual equip stops prestige from auto-swapping the equipped skin.
-10. **Awards:** Tiered achievements with claimable permanent power (survives Reforge).
-11. **Leaderboard:** Weekly CrazyGames board for most ore mined (`seasonOre`). See `docs/leaderboard.md`.
+9. **Awards:** Tiered achievements with claimable permanent power (survives Reforge).
+10. **Leaderboard:** Weekly CrazyGames board for most ore mined (`seasonOre`). See `docs/leaderboard.md`.
 
 ## HUD wireframes (notes)
 
@@ -129,7 +128,7 @@ Progress dots show step N/4. Mid-tutorial Smelter milestone is suppressed so the
 | Type | When | Never |
 | --- | --- | --- |
 | Midgame | After expedition claim, prestige confirm, major milestone | During active play; on nav/settings/shop open |
-| Rewarded | Opt-in 2× loot, progressive resource boost (~5 min), cosmetic | Forced; reward on error |
+| Rewarded | Opt-in 2× loot, progressive resource boost (~5 min) | Forced; reward on error |
 | Banner | Optional on Ledger if open ≥5s avg | Over gameplay |
 
 Pacing: first midgame after ~3–5 min **or** first real expedition claim. Progressive resource offers: opt-in rewarded suggestion about every 5 min for the scarcest resource toward the next craft/station goal; grant size scales with prior accepts and progression. Mute/pause only in `adStarted`; always resume on `adFinished` / `adError`. Adblock: fully playable; notice only on blocked reward features. When ads disabled (Basic Launch): no freeze, no dead reward buttons.
@@ -145,5 +144,4 @@ CrazyGames HTML5 SDK v3: loading start/stop, gameplay start/stop, midgame/reward
 - ≥6 stations (Smelter → Aetherforge) soft-gated by ore and dig depth
 - ≥10 mine strata + rare tile finds
 - ≥8 Relic talent trees
-- Forge cosmetics: 3 prestige unlocks + ≥2 Relic-bought hall skins, with equip UI
 - Audio bed + craft / claim / prestige SFX at consistent levels

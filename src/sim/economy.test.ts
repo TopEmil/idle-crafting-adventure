@@ -13,11 +13,13 @@ import {
   completeExpeditionIfReady,
   craftRecipe,
   expeditionSlotCount,
+  expeditionTripDurationSec,
   AUTO_DIG_STRIKES_PER_SEC,
   getAutoMineRate,
   getDigDamage,
   prestige,
   prestigeCooldownRemaining,
+  previewExpeditionBaseLoot,
   rushExpedition,
   simulateSeconds,
   startExpedition,
@@ -512,6 +514,26 @@ describe('talents', () => {
     state.talents.hearth_kindling = 5;
     const buffed = tickProduction(structuredClone(state), 1);
     expect(buffed.resources.emberglass).toBeGreaterThan(plain.resources.emberglass);
+  });
+
+  it('boosts expedition loot via scout instinct and achievement rewards', () => {
+    const base = createInitialState();
+    const plain = previewExpeditionBaseLoot(base, 'glow_shalllows');
+    base.talents.scout_instinct = 5;
+    const talented = previewExpeditionBaseLoot(base, 'glow_shalllows');
+    expect((talented.glowdust ?? 0)).toBeGreaterThan(plain.glowdust ?? 0);
+
+    base.claimedAchievements = { scouts_return: 1 };
+    const awarded = previewExpeditionBaseLoot(base, 'glow_shalllows');
+    expect((awarded.glowdust ?? 0)).toBeGreaterThan(talented.glowdust ?? 0);
+  });
+
+  it('shortens expedition duration via caravan pact', () => {
+    const state = createInitialState();
+    const baseSec = expeditionTripDurationSec(state, 'glow_shalllows');
+    state.talents.caravan_pact = 5;
+    const fastSec = expeditionTripDurationSec(state, 'glow_shalllows');
+    expect(fastSec).toBeLessThan(baseSec);
   });
 });
 

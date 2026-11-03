@@ -3,7 +3,11 @@ import type { RecipeDef } from '../data/recipes';
 import { availableRecipes, canAfford } from '../sim/economy';
 import { recipeCost } from '../sim/pricing';
 import type { GameState } from '../sim/types';
-import { formatNumber, formatResourceInline } from './format';
+import {
+  formatNumber,
+  formatResourceInline,
+  type ResourceInlineOpts,
+} from './format';
 
 export interface CraftQuickState {
   recipe: RecipeDef | null;
@@ -19,6 +23,7 @@ export interface CraftQuickState {
 export function formatCostProgress(
   cost: Partial<Record<ResourceId, number>>,
   wallet: Record<ResourceId, number>,
+  opts?: ResourceInlineOpts,
 ): { detail: string; progress: number; affordable: boolean } {
   let progress = 1;
   const parts: string[] = [];
@@ -26,7 +31,9 @@ export function formatCostProgress(
     const owned = wallet[key] ?? 0;
     const ratio = amount > 0 ? Math.min(1, owned / amount) : 1;
     progress = Math.min(progress, ratio);
-    parts.push(formatResourceInline(key, `${formatNumber(owned)}/${formatNumber(amount)}`));
+    parts.push(
+      formatResourceInline(key, `${formatNumber(owned)}/${formatNumber(amount)}`, opts),
+    );
   }
   return {
     detail: parts.join('<span class="res-sep"> · </span>'),

@@ -12,13 +12,6 @@ import {
   stationUnlockCost,
 } from './pricing';
 import {
-  cosmeticGrantedByPrestige,
-  cosmeticsForPrestigeCount,
-  getCosmetic,
-  isCosmeticId,
-  type CosmeticId,
-} from '../data/cosmetics';
-import {
   DEFAULT_EXPEDITION_CONTRACT,
   getExpeditionContract,
   type ExpeditionContractId,
@@ -403,15 +396,13 @@ export function startExpedition(
       reason: `Dig to depth ${def.unlockAtDepth} first`,
     };
   }
-  const contract = getExpeditionContract(contractId);
   const tripCost = expeditionTripCost(expeditionId, contractId);
   if (!canAfford(state.resources, tripCost)) {
     return { ok: false, reason: 'Not enough resources for this expedition' };
   }
   const next = structuredClone(state);
   pay(next.resources, tripCost);
-  const durationSec =
-    def.durationSec * contract.durationMult * effectsFor(next).expeditionDuration;
+  const durationSec = expeditionTripDurationSec(next, expeditionId, contractId);
   next.activeExpeditions = [
     ...(next.activeExpeditions ?? []),
     {
@@ -451,6 +442,36 @@ export function rushExpedition(
   return { ok: true, state: next, event: { type: 'rush_expedition', expeditionId } };
 }
 
+/** Trip length after stance + talent/recipe/achievement speed. */
+export function expeditionTripDurationSec(
+  state: GameState,
+  expeditionId: ExpeditionId,
+  contractId: ExpeditionContractId = DEFAULT_EXPEDITION_CONTRACT,
+): number {
+  const def = getExpedition(expeditionId);
+  const contract = getExpeditionContract(contractId);
+  return def.durationSec * contract.durationMult * effectsFor(state).expeditionDuration;
+}
+
+/**
+ * Guaranteed haul preview (base pack only — no bonus roll).
+ * Matches claim scaling from hardness, stance, recipes, talents, and achievements.
+ */
+export function previewExpeditionBaseLoot(
+  state: GameState,
+  expeditionId: ExpeditionId,
+  contractId: ExpeditionContractId = DEFAULT_EXPEDITION_CONTRACT,
+): Partial<Record<ResourceId, number>> {
+  const def = getExpedition(expeditionId);
+  const contract = getExpeditionContract(contractId);
+  const effects = effectsFor(state);
+  const hardness = def.costHardness ?? 2;
+  return scaleLoot(
+    expeditionLoot(def.baseLoot, hardness),
+    effects.expeditionLoot * contract.lootMult,
+  );
+}
+
 export function rollExpeditionLoot(
   state: GameState,
   expeditionId: ExpeditionId,
@@ -461,16 +482,11 @@ export function rollExpeditionLoot(
   const contract = getExpeditionContract(contractId);
   const effects = effectsFor(state);
   const hardness = def.costHardness ?? 2;
-  const loot = scaleLoot(
-    expeditionLoot(def.baseLoot, hardness),
-    effects.expeditionLoot * contract.lootMult,
-  );
+  const lootMult = effects.expeditionLoot * contract.lootMult;
+  const loot = scaleLoot(expeditionLoot(def.baseLoot, hardness), lootMult);
   const bonusChance = Math.min(1, Math.max(0, def.bonusChance + contract.bonusChanceDelta));
   if (rng() < bonusChance) {
-    const bonus = scaleLoot(
-      expeditionLoot(def.bonusLoot, hardness),
-      effects.expeditionLoot * contract.lootMult,
-    );
+    const bonus = scaleLoot(expeditionLoot(def.bonusLoot, hardness), lootMult);
     for (const [key, amount] of Object.entries(bonus) as [ResourceId, number][]) {
       loot[key] = (loot[key] ?? 0) + amount;
     }
@@ -778,21 +794,6 @@ export function prestige(
   next.seasonStartedAt = state.seasonStartedAt ?? 0;
   next.lastLeaderboardScore = state.lastLeaderboardScore ?? 0;
   next.lastLeaderboardSubmitAt = state.lastLeaderboardSubmitAt ?? 0;
-  next.cosmeticPicked = Boolean(state.cosmeticPicked);
-  const prestigeCount = state.prestigeCount + 1;
-  const unlocked = mergeCosmetics(state.unlockedCosmetics, [
-    ...cosmeticsForPrestigeCount(prestigeCount),
-    cosmeticGrantedByPrestige(prestigeCount),
-  ]);
-  next.unlockedCosmetics = unlocked;
-  const granted = cosmeticGrantedByPrestige(prestigeCount);
-  if (!state.cosmeticPicked && granted) {
-    next.activeCosmetic = granted;
-  } else if (isCosmeticId(state.activeCosmetic) && unlocked.includes(state.activeCosmetic)) {
-    next.activeCosmetic = state.activeCosmetic;
-  } else {
-    next.activeCosmetic = 'default';
-  }
   next.onboardingDone = true;
   next.milestones.firstPrestige = true;
   next.milestones.firstExpeditionClaimed = state.milestones.firstExpeditionClaimed;
@@ -827,68 +828,6 @@ export function buyTalent(
   next.resources.relics -= cost;
   next.talents[talentId] = level + 1;
   return { ok: true, state: next, event: { type: 'buy_talent', talentId } };
-}
-
-function mergeCosmetics(
-  owned: readonly string[],
-  additions: readonly (CosmeticId | null | undefined)[],
-): CosmeticId[] {
-  const set = new Set<CosmeticId>(['default']);
-  for (const id of owned) {
-    if (isCosmeticId(id)) set.add(id);
-  }
-  for (const id of additions) {
-    if (id && isCosmeticId(id)) set.add(id);
-  }
-  return [...set];
-}
-
-export function isCosmeticUnlocked(state: GameState, cosmeticId: CosmeticId): boolean {
-  return state.unlockedCosmetics.includes(cosmeticId) || cosmeticId === 'default';
-}
-
-export function buyCosmetic(
-  state: GameState,
-  cosmeticId: CosmeticId,
-): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
-  const def = getCosmetic(cosmeticId);
-  if (def.id === 'default') {
-    return { ok: false, reason: 'Already owned' };
-  }
-  if (isCosmeticUnlocked(state, def.id)) {
-    return { ok: false, reason: 'Already unlocked' };
-  }
-  if (def.relicCost <= 0) {
-    return { ok: false, reason: 'Earn this skin by Reforging' };
-  }
-  if ((state.resources.relics ?? 0) < def.relicCost) {
-    return { ok: false, reason: 'Not enough Relics' };
-  }
-  const next = structuredClone(state);
-  next.resources.relics -= def.relicCost;
-  next.unlockedCosmetics = mergeCosmetics(state.unlockedCosmetics, [def.id]);
-  next.activeCosmetic = def.id;
-  next.cosmeticPicked = true;
-  return { ok: true, state: next, event: { type: 'buy_cosmetic', cosmeticId: def.id } };
-}
-
-export function equipCosmetic(
-  state: GameState,
-  cosmeticId: CosmeticId,
-): { ok: true; state: GameState; event: GameEvent } | { ok: false; reason: string } {
-  if (!isCosmeticId(cosmeticId)) {
-    return { ok: false, reason: 'Unknown skin' };
-  }
-  if (!isCosmeticUnlocked(state, cosmeticId)) {
-    return { ok: false, reason: 'Skin locked' };
-  }
-  if (state.activeCosmetic === cosmeticId && state.cosmeticPicked) {
-    return { ok: false, reason: 'Already equipped' };
-  }
-  const next = structuredClone(state);
-  next.activeCosmetic = cosmeticId;
-  next.cosmeticPicked = true;
-  return { ok: true, state: next, event: { type: 'equip_cosmetic', cosmeticId } };
 }
 
 export function availableExpeditions(state: GameState) {

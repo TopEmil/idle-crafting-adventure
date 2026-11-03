@@ -4,11 +4,6 @@ import {
   type AchievementId,
 } from '../data/achievements';
 import { BALANCE } from '../data/balance';
-import {
-  cosmeticsForPrestigeCount,
-  isCosmeticId,
-  type CosmeticId,
-} from '../data/cosmetics';
 import { RESOURCE_IDS, emptyWallet } from '../data/resources';
 import { emptyStationProgress, STATIONS } from '../data/stations';
 import { STRATA, type StratumId } from '../data/strata';
@@ -219,24 +214,10 @@ export function migrateState(state: GameState): GameState {
       : 0;
   next.prestigeCount = prestigeCount;
 
-  const unlocked = new Set<CosmeticId>(['default']);
-  if (Array.isArray(next.unlockedCosmetics)) {
-    for (const id of next.unlockedCosmetics) {
-      if (isCosmeticId(id)) unlocked.add(id);
-    }
-  }
-  for (const id of cosmeticsForPrestigeCount(prestigeCount)) {
-    unlocked.add(id);
-  }
-  next.unlockedCosmetics = [...unlocked];
-
-  if (typeof next.cosmeticPicked !== 'boolean') {
-    next.cosmeticPicked = false;
-  }
-
-  if (!isCosmeticId(next.activeCosmetic) || !unlocked.has(next.activeCosmetic)) {
-    next.activeCosmetic = 'default';
-  }
+  // Drop retired forge-skin fields from older saves.
+  delete (next as { unlockedCosmetics?: unknown }).unlockedCosmetics;
+  delete (next as { activeCosmetic?: unknown }).activeCosmetic;
+  delete (next as { cosmeticPicked?: unknown }).cosmeticPicked;
 
   return next;
 }

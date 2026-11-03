@@ -5,7 +5,6 @@ import {
   type AchievementId,
 } from '../data/achievements';
 import { BALANCE, relicsFromReforge } from '../data/balance';
-import { COSMETICS, type CosmeticId } from '../data/cosmetics';
 import {
   DEFAULT_EXPEDITION_CONTRACT,
   EXPEDITION_CONTRACTS,
@@ -36,9 +35,11 @@ import {
   prestigeContentUnlocked,
   prestigeCooldownRemaining,
   prestigeMinPlayRemaining,
+  previewExpeditionBaseLoot,
   stationRunMult,
   stationUpgradeCostMap,
 } from '../sim/economy';
+import { aggregateEffects } from '../sim/effects';
 import { faceDamageSum, faceTotalHp } from '../sim/mineShaft';
 import { recipeCost, stationUnlockCost } from '../sim/pricing';
 import type { GameState } from '../sim/types';
@@ -55,7 +56,9 @@ import {
 } from './format';
 import {
   formatAchievementRewardLineHtml,
+  formatExpeditionBonusHint,
   formatRecipeEffects,
+  formatStationBonusHint,
   formatStationIO,
   formatStationSpeedHint,
   formatStationUpgradeHint,
@@ -103,8 +106,6 @@ export interface HudActions {
   onClaimAchievement: (id: AchievementId) => void;
   onPrestige: () => void;
   onBuyTalent: (id: TalentId) => void;
-  onBuyCosmetic: (id: CosmeticId) => void;
-  onEquipCosmetic: (id: CosmeticId) => void;
   onResourceOffer: (mode: 'ad' | 'dismiss') => void;
   onSkipOnboarding: () => void;
   onToggleMute: () => void;
@@ -493,21 +494,26 @@ export class Hud {
   ) {
     const items = (Object.entries(loot) as [ResourceId, number][])
       .map(([id, amount]) => {
-        return `<li><span>${formatResourceInline(id)}</span><span>+${formatNumber(amount)}</span></li>`;
+        return `<li><span>${formatResourceInline(id, undefined, { showLabel: true })}</span><span>+${formatNumber(amount)}</span></li>`;
       })
       .join('');
 
+    const coinCostHtml = formatResourceInline(
+      'ore',
+      formatNumber(BALANCE.rewardBoostOreCost),
+      { showLabel: true },
+    );
     let rewardBlock = '';
     if (options.adsDisabled) {
       rewardBlock = options.coinAlt
-        ? `<button class="btn btn-secondary" id="claim-coin" type="button">2× for ${BALANCE.rewardBoostOreCost} Ore</button>`
+        ? `<button class="btn btn-secondary" id="claim-coin" type="button">2× for ${coinCostHtml}</button>`
         : `<p class="notice">Bonus rewards unavailable in this build.</p>`;
     } else if (options.adblock) {
       rewardBlock = `<p class="notice">Ad blocked — reward boost unavailable. Game stays fully playable.</p>`;
     } else if (options.canReward) {
       rewardBlock = `
         <button class="btn btn-reward" id="claim-double" type="button">▶ 2× Loot</button>
-        ${options.coinAlt ? `<button class="btn btn-secondary" id="claim-coin" type="button">2× for ${BALANCE.rewardBoostOreCost} Ore</button>` : ''}
+        ${options.coinAlt ? `<button class="btn btn-secondary" id="claim-coin" type="button">2× for ${coinCostHtml}</button>` : ''}
       `;
     } else {
       rewardBlock = `<p class="muted">Reward boost cooling down…</p>`;
@@ -563,16 +569,18 @@ export class Hud {
   }
 
   showResourceOffer(opts: {
-    resourceName: string;
+    resource: ResourceId;
     amount: number;
     reason: string;
   }) {
+    const label = resourceLabel(opts.resource);
+    const icon = formatResourceInline(opts.resource);
     this.overlay.innerHTML = `
       <div class="modal">
         <h2>Vein favor</h2>
-        <p>Short on <strong>${opts.resourceName}</strong> to ${opts.reason}?</p>
+        <p>Short on ${icon} <strong>${label}</strong> to ${opts.reason}?</p>
         <ul class="loot-list">
-          <li><span>${opts.resourceName}</span><span>+${formatNumber(opts.amount)}</span></li>
+          <li><span>${icon}</span><span>+${formatNumber(opts.amount)}</span></li>
         </ul>
         <p class="muted">Optional rewarded boost — equal weight to skip.</p>
         <div class="modal-actions">
@@ -752,14 +760,20 @@ export class Hud {
     const squadGate = canBuySquadSlot(state);
     const extras = Math.max(0, Math.floor(state.extraSquadSlots ?? 0));
     const canBuyMore = extras < BALANCE.maxExtraSquadSlots;
-    const relicCostHtml = formatResourceInline('relics', formatNumber(BALANCE.extraSquadRelicCost));
     const squadBuyLabel = squadGate.ok
-      ? `Buy squad · ${BALANCE.extraSquadRelicCost} Relics`
+      ? 'Buy squad'
       : canBuyMore
-        ? `Need ${BALANCE.extraSquadRelicCost} Relics`
+        ? 'Need more'
         : 'Roster full';
+    const effects = aggregateEffects(
+      state.ownedRecipes,
+      state.talents,
+      state.claimedAchievements ?? {},
+    );
     const stance = EXPEDITION_CONTRACTS.find((c) => c.id === this.selectedContract)
       ?? EXPEDITION_CONTRACTS[0]!;
+    const stanceLootMult = effects.expeditionLoot * stance.lootMult;
+    const lootBonusHint = formatExpeditionBonusHint(stanceLootMult);
     const stanceChips = EXPEDITION_CONTRACTS.map((c) => {
       const active = c.id === this.selectedContract ? ' is-active' : '';
       return `<button class="stance-chip${active}" type="button" data-exp-stance="${c.id}" title="${c.blurb}">${c.name}</button>`;
@@ -767,11 +781,15 @@ export class Hud {
 
     const rows = EXPEDITIONS.map((e) => {
       const row = getExpeditionRowState(state, e, now, this.selectedContract);
-      const lootHint = formatLootHtml(e.baseLoot);
+      const loot = previewExpeditionBaseLoot(state, e.id, this.selectedContract);
+      const lootHint = formatLootHtml(loot, { showLabel: true });
       const showMeter = row.kind === 'locked' || row.kind === 'need_cost';
       const meter = showMeter
         ? `<div class="req-meter" data-exp-meter aria-hidden="true"><span style="width:${Math.round(row.progress * 100)}%"></span></div>`
         : `<div class="req-meter" data-exp-meter hidden aria-hidden="true"><span style="width:0%"></span></div>`;
+      const bonusLine = lootBonusHint
+        ? `<div class="effect-line muted">${lootBonusHint}</div>`
+        : '';
       return `
         <div class="row-item${row.blocked ? ' row-item-blocked' : ''}" data-exp-row="${e.id}">
           <div>
@@ -780,6 +798,7 @@ export class Hud {
             ${meter}
             <div class="req-line" data-exp-req>${row.requirements}</div>
             <div class="effect-line">Loot: ${lootHint}</div>
+            ${bonusLine}
           </div>
           <div data-exp-action data-exp-mode="${row.mode}">${expeditionActionHtml(row, e.id)}</div>
           <p>${e.description}</p>
@@ -805,7 +824,7 @@ export class Hud {
           <h2>Expeditions</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="sheet-intro">Pick a stance, unlock destinations with lifetime ore, then send — or Rush home with an ad. Squads ${busy}/${slots}.</p>
+        <p class="sheet-intro">Pick a stance, unlock destinations with lifetime ${formatResourceInline('ore', undefined, { showLabel: true })}, then send — or Rush home with an ad. Squads ${busy}/${slots}.</p>
         <div class="stance-picker" role="group" aria-label="Expedition stance">
           <div class="stance-chips">${stanceChips}</div>
           <p class="stance-blurb" data-stance-blurb>${stance.blurb}</p>
@@ -813,7 +832,7 @@ export class Hud {
         <div class="row-item" data-squad-buy>
           <div>
             <h3>Extra squad</h3>
-            <div class="cost">${relicCostHtml}<span class="res-sep"> · </span>permanent across Reforge</div>
+            <div class="cost">${formatResourceInline('relics', formatNumber(BALANCE.extraSquadRelicCost), { showLabel: true })}<span class="res-sep"> · </span>permanent across Reforge</div>
             <div class="req-line">More concurrent scout parties (${extras}/${BALANCE.maxExtraSquadSlots} bought)</div>
           </div>
           <button class="btn btn-secondary" id="btn-buy-squad" type="button" ${squadGate.ok ? '' : 'disabled'}>${squadBuyLabel}</button>
@@ -950,6 +969,13 @@ export class Hud {
   }
 
   private renderForge(state: GameState, notice?: string) {
+    const effects = aggregateEffects(
+      state.ownedRecipes,
+      state.talents,
+      state.claimedAchievements ?? {},
+    );
+    const stationMult = effects.stationOutput;
+    const stationBonusHint = formatStationBonusHint(stationMult);
     const stationRows = STATIONS.map((s) => {
       const st = state.stations[s.id as StationId];
       if (!st.unlocked) {
@@ -976,12 +1002,16 @@ export class Hud {
           prereqOk && depthOk && !affordable
             ? formatMissingCostHtml(unlock, state.resources)
             : formatCostHtml(unlock);
+        const bonusLine = stationBonusHint
+          ? `<div class="effect-line muted">${stationBonusHint}</div>`
+          : '';
         return `
           <div class="row-item${!prereqOk || !depthOk || !affordable ? ' row-item-blocked' : ''}">
             <div>
               <h3>${s.name}</h3>
               <div class="cost">${costHint}</div>
-              <div class="effect-line">${formatStationIO(s, 1)}</div>
+              <div class="effect-line">${formatStationIO(s, 1, stationMult)}</div>
+              ${bonusLine}
             </div>
             <button class="btn btn-secondary" data-unlock="${s.id}" type="button" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
             <p>${s.description} <span class="muted">(${gate})</span></p>
@@ -1008,12 +1038,16 @@ export class Hud {
           ? 'Throttled below owned level — raise Speed anytime'
           : 'Running when inputs are available';
       const titleSpeed = throttled ? ` · Speed ${runLevel}` : '';
+      const bonusLine = stationBonusHint
+        ? `<div class="effect-line muted">${stationBonusHint}</div>`
+        : '';
       return `
         <div class="row-item${!atCap && !affordable ? ' row-item-blocked' : ''}${!st.enabled ? ' row-item-paused' : ''}">
           <div>
             <h3>${s.name} · Lv ${st.level}${titleSpeed}${st.enabled ? '' : ' · Off'}</h3>
             <div class="cost">${costHint}</div>
-            <div class="effect-line">${formatStationIO(s, runLevel)}</div>
+            <div class="effect-line">${formatStationIO(s, runLevel, stationMult)}</div>
+            ${bonusLine}
             <div class="effect-line muted">${formatStationSpeedHint(runLevel, st.level)}</div>
             <div class="effect-line muted">${formatStationUpgradeHint(st.level)}</div>
           </div>
@@ -1069,7 +1103,7 @@ export class Hud {
     const contentUnlocked = prestigeContentUnlocked(state);
     const prestigeReady = canPrestige(state);
     let prestigeLabel = 'Reforge';
-    let prestigeHint = 'Reset this run\'s production. Talents, Relics, and cosmetics stay.';
+    let prestigeHint = 'Reset this run\'s production. Talents and Relics stay.';
     let statusLine = 'Ready to Reforge';
     if (!prestigeReady && coolLeft > 0) {
       prestigeLabel = formatDuration(coolLeft);
@@ -1081,7 +1115,7 @@ export class Hud {
       statusLine = `Opens in ${formatDuration(playLeft)}`;
     } else if (!prestigeReady) {
       prestigeLabel = 'Locked';
-      prestigeHint = `Need ${formatNumber(BALANCE.prestigeMinLifetimeOre)} lifetime ore, or unlock the Smelter.`;
+      prestigeHint = `Need ${formatResourceInline('ore', formatNumber(BALANCE.prestigeMinLifetimeOre))} lifetime, or unlock the Smelter.`;
       statusLine = 'Not unlocked yet';
     }
 
@@ -1091,7 +1125,7 @@ export class Hud {
           <h2>Reforge</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="sheet-intro">Reset the forge for Relics, then spend them on the Talents tab for permanent power and forge skins.</p>
+        <p class="sheet-intro">Reset the forge for Relics, then spend them on the Talents tab for permanent power.</p>
         <div class="reforge-reward" aria-live="polite">
           <div class="reforge-reward-label">Reforge points this run</div>
           <div class="reforge-reward-value">${formatNumber(relicsPreview)}</div>
@@ -1102,8 +1136,8 @@ export class Hud {
             <div>
               <h3>This Reforge</h3>
               <div class="cost">${statusLine}</div>
-              <div class="effect-line">Gain ${formatNumber(relicsPreview)} Relic${relicsPreview === 1 ? '' : 's'}</div>
-              <div class="effect-line muted">Run ore ${formatNumber(state.lifetimeOre)} · Past Reforges ${state.prestigeCount}</div>
+              <div class="effect-line">Gain ${formatResourceInline('relics', `+${formatNumber(relicsPreview)}`)}</div>
+              <div class="effect-line muted">Run ${formatResourceInline('ore', formatNumber(state.lifetimeOre))} · Past Reforges ${state.prestigeCount}</div>
             </div>
             <button class="btn btn-primary" id="btn-prestige" type="button" ${prestigeReady ? '' : 'disabled'}>${prestigeLabel}</button>
             <p>${prestigeHint}</p>
@@ -1111,11 +1145,11 @@ export class Hud {
           <div class="row-item">
             <div>
               <h3>Relics owned</h3>
-              <div class="cost">${formatNumber(state.resources.relics)} available</div>
-              <div class="effect-line muted">Lifetime earned ${formatNumber(state.totalRelicsEarned)}</div>
+              <div class="cost">${formatResourceInline('relics', formatNumber(state.resources.relics))} available</div>
+              <div class="effect-line muted">Lifetime earned ${formatResourceInline('relics', formatNumber(state.totalRelicsEarned))}</div>
             </div>
             <button class="btn btn-secondary" id="btn-reforge-talents" type="button">Talents</button>
-            <p>Spend Relics on permanent bonuses that survive every Reforge.</p>
+            <p>Spend Relics on permanent talent bonuses that survive every Reforge.</p>
           </div>
         </div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
@@ -1138,54 +1172,26 @@ export class Hud {
       const atMax = level >= t.maxLevel;
       const cost = atMax ? 0 : talentUpgradeCost(t, level);
       const affordable = !atMax && state.resources.relics >= cost;
-      let actionLabel = `Buy · ${cost} Relic${cost === 1 ? '' : 's'}`;
+      let actionLabel = 'Buy';
       if (atMax) actionLabel = 'Max';
-      else if (!affordable) actionLabel = `Need ${cost}`;
+      else if (!affordable) actionLabel = 'Need more';
       const effectLine = level > 0
         ? formatTalentEffects(t, level)
         : formatTalentPerLevel(t);
+      const costHint = atMax
+        ? 'Maxed'
+        : !affordable
+          ? `Need ${formatResourceInline('relics', formatNumber(cost))}`
+          : formatResourceInline('relics', formatNumber(cost));
       return `
         <div class="row-item${!atMax && !affordable ? ' row-item-blocked' : ''}">
           <div>
             <h3>${t.name} · Lv ${level}/${t.maxLevel}</h3>
-            <div class="cost">${atMax ? 'Maxed' : `${cost} Relic${cost === 1 ? '' : 's'}`}</div>
+            <div class="cost">${costHint}</div>
             <div class="effect-line">${effectLine}</div>
           </div>
           <button class="btn btn-secondary" data-talent="${t.id}" type="button" ${atMax || !affordable ? 'disabled' : ''}>${actionLabel}</button>
           <p>${t.description}</p>
-        </div>
-      `;
-    }).join('');
-
-    const skinRows = COSMETICS.map((skin) => {
-      const unlocked = state.unlockedCosmetics.includes(skin.id) || skin.id === 'default';
-      const equipped = state.activeCosmetic === skin.id;
-      const swatch = `#${skin.visuals.hearth.toString(16).padStart(6, '0')}`;
-      let lockHint = '';
-      if (!unlocked && skin.prestigeUnlock > 0) {
-        lockHint = `Unlocks at Reforge ${skin.prestigeUnlock}`;
-      } else if (!unlocked && skin.relicCost > 0) {
-        lockHint = `${skin.relicCost} Relic${skin.relicCost === 1 ? '' : 's'}`;
-      }
-      let action = '';
-      if (equipped) {
-        action = `<span class="muted">Equipped</span>`;
-      } else if (unlocked) {
-        action = `<button class="btn btn-secondary" data-equip-cosmetic="${skin.id}" type="button">Equip</button>`;
-      } else if (skin.relicCost > 0) {
-        const affordable = state.resources.relics >= skin.relicCost;
-        action = `<button class="btn btn-secondary" data-buy-cosmetic="${skin.id}" type="button" ${affordable ? '' : 'disabled'}>${affordable ? `Buy · ${skin.relicCost}` : `Need ${skin.relicCost}`}</button>`;
-      } else {
-        action = `<span class="muted">${lockHint}</span>`;
-      }
-      return `
-        <div class="row-item${!unlocked ? ' row-item-blocked' : ''}${equipped ? ' row-item-ready' : ''}">
-          <div>
-            <h3><span class="cosmetic-swatch" style="background:${swatch}" aria-hidden="true"></span>${skin.name}</h3>
-            <div class="cost">${unlocked ? (equipped ? 'Active hall skin' : 'Owned') : lockHint || 'Locked'}</div>
-          </div>
-          ${action}
-          <p>${skin.blurb}</p>
         </div>
       `;
     }).join('');
@@ -1196,11 +1202,8 @@ export class Hud {
           <h2>Talents</h2>
           <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Permanent bonuses that survive Reforge · Relics ${formatNumber(state.resources.relics)} · Levels ${talentLevels}</p>
+        <p class="muted">Permanent bonuses that survive Reforge · ${formatResourceInline('relics', formatNumber(state.resources.relics))} · Levels ${talentLevels}</p>
         <div class="list">${talentRows}</div>
-        <h3 class="sheet-section-title">Forge skins</h3>
-        <p class="sheet-intro">Prestige unlocks crest skins; spend Relics on extra hall looks. Equip one to tint the forge and mine shaft.</p>
-        <div class="list">${skinRows}</div>
         ${notice ? `<p class="notice">${notice}</p>` : ''}
         <p class="muted" style="margin-top:12px">Earn Relics from the Reforge tab.</p>
       </div>
@@ -1208,16 +1211,6 @@ export class Hud {
     this.bindSheet();
     this.overlay.querySelectorAll('[data-talent]').forEach((btn) => {
       btn.addEventListener('click', () => this.actions.onBuyTalent((btn as HTMLElement).dataset.talent as TalentId));
-    });
-    this.overlay.querySelectorAll('[data-equip-cosmetic]').forEach((btn) => {
-      btn.addEventListener('click', () =>
-        this.actions.onEquipCosmetic((btn as HTMLElement).dataset.equipCosmetic as CosmeticId),
-      );
-    });
-    this.overlay.querySelectorAll('[data-buy-cosmetic]').forEach((btn) => {
-      btn.addEventListener('click', () =>
-        this.actions.onBuyCosmetic((btn as HTMLElement).dataset.buyCosmetic as CosmeticId),
-      );
     });
   }
 
@@ -1305,16 +1298,16 @@ export class Hud {
         <h3 class="sheet-section">Miners' ranks</h3>
         <p class="sheet-intro">Weekly CrazyGames board — most ore mined. Global ranks show on the CrazyGames game page.</p>
         <div class="list">
-          <div class="row-item"><div><h3>This week</h3></div><div>${formatNumber(weekScore)}</div></div>
-          <div class="row-item"><div><h3>All-time ore</h3></div><div>${formatNumber(state.allTimeOre ?? 0)}</div></div>
+          <div class="row-item"><div><h3>This week</h3></div><div>${formatResourceInline('ore', formatNumber(weekScore))}</div></div>
+          <div class="row-item"><div><h3>All-time</h3></div><div>${formatResourceInline('ore', formatNumber(state.allTimeOre ?? 0))}</div></div>
           <div class="row-item"><div><h3>Season ends in</h3></div><div>${seasonLeft}</div></div>
         </div>
         <div class="list">
-          <div class="row-item"><div><h3>Run ore</h3></div><div>${formatNumber(state.lifetimeOre)}</div></div>
+          <div class="row-item"><div><h3>Run</h3></div><div>${formatResourceInline('ore', formatNumber(state.lifetimeOre))}</div></div>
           <div class="row-item"><div><h3>Vein taps</h3></div><div>${formatNumber(state.lifetimeClicks ?? 0)}</div></div>
           <div class="row-item"><div><h3>Play time</h3></div><div>${formatDuration(state.playTimeSec)}</div></div>
           <div class="row-item"><div><h3>Reforges</h3></div><div>${state.prestigeCount}</div></div>
-          <div class="row-item"><div><h3>Relics earned</h3></div><div>${formatNumber(state.totalRelicsEarned)}</div></div>
+          <div class="row-item"><div><h3>Relics earned</h3></div><div>${formatResourceInline('relics', formatNumber(state.totalRelicsEarned))}</div></div>
           <div class="row-item"><div><h3>Talent levels</h3></div><div>${talentLevels}</div></div>
           <div class="row-item"><div><h3>Recipes owned</h3></div><div>${state.ownedRecipes.length}/${RECIPES.length}</div></div>
           <div class="row-item"><div><h3>Achievement tiers</h3></div><div>${claimedCount}/${totalAchievementTiers()}</div></div>

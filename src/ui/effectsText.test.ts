@@ -5,7 +5,9 @@ import { getStation } from '../data/stations';
 import { getTalent } from '../data/talents';
 import {
   formatAchievementRewards,
+  formatExpeditionBonusHint,
   formatRecipeEffects,
+  formatStationBonusHint,
   formatStationIO,
   formatStationSpeedHint,
   formatStationUpgradeHint,
@@ -30,6 +32,15 @@ describe('effects text', () => {
     expect(formatStationUpgradeHint(2)).toContain('Lv 2 → Lv 3');
   });
 
+  it('folds station output mult into displayed rates', () => {
+    const base = formatStationIO(getStation('smelter'), 1, 1);
+    const buffed = formatStationIO(getStation('smelter'), 1, 2);
+    expect(buffed).not.toBe(base);
+    expect(formatStationBonusHint(1)).toBe('');
+    expect(formatStationBonusHint(1.5)).toContain('×1.50');
+    expect(formatExpeditionBonusHint(1.25)).toContain('×1.25');
+  });
+
   it('explains throttled station speed', () => {
     expect(formatStationSpeedHint(5, 5)).toContain('full rate');
     expect(formatStationSpeedHint(2, 5)).toContain('throttled');
@@ -46,5 +57,8 @@ describe('effects text', () => {
     expect(formatAchievementRewards(getAchievement('first_strike').tiers[0]!.rewards)).toContain('Ore');
     expect(formatAchievementRewards(getAchievement('vein_warmup').tiers[0]!.rewards)).toContain('+5% dig damage');
     expect(formatAchievementRewards(getAchievement('copper_bound').tiers[0]!.rewards)).toContain('Dwarf dig');
+    expect(formatAchievementRewards(getAchievement('scouts_return').tiers[0]!.rewards)).toContain(
+      'expedition loot',
+    );
   });
 });

@@ -34,9 +34,6 @@ export function createInitialState(now = Date.now()): GameState {
     prestigeCount: 0,
     totalRelicsEarned: 0,
     lastPrestigeAt: 0,
-    unlockedCosmetics: ['default'],
-    activeCosmetic: 'default',
-    cosmeticPicked: false,
     onboardingStep: 0,
     onboardingDone: false,
     milestones: {
